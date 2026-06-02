@@ -30,6 +30,7 @@ export interface IGuiState {
   isShowLogo: boolean;
   enableAppreciationMode: boolean; // Pc102
   fontOptimization: boolean; // 字体优化
+  showScavengeTimeControl: boolean; // 拾荒时间控制面板
 }
 
 export type componentsVisibility = Pick<

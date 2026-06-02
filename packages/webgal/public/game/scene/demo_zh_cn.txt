@@ -1,6 +1,11 @@
 bgm:s_Title.mp3 -volume=80 -enter=3000;
+; 初始化时间控件
+setVar:current_day=1;
+setVar:current_period_index=0;
+setVar:show_scavenge_time_control=true;
+
 unlockBgm:s_Title.mp3 -name=雲を追いかけて;
-intro:你好|欢迎来到 {engine} 的世界;
+intro:你好|欢迎来到 {engine} 的世界1;
 changeBg:WebGalEnter.webp -next;
 setTransition: -target=bg-main -exit=shockwaveOut;
 :你好|欢迎来到 {engine} 的世界;

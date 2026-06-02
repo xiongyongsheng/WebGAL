@@ -1,0 +1,78 @@
+.container {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 100;
+  background: linear-gradient(135deg, rgba(40, 44, 52, 0.95) 0%, rgba(30, 33, 40, 0.95) 100%);
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 140px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.timeDisplay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.day {
+  display: flex;
+  align-items: baseline;
+  font-size: 24px;
+  font-weight: bold;
+  color: #f0f0f0;
+}
+
+.label {
+  font-size: 14px;
+  color: #a0a0a0;
+  margin: 0 2px;
+}
+
+.value {
+  font-size: 32px;
+  color: #ffd700;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.period {
+  padding: 6px 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+}
+
+.periodValue {
+  font-size: 18px;
+  color: #e0e0e0;
+  font-weight: 500;
+}
+
+.advanceButton {
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(74, 144, 226, 0.3);
+}
+
+.advanceButton:hover {
+  background: linear-gradient(135deg, #5a9ff2 0%, #4080cc 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.4);
+}
+
+.advanceButton:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(74, 144, 226, 0.3);
+}
