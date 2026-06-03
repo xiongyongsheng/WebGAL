@@ -11,6 +11,8 @@
   "dependencies": {
     "@emotion/css": "^11.11.2",
     "@icon-park/react": "^1.4.2",
+    "@iconify-icons/material-symbols": "^1.2.58",
+    "@iconify/react": "^6.0.2",
     "@reduxjs/toolkit": "^1.8.1",
     "angular-expressions": "^1.4.3",
     "axios": "^1.13.5",

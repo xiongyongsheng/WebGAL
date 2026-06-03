@@ -79,12 +79,24 @@ stageStateManager.getCalculationStageState().GameVar['key'] = value;
 stageStateManager.setStageVarAndCommit({ key: 'key', value });
 ```
 
-### 5. 自动存档时机
+### 5. changeScene 跳转必须加 .txt 后缀
+
+场景文件引用时必须包含完整后缀：
+
+```ws
+// ✅ 正确
+changeScene:scavenge/scavenge_main.txt;
+
+// ❌ 错误
+changeScene:scavenge/scavenge_main;
+```
+
+### 6. 自动存档时机
 
 - **过天/关键节点**：调用 `dumpToStorageFast()` 保存 `globalGameVar` 到 localStorage
 - **场景存档**：由 WebGAL 的 saveGame/loadGame 系统处理，保存 GameVar
 
-### 6. 初始化变量的默认值处理
+### 7. 初始化变量的默认值处理
 
 组件中应使用 `??` 提供默认值：
 ```typescript

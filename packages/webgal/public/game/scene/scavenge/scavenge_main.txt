@@ -1,0 +1,10 @@
+; 拾荒模块主入口场景
+; 该场景作为拾荒系统的入口点
+
+; 初始化拾荒时间控制系统
+setVar:show_scavenge_time_control=true;
+setVar:current_day=1;
+setVar:current_period_index=0;
+
+; 进入拾荒主界面
+scavengeStart:拾荒主界面;

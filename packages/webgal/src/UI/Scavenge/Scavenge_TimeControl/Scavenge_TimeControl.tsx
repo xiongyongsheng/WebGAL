@@ -1,9 +1,11 @@
 import { useSelector } from 'react-redux';
+import { Icon } from '@iconify/react';
+import schedule from '@iconify-icons/material-symbols/schedule';
 import { RootState } from '@/store/store';
 import { useStageState } from '@/hooks/useStageState';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { saveGame } from '@/Core/controller/storage/saveGame';
-import styles from './scavengeTimeControl.module.scss';
+import styles from './Scavenge_TimeControl.module.scss';
 
 type TimePeriod = '清晨' | '上午' | '下午' | '半晚' | '黑夜';
 
@@ -31,7 +33,7 @@ function getNextPeriod(currentIndex: number): TimeState {
   };
 }
 
-export const ScavengeTimeControl = () => {
+export const Scavenge_TimeControl = () => {
   const GUIState = useSelector((state: RootState) => state.GUI);
   const stageState = useStageState();
 
@@ -72,8 +74,8 @@ export const ScavengeTimeControl = () => {
           <span className={styles.periodValue}>{currentPeriod}</span>
         </div>
       </div>
-      <button className={styles.advanceButton} onClick={handleTimeAdvance}>
-        时间流逝
+      <button className={styles.advanceButton} onClick={handleTimeAdvance} title="时间流逝">
+        <Icon icon={schedule} className={styles.buttonIcon} />
       </button>
     </div>
   );

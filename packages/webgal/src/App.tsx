@@ -12,7 +12,7 @@ import Menu from '@/UI/Menu/Menu';
 import GlobalDialog from '@/UI/GlobalDialog/GlobalDialog';
 import PanicOverlay from '@/UI/PanicOverlay/PanicOverlay';
 import DevPanel from '@/UI/DevPanel/DevPanel';
-import { ScavengeTimeControl } from '@/UI/ScavengeTimeControl/ScavengeTimeControl';
+import { Scavenge_Main } from '@/UI/Scavenge/Scavenge_main';
 
 export default function App() {
   useEffect(() => {
@@ -22,6 +22,7 @@ export default function App() {
     <div className="App">
       <Translation />
       <Stage />
+      <Scavenge_Main />
       <BottomControlPanel />
       <BottomControlPanelFilm />
       <Backlog />
@@ -32,7 +33,6 @@ export default function App() {
       <GlobalDialog />
       <PanicOverlay />
       <DevPanel />
-      <ScavengeTimeControl />
     </div>
   );
 }

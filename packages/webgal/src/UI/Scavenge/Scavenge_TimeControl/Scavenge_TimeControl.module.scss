@@ -2,12 +2,13 @@
   position: absolute;
   top: 20px;
   left: 20px;
-  z-index: 100;
+  z-index: 1;
   background: linear-gradient(135deg, rgba(40, 44, 52, 0.95) 0%, rgba(30, 33, 40, 0.95) 100%);
   border-radius: 12px;
   padding: 16px 20px;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 12px;
   min-width: 140px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
@@ -54,25 +55,34 @@
 }
 
 .advanceButton {
-  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
   font-size: 14px;
   font-weight: 600;
   color: #fff;
   background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
   border: none;
-  border-radius: 8px;
+  border-radius: 50%;
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 2px 8px rgba(74, 144, 226, 0.3);
 }
 
+.buttonIcon {
+  font-size: 24px;
+}
+
 .advanceButton:hover {
   background: linear-gradient(135deg, #5a9ff2 0%, #4080cc 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.4);
+  transform: scale(1.08);
+  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.5);
 }
 
 .advanceButton:active {
-  transform: translateY(0);
+  transform: scale(0.95);
   box-shadow: 0 2px 6px rgba(74, 144, 226, 0.3);
 }
