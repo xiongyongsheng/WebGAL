@@ -1,0 +1,48 @@
+.statusPanel {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.statusItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.statusHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.statusIcon {
+  font-size: 18px;
+}
+
+.statusLabel {
+  font-size: 13px;
+  color: #a0a0a0;
+  flex: 1;
+}
+
+.statusValue {
+  font-size: 14px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.statusTrack {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.statusFill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}

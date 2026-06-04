@@ -4,7 +4,7 @@
  * 所有显示状态和数据都存储在 GameVar 中，跟随场景存档
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStageState } from '@/hooks/useStageState';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { ScavengeTimeControl } from './ScavengeTimeControl/ScavengeTimeControl';
@@ -24,6 +24,26 @@ export const ScavengeMain = () => {
   const isMapVisible = (stageState.GameVar['show_scavenge_map'] as boolean) ?? false;
   const isTimeControlVisible = (stageState.GameVar['show_scavenge_time_control'] as boolean) ?? false;
   const isMenuVisible = (stageState.GameVar['scavenge_show_menu'] as boolean) ?? false;
+  const isScavengeActive = isMapVisible || isTimeControlVisible || isMenuVisible;
+
+  // 拾荒场景激活时禁用滚轮打开回想功能
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      if (isScavengeActive) {
+        // if (e.deltaY < 0) {
+          e.stopPropagation();
+        // }
+      }
+    };
+
+    if (isScavengeActive) {
+      document.body.addEventListener('wheel', handleWheel, { passive: false });
+    }
+
+    return () => {
+      document.body.removeEventListener('wheel', handleWheel);
+    };
+  }, [isScavengeActive]);
 
   // 地图相关状态
   const [selectedLocation, setSelectedLocation] = useState<ScavengeLocationItem | null>(null);

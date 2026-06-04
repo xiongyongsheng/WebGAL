@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import { useStageState } from '@/hooks/useStageState';
-import { ScavengeCharacter, getCharacterStatusText, getStatusBarColor } from './character';
-import { Icon, IconifyIcon } from '@iconify/react';
-import favorite from '@iconify-icons/material-symbols/favorite';
-import restaurant from '@iconify-icons/material-symbols/restaurant';
-import waterDrop from '@iconify-icons/material-symbols/water-drop';
-import psychology from '@iconify-icons/material-symbols/psychology';
-import localFireDepartment from '@iconify-icons/material-symbols/local-fire-department';
-import backpack from '@iconify-icons/material-symbols/backpack-outline';
-import { getItemName, getItemIcon, getItemRarityColor, getItemById } from '../ScavengeItems/items';
-import { InventoryItem, MAX_CARRY_WEIGHT } from '../ScavengeItems/inventory';
+import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
+import { ScavengeCharacter, getCharacterStatusText } from './character';
+import { getItemName, getItemIcon, getItemRarityColor, getItemById, isEquipment, isConsumable, getEquipmentSlot, ConsumableItem, EquipmentItem } from '../ScavengeItems/items';
+import { InventoryItem, MAX_CARRY_WEIGHT, addToInventory, removeFromInventory } from '../ScavengeItems/inventory';
+import { ScavengeCharacterHeader } from './ScavengeCharacterHeader/ScavengeCharacterHeader';
+import { ScavengeCharacterStatus } from './ScavengeCharacterStatus/ScavengeCharacterStatus';
+import { ScavengeCharacterAttributes } from './ScavengeCharacterAttributes/ScavengeCharacterAttributes';
+import { ScavengeCharacterEquip } from './ScavengeCharacterEquip/ScavengeCharacterEquip';
+import { ScavengeCharacterInventory } from './ScavengeCharacterInventory/ScavengeCharacterInventory';
 import styles from './ScavengeCharacterDetail.module.scss';
 
 interface ScavengeCharacterDetailProps {
@@ -17,46 +16,85 @@ interface ScavengeCharacterDetailProps {
   onClose: () => void;
 }
 
-interface StatusBarProps {
-  icon: IconifyIcon;
-  label: string;
-  value: number;
-  maxValue: number;
-  color: string;
-}
-
-const StatusBar = ({ icon, label, value, maxValue, color }: StatusBarProps) => {
-  const percentage = (value / maxValue) * 100;
-
-  return (
-    <div className={styles.statusItem}>
-      <div className={styles.statusHeader}>
-        <Icon icon={icon} className={styles.statusIcon} style={{ color }} />
-        <span className={styles.statusLabel}>{label}</span>
-        <span className={styles.statusValue}>{value}</span>
-      </div>
-      <div className={styles.statusTrack}>
-        <div
-          className={styles.statusFill}
-          style={{
-            width: `${percentage}%`,
-            backgroundColor: color,
-          }}
-        />
-      </div>
-    </div>
-  );
-};
-
 export const ScavengeCharacterDetail = ({ character, onClose }: ScavengeCharacterDetailProps) => {
-  const [showInventory, setShowInventory] = useState(false);
+  const [, forceUpdate] = useState({});
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [showItemMenu, setShowItemMenu] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
+  const [actionQuantity, setActionQuantity] = useState(1);
+  const [itemFilter, setItemFilter] = useState<'all' | 'consumable' | 'equipment' | 'material'>('all');
   const stageState = useStageState();
   const statusText = getCharacterStatusText(character);
+
+  // 强制刷新（用于物品操作后更新UI）
+  const refresh = () => forceUpdate({});
+
+  // 计算装备加成
+  const calculateEquipBonus = (charData: ScavengeCharacter, attr: 'str' | 'agi' | 'end' | 'int'): number => {
+    let bonus = 0;
+    const slots = ['weaponId', 'armorId', 'toolId'] as const;
+    for (const slot of slots) {
+      const equipId = charData[slot];
+      if (equipId) {
+        const equipItem = getItemById(equipId);
+        if (equipItem && isEquipment(equipId)) {
+          const equipment = equipItem as EquipmentItem;
+          if (equipment.attributes && equipment.attributes[attr]) {
+            bonus += equipment.attributes[attr]!;
+          }
+        }
+      }
+    }
+    return bonus;
+  };
+
+  // 计算最终属性值（基础 + 装备加成）
+  const getFinalAttr = (charData: ScavengeCharacter, attr: 'str' | 'agi' | 'end' | 'int'): number => {
+    const base = charData[attr];
+    const equipBonus = calculateEquipBonus(charData, attr);
+    return base + equipBonus;
+  };
+
+  // 计算最大生命值（基础 + 耐力加成）
+  const getMaxHp = (charData: ScavengeCharacter): number => {
+    const base = charData.maxHp;
+    const endBonus = getFinalAttr(charData, 'end');
+    return base + (endBonus - 5) * 5;
+  };
+
+  // 计算最大负重（基础 + 耐力加成）
+  const getMaxCarryWeight = (charData: ScavengeCharacter): number => {
+    const baseEnd = charData.end;
+    const equipBonus = calculateEquipBonus(charData, 'end');
+    const totalEnd = baseEnd + equipBonus;
+    return MAX_CARRY_WEIGHT + (totalEnd - 5) * 3;
+  };
+
+  // 计算饥饿/口渴上限（耐力加成）
+  const getMaxHungerThirst = (charData: ScavengeCharacter): number => {
+    const totalEnd = getFinalAttr(charData, 'end');
+    return 100 + (totalEnd - 5) * 5;
+  };
+
+  // 获取当前角色的完整数据
+  const getCharData = () => {
+    return getCharacterVar();
+  };
 
   // 从 GameVar 获取背包数据
   const getInventory = (): InventoryItem[] => {
     const key = `scavenge_inventory_${character.id}`;
     const inventory = stageState.GameVar[key];
+    if (typeof inventory === 'string') {
+      try {
+        const parsed = JSON.parse(inventory);
+        if (Array.isArray(parsed)) {
+          return parsed as unknown as InventoryItem[];
+        }
+      } catch {
+        // ignore parse error
+      }
+    }
     if (Array.isArray(inventory)) {
       return inventory as unknown as InventoryItem[];
     }
@@ -77,171 +115,257 @@ export const ScavengeCharacterDetail = ({ character, onClose }: ScavengeCharacte
 
   const inventory = getInventory();
   const totalWeight = calculateWeight();
-  const remainingWeight = MAX_CARRY_WEIGHT - totalWeight;
+
+  // 获取角色在 GameVar 中的数据
+  const getCharacterVar = (): ScavengeCharacter => {
+    const key = `scavenge_character_${character.id}`;
+    const charData = stageState.GameVar[key];
+    if (charData) {
+      if (typeof charData === 'string') {
+        try {
+          return JSON.parse(charData) as ScavengeCharacter;
+        } catch {
+          return character;
+        }
+      }
+      if (typeof charData === 'object') {
+        return charData as unknown as ScavengeCharacter;
+      }
+    }
+    return character;
+  };
+
+  // 保存角色数据到 GameVar
+  const setCharacterVar = (char: ScavengeCharacter) => {
+    const key = `scavenge_character_${char.id}`;
+    stageStateManager.setStageVarAndCommit({ key, value: JSON.stringify(char) });
+  };
+
+  // 保存背包数据到 GameVar
+  const setInventoryVar = (characterId: string, items: InventoryItem[]) => {
+    const key = `scavenge_inventory_${characterId}`;
+    stageStateManager.setStageVarAndCommit({ key, value: JSON.stringify(items) });
+  };
+
+  // 使用物品
+  const handleUseItem = (invItem: InventoryItem) => {
+    const item = getItemById(invItem.itemId);
+    if (!item) return;
+
+    if (isConsumable(invItem.itemId)) {
+      const consumableItem = item as ConsumableItem;
+      const charData = getCharacterVar();
+
+      consumableItem.effects.forEach(effect => {
+        const effectKey = effect.type as keyof ScavengeCharacter;
+        let maxValue: number;
+        switch (effect.type) {
+          case 'hp':
+            maxValue = getMaxHp(charData);
+            break;
+          case 'hunger':
+            maxValue = getMaxHungerThirst(charData);
+            break;
+          case 'thirst':
+            maxValue = getMaxHungerThirst(charData);
+            break;
+          case 'sanity':
+            maxValue = charData.maxSanity;
+            break;
+          default:
+            maxValue = 100;
+        }
+        const currentValue = charData[effectKey] as number;
+        (charData as any)[effectKey] = Math.min(currentValue + effect.value, maxValue);
+      });
+
+      const currentInventory = getInventory();
+      let newInventory: InventoryItem[];
+      if (invItem.quantity > 1) {
+        newInventory = currentInventory.map(i =>
+          i.itemId === invItem.itemId ? { ...i, quantity: i.quantity - 1 } : i
+        );
+      } else {
+        newInventory = removeFromInventory(currentInventory, invItem.itemId, 1);
+      }
+
+      setCharacterVar(charData);
+      setInventoryVar(character.id, newInventory);
+      refresh();
+    }
+  };
+
+  // 卸下装备
+  const handleUnequipItem = (slot: 'weapon' | 'armor' | 'tool') => {
+    const charData = getCharacterVar();
+    const slotKey = `${slot}Id` as keyof ScavengeCharacter;
+    const equipId = charData[slotKey] as string | undefined;
+
+    if (!equipId) return;
+
+    const currentInventory = getInventory();
+    const newInventory = addToInventory(currentInventory, {
+      itemId: equipId,
+      quantity: 1,
+      durability: (charData as any)[`${slot}Durability`] as number | undefined,
+    });
+
+    (charData as any)[slotKey] = undefined;
+    (charData as any)[`${slot}Durability`] = undefined;
+
+    // 检查属性上限变化
+    const newMaxHp = getMaxHp(charData);
+    if (charData.hp > newMaxHp) {
+      charData.hp = newMaxHp;
+    }
+    const newMaxHunger = getMaxHungerThirst(charData);
+    if (charData.hunger > newMaxHunger) {
+      charData.hunger = newMaxHunger;
+    }
+    if (charData.thirst > newMaxHunger) {
+      charData.thirst = newMaxHunger;
+    }
+
+    setCharacterVar(charData);
+    setInventoryVar(character.id, newInventory);
+    refresh();
+  };
+
+  // 装备物品
+  const handleEquipItem = (invItem: InventoryItem) => {
+    const slot = getEquipmentSlot(invItem.itemId);
+    if (!slot) return;
+
+    const equipItem = getItemById(invItem.itemId);
+    if (!equipItem || !isEquipment(invItem.itemId)) return;
+
+    const charData = getCharacterVar();
+    const slotKey = `${slot}Id` as keyof ScavengeCharacter;
+
+    const currentEquipId = charData[slotKey] as string | undefined;
+    const currentInventory = getInventory();
+    let newInventory = [...currentInventory];
+
+    if (currentEquipId) {
+      const currentEquip = getItemById(currentEquipId);
+      if (currentEquip) {
+        newInventory = addToInventory(newInventory, {
+          itemId: currentEquipId,
+          quantity: 1,
+          durability: (charData as any)[`${slot}Durability`] as number | undefined,
+        });
+      }
+    }
+
+    (charData as any)[slotKey] = invItem.itemId;
+    const equipmentItem = equipItem as EquipmentItem;
+    (charData as any)[`${slot}Durability`] = invItem.durability ?? equipmentItem.maxDurability;
+
+    if (invItem.quantity > 1) {
+      newInventory = newInventory.map(i =>
+        i.itemId === invItem.itemId ? { ...i, quantity: i.quantity - 1 } : i
+      );
+    } else {
+      newInventory = removeFromInventory(newInventory, invItem.itemId, 1);
+    }
+
+    setCharacterVar(charData);
+    setInventoryVar(character.id, newInventory);
+    refresh();
+  };
+
+  // 点击物品显示菜单
+  const handleItemClick = (invItem: InventoryItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedItem(invItem);
+    setActionQuantity(1);
+    setMenuPosition({ x: e.clientX, y: e.clientY });
+    setShowItemMenu(true);
+  };
+
+  // 关闭物品菜单
+  const closeItemMenu = () => {
+    setShowItemMenu(false);
+    setSelectedItem(null);
+  };
+
+  // 执行物品操作
+  const executeItemAction = (action: string) => {
+    if (!selectedItem) return;
+
+    const quantity = actionQuantity;
+    closeItemMenu();
+
+    if (action === 'use' && isConsumable(selectedItem.itemId)) {
+      for (let i = 0; i < quantity; i++) {
+        handleUseItem({ ...selectedItem, quantity: 1 });
+      }
+    } else if (action === 'equip' && isEquipment(selectedItem.itemId)) {
+      handleEquipItem({ ...selectedItem, quantity: 1 });
+    } else if (action === 'discard') {
+      const currentInventory = getInventory();
+      let newInventory: InventoryItem[];
+      if (selectedItem.quantity <= quantity) {
+        newInventory = removeFromInventory(currentInventory, selectedItem.itemId, selectedItem.quantity);
+      } else {
+        newInventory = currentInventory.map(i =>
+          i.itemId === selectedItem.itemId ? { ...i, quantity: i.quantity - quantity } : i
+        );
+      }
+      setInventoryVar(character.id, newInventory);
+      refresh();
+    }
+  };
+
+  // 获取角色数据用于组件
+  const charData = getCharData();
+  const maxWeight = getMaxCarryWeight(charData);
 
   return (
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        {/* 标题栏 */}
-        <div className={styles.header}>
-          <div className={styles.titleGroup}>
-            <div className={styles.avatar}>
-              <Icon icon="material-symbols:person" />
-            </div>
-            <div className={styles.titleInfo}>
-              <h2 className={styles.title}>{character.name}</h2>
-              <span className={`${styles.status} ${character.isExploring ? styles.statusExploring : ''}`}>
-                {statusText}
-              </span>
-            </div>
-          </div>
-          <button className={styles.closeButton} onClick={onClose}>
-            <Icon icon="material-symbols:close" />
-          </button>
-        </div>
+        <ScavengeCharacterHeader
+          name={character.name}
+          statusText={statusText}
+          isExploring={character.isExploring}
+          onClose={onClose}
+        />
 
-        {/* 状态面板 */}
-        <div className={styles.statusPanel}>
-          <StatusBar
-            icon={favorite}
-            label="生命值"
-            value={character.hp}
-            maxValue={character.maxHp}
-            color={getStatusBarColor(character.hp, character.maxHp)}
-          />
-          <StatusBar
-            icon={restaurant}
-            label="饥饿值"
-            value={character.hunger}
-            maxValue={character.maxHunger}
-            color={getStatusBarColor(character.hunger, character.maxHunger)}
-          />
-          <StatusBar
-            icon={waterDrop}
-            label="口渴值"
-            value={character.thirst}
-            maxValue={character.maxThirst}
-            color={getStatusBarColor(character.thirst, character.maxThirst)}
-          />
-          <StatusBar
-            icon={psychology}
-            label="精神值"
-            value={character.sanity}
-            maxValue={character.maxSanity}
-            color={getStatusBarColor(character.sanity, character.maxSanity)}
-          />
-          <StatusBar
-            icon={localFireDepartment}
-            label="疲劳值"
-            value={character.fatigue}
-            maxValue={character.maxFatigue}
-            color={getStatusBarColor(character.maxFatigue - character.fatigue, character.maxFatigue)}
-          />
-        </div>
+        <ScavengeCharacterStatus
+          charData={charData}
+          maxHp={getMaxHp(charData)}
+          maxHunger={getMaxHungerThirst(charData)}
+          maxThirst={getMaxHungerThirst(charData)}
+        />
 
-        {/* 属性面板 */}
-        <div className={styles.attrPanel}>
-          <div className={styles.sectionTitle}>角色属性</div>
-          <div className={styles.attrGrid}>
-            <div className={styles.attrItem}>
-              <span className={styles.attrName}>力量 STR</span>
-              <span className={styles.attrValue}>{character.str}</span>
-            </div>
-            <div className={styles.attrItem}>
-              <span className={styles.attrName}>敏捷 AGI</span>
-              <span className={styles.attrValue}>{character.agi}</span>
-            </div>
-            <div className={styles.attrItem}>
-              <span className={styles.attrName}>耐力 END</span>
-              <span className={styles.attrValue}>{character.end}</span>
-            </div>
-            <div className={styles.attrItem}>
-              <span className={styles.attrName}>智力 INT</span>
-              <span className={styles.attrValue}>{character.int}</span>
-            </div>
-          </div>
-        </div>
+        <ScavengeCharacterAttributes
+          charData={charData}
+          strBonus={calculateEquipBonus(charData, 'str')}
+          agiBonus={calculateEquipBonus(charData, 'agi')}
+          endBonus={calculateEquipBonus(charData, 'end')}
+          intBonus={calculateEquipBonus(charData, 'int')}
+        />
 
-        {/* 装备面板 */}
-        <div className={styles.equipPanel}>
-          <div className={styles.sectionTitle}>装备</div>
-          <div className={styles.equipList}>
-            <div className={styles.equipItem}>
-              <span className={styles.equipType}>武器</span>
-              <span className={styles.equipName}>{character.weaponId ?? '未装备'}</span>
-            </div>
-            <div className={styles.equipItem}>
-              <span className={styles.equipType}>护甲</span>
-              <span className={styles.equipName}>{character.armorId ?? '未装备'}</span>
-            </div>
-            <div className={styles.equipItem}>
-              <span className={styles.equipType}>工具</span>
-              <span className={styles.equipName}>{character.toolId ?? '未装备'}</span>
-            </div>
-          </div>
-        </div>
+        <ScavengeCharacterEquip
+          charData={charData}
+          onUnequip={handleUnequipItem}
+        />
 
-        {/* 背包面板 */}
-        <div className={styles.inventoryPanel}>
-          <div className={styles.sectionTitle}>
-            <Icon icon={backpack} className={styles.sectionIcon} />
-            <span>背包</span>
-            <button className={styles.toggleButton} onClick={() => setShowInventory(!showInventory)}>
-              <Icon icon={showInventory ? 'material-symbols:expand-less' : 'material-symbols:expand-more'} />
-            </button>
-          </div>
-
-          {/* 负重信息 */}
-          <div className={styles.weightInfo}>
-            <div className={styles.weightBar}>
-              <div
-                className={styles.weightFill}
-                style={{
-                  width: `${(totalWeight / MAX_CARRY_WEIGHT) * 100}%`,
-                  backgroundColor: remainingWeight > 10 ? '#4CAF50' : remainingWeight > 5 ? '#FFC107' : '#F44336',
-                }}
-              />
-            </div>
-            <span className={styles.weightText}>
-              {totalWeight.toFixed(1)}/{MAX_CARRY_WEIGHT}kg
-            </span>
-          </div>
-
-          {/* 物品列表 */}
-          {showInventory && (
-            <div className={styles.inventoryList}>
-              {inventory.length === 0 ? (
-                <div className={styles.empty}>背包是空的</div>
-              ) : (
-                inventory.map((invItem, index) => {
-                  const rarityColor = getItemRarityColor(invItem.itemId);
-                  return (
-                    <div key={`${invItem.itemId}-${index}`} className={styles.inventoryItem}>
-                      <div className={styles.itemIcon} style={{ color: rarityColor }}>
-                        <Icon icon={getItemIcon(invItem.itemId)} />
-                      </div>
-                      <div className={styles.itemInfo}>
-                        <span className={styles.itemName}>{getItemName(invItem.itemId)}</span>
-                        <span className={styles.itemQuantity}>x{invItem.quantity}</span>
-                      </div>
-                      {invItem.durability !== undefined && (
-                        <div className={styles.durability}>
-                          <div
-                            className={styles.durabilityBar}
-                            style={{
-                              width: `${invItem.durability}%`,
-                              backgroundColor: invItem.durability > 50 ? '#4CAF50' : '#F44336',
-                            }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          )}
-        </div>
+        <ScavengeCharacterInventory
+          inventory={inventory}
+          totalWeight={totalWeight}
+          maxWeight={maxWeight}
+          onItemClick={handleItemClick}
+          itemFilter={itemFilter}
+          onFilterChange={setItemFilter}
+          selectedItem={selectedItem}
+          showItemMenu={showItemMenu}
+          menuPosition={menuPosition}
+          actionQuantity={actionQuantity}
+          onQuantityChange={setActionQuantity}
+          onExecuteAction={executeItemAction}
+          onCloseMenu={closeItemMenu}
+        />
       </div>
     </div>
   );
