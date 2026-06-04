@@ -1,0 +1,33 @@
+.menuButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, rgba(60, 65, 75, 0.95) 0%, rgba(50, 55, 65, 0.95) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #e0e0e0;
+
+  &:hover {
+    background: linear-gradient(135deg, rgba(70, 75, 85, 0.95) 0%, rgba(60, 65, 75, 0.95) 100%);
+    border-color: rgba(74, 144, 226, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.icon {
+  font-size: 20px;
+  color: #4a90e2;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 500;
+}

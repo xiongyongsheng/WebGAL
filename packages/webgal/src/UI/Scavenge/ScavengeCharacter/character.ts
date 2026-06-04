@@ -1,0 +1,103 @@
+/**
+ * 拾荒系统 - 角色管理模块
+ * 角色数据定义和操作
+ */
+
+export interface ScavengeCharacter {
+  /** 角色ID */
+  id: string;
+  /** 角色名称 */
+  name: string;
+  /** 角色图标/头像 */
+  avatar?: string;
+  /** 力量属性 */
+  str: number;
+  /** 敏捷属性 */
+  agi: number;
+  /** 耐力属性 */
+  end: number;
+  /** 智力属性 */
+  int: number;
+  /** 当前HP */
+  hp: number;
+  /** 最大HP */
+  maxHp: number;
+  /** 饥饿值 */
+  hunger: number;
+  /** 最大饥饿值 */
+  maxHunger: number;
+  /** 口渴值 */
+  thirst: number;
+  /** 最大口渴值 */
+  maxThirst: number;
+  /** 精神值 */
+  sanity: number;
+  /** 最大精神值 */
+  maxSanity: number;
+  /** 疲劳值 */
+  fatigue: number;
+  /** 最大疲劳值 */
+  maxFatigue: number;
+  /** 装备的武器ID */
+  weaponId?: string;
+  /** 装备的护甲ID */
+  armorId?: string;
+  /** 装备的工具ID */
+  toolId?: string;
+  /** 是否在探索中 */
+  isExploring: boolean;
+  /** 探索地点ID */
+  exploringLocationId?: string;
+}
+
+/**
+ * 默认主角角色数据
+ */
+export const DEFAULT_CHARACTER: ScavengeCharacter = {
+  id: 'player_1',
+  name: '主角',
+  str: 5,
+  agi: 5,
+  end: 5,
+  int: 5,
+  hp: 100,
+  maxHp: 100,
+  hunger: 100,
+  maxHunger: 100,
+  thirst: 100,
+  maxThirst: 100,
+  sanity: 100,
+  maxSanity: 100,
+  fatigue: 0,
+  maxFatigue: 100,
+  isExploring: false,
+};
+
+/**
+ * 角色状态显示辅助函数
+ */
+export const getCharacterStatusText = (character: ScavengeCharacter): string => {
+  if (character.isExploring) {
+    return '探索中';
+  }
+  if (character.hp <= 0) {
+    return '无法行动';
+  }
+  if (character.fatigue >= 80) {
+    return '疲劳';
+  }
+  if (character.hunger <= 30 || character.thirst <= 30) {
+    return '需要物资';
+  }
+  return '待命';
+};
+
+/**
+ * 获取状态条颜色
+ */
+export const getStatusBarColor = (value: number, maxValue: number = 100): string => {
+  const percentage = (value / maxValue) * 100;
+  if (percentage >= 70) return '#4CAF50';
+  if (percentage >= 40) return '#FFC107';
+  return '#F44336';
+};

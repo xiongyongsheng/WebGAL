@@ -5,7 +5,7 @@ import { RootState } from '@/store/store';
 import { useStageState } from '@/hooks/useStageState';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { saveGame } from '@/Core/controller/storage/saveGame';
-import styles from './Scavenge_TimeControl.module.scss';
+import styles from './ScavengeTimeControl.module.scss';
 
 type TimePeriod = '清晨' | '上午' | '下午' | '半晚' | '黑夜';
 
@@ -33,7 +33,7 @@ function getNextPeriod(currentIndex: number): TimeState {
   };
 }
 
-export const Scavenge_TimeControl = () => {
+export const ScavengeTimeControl = () => {
   const GUIState = useSelector((state: RootState) => state.GUI);
   const stageState = useStageState();
 

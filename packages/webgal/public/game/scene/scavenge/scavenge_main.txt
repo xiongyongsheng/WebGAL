@@ -6,5 +6,24 @@ setVar:show_scavenge_time_control=true;
 setVar:current_day=1;
 setVar:current_period_index=0;
 
+; 初始化地图系统
+setVar:show_scavenge_map=true;
+
+; 初始化角色系统
+setVar:scavenge_show_character_list=false;
+
+; 初始化仓库系统
+setVar:scavenge_show_warehouse=false;
+
+; 初始化菜单系统
+setVar:scavenge_show_menu=true;
+
+
+; 初始化角色数据（如果没有的话）
+setVar:scavenge_character_player_1={"id":"player_1","name":"主角","str":5,"agi":5,"end":5,"int":5,"hp":100,"maxHp":100,"hunger":100,"maxHunger":100,"thirst":100,"maxThirst":100,"sanity":100,"maxSanity":100,"fatigue":0,"maxFatigue":100,"isExploring":false};
+
+; 初始化测试背包物品
+setVar:scavenge_inventory_player_1=[{"itemId":"food_apple","quantity":5},{"itemId":"drink_water","quantity":3},{"itemId":"medicine_bandage","quantity":2},{"itemId":"weapon_crowbar","quantity":1,"durability":85}];
+
 ; 进入拾荒主界面
 scavengeStart:拾荒主界面;
