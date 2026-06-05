@@ -9,7 +9,7 @@ import styles from './ScavengeCharacterInventory.module.scss';
 type ItemFilter = 'all' | 'consumable' | 'equipment' | 'material';
 
 interface ScavengeCharacterInventoryProps {
-  inventory: InventoryItem[];
+  inventory: (InventoryItem | null)[];
   totalWeight: number;
   maxWeight: number;
   onItemClick: (invItem: InventoryItem, e: React.MouseEvent) => void;
@@ -40,13 +40,20 @@ export const ScavengeCharacterInventory = ({
   onCloseMenu,
 }: ScavengeCharacterInventoryProps) => {
   // 过滤物品
-  const filteredInventory = inventory.filter(invItem => {
-    if (itemFilter === 'all') return true;
-    if (itemFilter === 'consumable') return isConsumable(invItem.itemId);
-    if (itemFilter === 'equipment') return isEquipment(invItem.itemId);
-    if (itemFilter === 'material') return invItem.itemId.startsWith('material_');
-    return true;
-  });
+  // - "all" 视图保留所有槽位（包括空槽位），用于显示稳定的占位布局
+  // - 其他 tag 视图只显示匹配的物品，空槽位被过滤掉（紧凑显示）
+  const filteredInventory: (InventoryItem | null)[] = (() => {
+    if (itemFilter === 'all') {
+      return inventory;
+    }
+    return inventory.filter((invItem): invItem is InventoryItem => {
+      if (!invItem) return false;
+      if (itemFilter === 'consumable') return isConsumable(invItem.itemId);
+      if (itemFilter === 'equipment') return isEquipment(invItem.itemId);
+      if (itemFilter === 'material') return invItem.itemId.startsWith('material_');
+      return true;
+    });
+  })();
 
   const weightPercent = (totalWeight / maxWeight) * 100;
   const remaining = maxWeight - totalWeight;
@@ -88,11 +95,15 @@ export const ScavengeCharacterInventory = ({
       </div>
 
       {/* 物品网格 */}
-      {filteredInventory.length === 0 ? (
+      {filteredInventory.every((slot) => slot === null) ? (
         <div className={styles.empty}>背包是空的</div>
       ) : (
         <div className={styles.inventoryGrid}>
           {filteredInventory.map((invItem, index) => {
+            // 空槽位：渲染占位的不可点击格子
+            if (!invItem) {
+              return <div key={`empty-${index}`} className={styles.gridItemEmpty} />;
+            }
             const rarityColor = getItemRarityColor(invItem.itemId);
             return (
               <div
@@ -138,21 +149,23 @@ export const ScavengeCharacterInventory = ({
 
             {selectedItem.quantity > 1 && (
               <div className={styles.quantitySelector}>
-                <span className={styles.quantityLabel}>数量:</span>
-                <button className={styles.quantityBtn} onClick={() => onQuantityChange(Math.max(1, actionQuantity - 1))}>
-                  -
-                </button>
-                <input
-                  type="number"
-                  className={styles.quantityInput}
-                  value={actionQuantity}
-                  min={1}
-                  max={selectedItem.quantity}
-                  onChange={(e) => onQuantityChange(Math.min(selectedItem.quantity, Math.max(1, parseInt(e.target.value) || 1)))}
-                />
-                <button className={styles.quantityBtn} onClick={() => onQuantityChange(Math.min(selectedItem.quantity, actionQuantity + 1))}>
-                  +
-                </button>
+                <div className={styles.quantityRow}>
+                  <span className={styles.quantityLabel}>数量:</span>
+                  <button className={styles.quantityBtn} onClick={() => onQuantityChange(Math.max(1, actionQuantity - 1))}>
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    className={styles.quantityInput}
+                    value={actionQuantity}
+                    min={1}
+                    max={selectedItem.quantity}
+                    onChange={(e) => onQuantityChange(Math.min(selectedItem.quantity, Math.max(1, parseInt(e.target.value) || 1)))}
+                  />
+                  <button className={styles.quantityBtn} onClick={() => onQuantityChange(Math.min(selectedItem.quantity, actionQuantity + 1))}>
+                    +
+                  </button>
+                </div>
                 <div className={styles.quantitySlider}>
                   <input
                     type="range"

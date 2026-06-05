@@ -3,6 +3,8 @@
  * 角色数据定义和操作
  */
 
+import { InventoryItem } from '../ScavengeItems/inventory';
+
 export interface ScavengeCharacter {
   /** 角色ID */
   id: string;
@@ -48,6 +50,14 @@ export interface ScavengeCharacter {
   isExploring: boolean;
   /** 探索地点ID */
   exploringLocationId?: string;
+  /** 武器耐久度 */
+  weaponDurability?: number;
+  /** 护甲耐久度 */
+  armorDurability?: number;
+  /** 工具耐久度 */
+  toolDurability?: number;
+  /** 背包物品列表（属于角色数据的一部分，null 表示空槽位） */
+  inventory: (InventoryItem | null)[];
 }
 
 /**
@@ -71,6 +81,7 @@ export const DEFAULT_CHARACTER: ScavengeCharacter = {
   fatigue: 0,
   maxFatigue: 100,
   isExploring: false,
+  inventory: [],
 };
 
 /**

@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import { initializeScript } from '@/Core/initializeScript';
+// 注册 Scavenge 模块的所有图标到 Iconify（必须最先导入）
+import '@/UI/Scavenge/iconRegistry';
 import Translation from '@/UI/Translation/Translation';
 import { Stage } from '@/Stage/Stage';
 import { BottomControlPanel } from '@/UI/BottomControlPanel/BottomControlPanel';

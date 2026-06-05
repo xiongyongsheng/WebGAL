@@ -54,11 +54,12 @@ export const setVar = (sentence: ISentence): IPerform => {
         logger.error('expression compile error', e);
       }
       setGameVar({ key, value: result });
-    } else if (valExp.match(/true|false/)) {
-      if (valExp.match(/true/)) {
+    } else if (valExp === 'true' || valExp === 'false') {
+      // [PATCH: setVar-true-false-strict] 严格相等匹配，避免 JSON 字符串中的 true/false 子串被误识别为布尔值
+      // 详见 PATCHES.md
+      if (valExp === 'true') {
         setGameVar({ key, value: true });
-      }
-      if (valExp.match(/false/)) {
+      } else {
         setGameVar({ key, value: false });
       }
     } else if (valExp.length === 0) {

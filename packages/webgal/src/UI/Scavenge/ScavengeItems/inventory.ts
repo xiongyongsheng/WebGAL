@@ -19,6 +19,11 @@ export interface InventoryItem {
   durability?: number;
 }
 
+/**
+ * 背包中的槽位，可以是物品或空槽位（null）
+ */
+export type InventorySlot = InventoryItem | null;
+
 // ============== 背包容量配置 ==============
 
 /** 背包最大负重（单位：kg） */
@@ -38,12 +43,13 @@ export const QUEST_WAREHOUSE_CAPACITY = 20; // 每种20格，每格5个
 // ============== 背包操作函数 ==============
 
 /**
- * 计算背包总重量
+ * 计算背包总重量（忽略 null 槽位）
  * @param items 背包物品列表
  * @returns 总重量
  */
-export const calculateTotalWeight = (items: InventoryItem[]): number => {
+export const calculateTotalWeight = (items: (InventoryItem | null)[]): number => {
   return items.reduce((total, invItem) => {
+    if (!invItem) return total;
     const item = getItemById(invItem.itemId);
     if (!item) return total;
     return total + item.weight * invItem.quantity;
@@ -86,21 +92,15 @@ export const canAddToInventory = (
 };
 
 /**
- * 添加物品到背包
+ * 添加物品到背包（支持 null 槽位，优先填入空槽）
  * @param items 当前背包物品
  * @param newItem 要添加的物品
  * @returns 新背包物品列表
  */
 export const addToInventory = (
-  items: InventoryItem[],
+  items: (InventoryItem | null)[],
   newItem: InventoryItem
-): InventoryItem[] => {
-  const { canAdd, reason } = canAddToInventory(items, newItem);
-  if (!canAdd) {
-    console.warn(`无法添加物品: ${reason}`);
-    return items;
-  }
-
+): (InventoryItem | null)[] => {
   const item = getItemById(newItem.itemId);
   if (!item) return items;
 
@@ -110,62 +110,95 @@ export const addToInventory = (
     ? (newItem.durability ?? equipmentItem.maxDurability)
     : undefined;
 
-  // 复制当前背包
   const newItems = [...items];
 
   // 检查是否可以堆叠
   if (item.stackable) {
-    const existingIndex = newItems.findIndex((i) => i.itemId === newItem.itemId);
+    const existingIndex = newItems.findIndex((i) => i !== null && i.itemId === newItem.itemId);
     if (existingIndex >= 0) {
       newItems[existingIndex] = {
-        ...newItems[existingIndex],
-        quantity: newItems[existingIndex].quantity + newItem.quantity,
+        ...newItems[existingIndex]!,
+        quantity: newItems[existingIndex]!.quantity + newItem.quantity,
       };
       return newItems;
     }
   }
 
-  // 添加新物品
-  newItems.push({
+  const slotItem: InventoryItem = {
     itemId: newItem.itemId,
     quantity: newItem.quantity,
     durability,
-  });
+  };
+
+  // 优先填入空槽
+  const nullIndex = newItems.findIndex((i) => i === null);
+  if (nullIndex >= 0) {
+    newItems[nullIndex] = slotItem;
+  } else {
+    newItems.push(slotItem);
+  }
 
   return newItems;
 };
 
 /**
- * 从背包移除物品
+ * 从背包移除物品（数量减为 0 时置空槽位而不是删除）
  * @param items 当前背包物品
  * @param itemId 物品ID
  * @param quantity 移除数量
  * @returns 新背包物品列表
  */
 export const removeFromInventory = (
-  items: InventoryItem[],
+  items: (InventoryItem | null)[],
   itemId: string,
   quantity: number = 1
-): InventoryItem[] => {
-  const newItems = [...items];
-  const itemIndex = newItems.findIndex((i) => i.itemId === itemId);
+): (InventoryItem | null)[] => {
+  return items.map((item) => {
+    if (!item || item.itemId !== itemId) return item;
+    if (item.quantity <= quantity) {
+      return null;
+    }
+    return { ...item, quantity: item.quantity - quantity };
+  });
+};
 
-  if (itemIndex < 0) return items;
+/**
+ * 减少物品数量（使用物品：消耗完置空槽位）
+ */
+export const decreaseInventoryItem = (
+  items: (InventoryItem | null)[],
+  itemId: string,
+  quantity: number = 1
+): (InventoryItem | null)[] => {
+  return removeFromInventory(items, itemId, quantity);
+};
 
-  const existingItem = newItems[itemIndex];
+/**
+ * 在指定物品的槽位替换为新物品（装备替换时用）
+ * @param items 背包物品
+ * @param targetItemId 要替换的物品 ID
+ * @param replacement 替换的物品，null 表示置空
+ */
+export const replaceInventoryItemAt = (
+  items: (InventoryItem | null)[],
+  targetItemId: string,
+  replacement: InventoryItem | null
+): (InventoryItem | null)[] => {
+  return items.map((item) => {
+    if (item && item.itemId === targetItemId) {
+      return replacement;
+    }
+    return item;
+  });
+};
 
-  if (existingItem.quantity <= quantity) {
-    // 移除整个物品
-    newItems.splice(itemIndex, 1);
-  } else {
-    // 减少数量
-    newItems[itemIndex] = {
-      ...existingItem,
-      quantity: existingItem.quantity - quantity,
-    };
-  }
-
-  return newItems;
+/**
+ * 整理背包：移除空槽位，把所有物品移到前面
+ */
+export const compactInventorySlots = (
+  items: (InventoryItem | null)[]
+): (InventoryItem | null)[] => {
+  return items.filter((item): item is InventoryItem => item !== null);
 };
 
 /**
@@ -175,9 +208,9 @@ export const removeFromInventory = (
  * @returns 新的背包和使用后的效果
  */
 export const useConsumable = (
-  items: InventoryItem[],
+  items: (InventoryItem | null)[],
   itemId: string
-): { newItems: InventoryItem[]; effects: Record<string, number> } | null => {
+): { newItems: (InventoryItem | null)[]; effects: Record<string, number> } | null => {
   const item = getItemById(itemId);
   if (!item || item.type !== 'consumable') {
     return null;

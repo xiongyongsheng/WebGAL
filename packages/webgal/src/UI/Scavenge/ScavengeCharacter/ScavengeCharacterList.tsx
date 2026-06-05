@@ -15,8 +15,16 @@ export const ScavengeCharacterList = ({ onCharacterSelect, onClose }: ScavengeCh
   // 从 GameVar 获取角色列表
   const getCharacters = (): ScavengeCharacter[] => {
     const charactersData = stageState.GameVar['scavenge_characters'];
-    if (Array.isArray(charactersData)) {
-      return charactersData as ScavengeCharacter[];
+    let parsed: any = charactersData;
+    if (typeof charactersData === 'string') {
+      try {
+        parsed = JSON.parse(charactersData);
+      } catch {
+        parsed = null;
+      }
+    }
+    if (Array.isArray(parsed)) {
+      return parsed as ScavengeCharacter[];
     }
 
     // 如果没有角色数据，返回默认角色
@@ -38,6 +46,7 @@ export const ScavengeCharacterList = ({ onCharacterSelect, onClose }: ScavengeCh
       fatigue: 0,
       maxFatigue: 100,
       isExploring: false,
+      inventory: [],
     };
     return [defaultChar];
   };
