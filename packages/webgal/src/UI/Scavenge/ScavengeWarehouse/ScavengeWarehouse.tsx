@@ -8,11 +8,13 @@ import styles from './ScavengeWarehouse.module.scss';
 
 interface ScavengeWarehouseProps {
   onClose: () => void;
+  /** 嵌入模式：用于角色面板内嵌，不显示外层 overlay 和关闭按钮 */
+  embedded?: boolean;
 }
 
 type TabType = 'all' | 'consumable' | 'material' | 'equipment' | 'quest';
 
-export const ScavengeWarehouse = ({ onClose }: ScavengeWarehouseProps) => {
+export const ScavengeWarehouse = ({ onClose, embedded = false }: ScavengeWarehouseProps) => {
   const [activeTab, setActiveTab] = useState<TabType>('all');
   const stageState = useStageState();
 
@@ -20,7 +22,7 @@ export const ScavengeWarehouse = ({ onClose }: ScavengeWarehouseProps) => {
   const getWarehouseItems = (): InventoryItem[] => {
     const warehouse = stageState.GameVar['scavenge_warehouse'];
     if (Array.isArray(warehouse)) {
-      return warehouse as InventoryItem[];
+      return warehouse as unknown as InventoryItem[];
     }
     return [];
   };
@@ -64,66 +66,78 @@ export const ScavengeWarehouse = ({ onClose }: ScavengeWarehouseProps) => {
     },
   ];
 
-  return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.panel} onClick={(e) => e.stopPropagation()}>
-        {/* 标题栏 */}
-        <div className={styles.header}>
-          <div className={styles.titleGroup}>
-            <Icon icon="material-symbols:warehouse-outline" className={styles.titleIcon} />
-            <h2 className={styles.title}>仓库</h2>
-          </div>
+  const content = (
+    <>
+      {/* 标题栏（嵌入模式不显示关闭按钮） */}
+      <div className={styles.header}>
+        <div className={styles.titleGroup}>
+          <Icon icon="material-symbols:warehouse-outline" className={styles.titleIcon} />
+          <h2 className={styles.title}>仓库</h2>
+        </div>
+        {!embedded && (
           <button className={styles.closeButton} onClick={onClose}>
             <Icon icon="material-symbols:close" />
           </button>
-        </div>
+        )}
+      </div>
 
-        {/* 标签页 */}
-        <div className={styles.tabs}>
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              className={`${styles.tab} ${activeTab === tab.key ? styles.active : ''}`}
-              onClick={() => setActiveTab(tab.key)}
-            >
-              {tab.label}
-              <span className={styles.tabCount}>{tab.count}</span>
-            </button>
-          ))}
-        </div>
+      {/* 标签页 */}
+      <div className={styles.tabs}>
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            className={`${styles.tab} ${activeTab === tab.key ? styles.active : ''}`}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            {tab.label}
+            <span className={styles.tabCount}>{tab.count}</span>
+          </button>
+        ))}
+      </div>
 
-        {/* 物品列表 */}
-        <div className={styles.itemList}>
-          {items.length === 0 ? (
-            <div className={styles.empty}>仓库是空的</div>
-          ) : (
-            items.map((invItem, index) => {
-              const rarityColor = getItemRarityColor(invItem.itemId);
-              return (
-                <div key={`${invItem.itemId}-${index}`} className={styles.itemCard}>
-                  <div className={styles.itemIcon} style={{ color: rarityColor }}>
-                    <Icon icon={getItemIcon(invItem.itemId)} />
-                  </div>
-                  <div className={styles.itemInfo}>
-                    <span className={styles.itemName}>{getItemName(invItem.itemId)}</span>
-                    <span className={styles.itemQuantity}>x{invItem.quantity}</span>
-                  </div>
-                  {invItem.durability !== undefined && (
-                    <div className={styles.durability}>
-                      <div
-                        className={styles.durabilityBar}
-                        style={{
-                          width: `${(invItem.durability / 100) * 100}%`,
-                          backgroundColor: invItem.durability > 50 ? '#4CAF50' : '#F44336',
-                        }}
-                      />
-                    </div>
-                  )}
+      {/* 物品列表 */}
+      <div className={styles.itemList}>
+        {items.length === 0 ? (
+          <div className={styles.empty}>仓库是空的</div>
+        ) : (
+          items.map((invItem, index) => {
+            const rarityColor = getItemRarityColor(invItem.itemId);
+            return (
+              <div key={`${invItem.itemId}-${index}`} className={styles.itemCard}>
+                <div className={styles.itemIcon} style={{ color: rarityColor }}>
+                  <Icon icon={getItemIcon(invItem.itemId)} />
                 </div>
-              );
-            })
-          )}
-        </div>
+                <div className={styles.itemInfo}>
+                  <span className={styles.itemName}>{getItemName(invItem.itemId)}</span>
+                  <span className={styles.itemQuantity}>x{invItem.quantity}</span>
+                </div>
+                {invItem.durability !== undefined && (
+                  <div className={styles.durability}>
+                    <div
+                      className={styles.durabilityBar}
+                      style={{
+                        width: `${(invItem.durability / 100) * 100}%`,
+                        backgroundColor: invItem.durability > 50 ? '#4CAF50' : '#F44336',
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </>
+  );
+
+  if (embedded) {
+    return <div className={styles.embeddedRoot}>{content}</div>;
+  }
+
+  return (
+    <div className={styles.overlay} onClick={onClose}>
+      <div className={styles.panel} onClick={(e) => e.stopPropagation()}>
+        {content}
       </div>
     </div>
   );

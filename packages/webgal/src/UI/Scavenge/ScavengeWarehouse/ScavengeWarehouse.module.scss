@@ -9,6 +9,18 @@
   animation: fadeIn 0.2s ease;
 }
 
+// 嵌入模式：直接填充父容器，不渲染外层 overlay
+.embeddedRoot {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 0;
+  overflow: hidden;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;

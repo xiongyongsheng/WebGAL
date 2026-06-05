@@ -112,3 +112,14 @@ export const getStatusBarColor = (value: number, maxValue: number = 100): string
   if (percentage >= 40) return '#FFC107';
   return '#F44336';
 };
+
+/**
+ * 规范化角色数据（处理 0/1 转 boolean 等类型问题）
+ */
+export const normalizeCharacter = (char: ScavengeCharacter): ScavengeCharacter => {
+  return {
+    ...char,
+    isExploring: Boolean(char.isExploring),
+    inventory: char.inventory ?? [],
+  };
+};
