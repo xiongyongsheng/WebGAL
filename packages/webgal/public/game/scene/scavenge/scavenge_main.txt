@@ -14,6 +14,7 @@ setVar:scavenge_show_character_list=false;
 
 ; 初始化仓库系统
 setVar:scavenge_show_warehouse=false;
+setVar:scavenge_warehouse=[{"itemId":"food_apple","quantity":10},{"itemId":"drink_water","quantity":8},{"itemId":"medicine_bandage","quantity":5},{"itemId":"material_parts","quantity":20},{"itemId":"weapon_crowbar","quantity":1,"durability":100},{"itemId":"armor_vest","quantity":1,"durability":100},{"itemId":"tool_flashlight","quantity":1,"durability":100},{"itemId":"quest_key","quantity":1}];
 
 ; 初始化菜单系统
 setVar:scavenge_show_menu=true;

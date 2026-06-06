@@ -121,6 +121,219 @@
   overflow: hidden;
 }
 
+// 角色卡片拖拽时高亮
+.characterCard {
+  position: relative;
+  flex: 0 0 auto;
+  width: 400px;
+  max-width: 90vw;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.characterCard.cardDragOver {
+  background: rgba(76, 175, 80, 0.12);
+  outline: 2px dashed #4CAF50;
+  outline-offset: -4px;
+}
+
+// 转移子菜单（显示在主菜单旁边）
+.transferSubmenu {
+  position: fixed;
+  z-index: 500;
+  min-width: 220px;
+  background: linear-gradient(135deg, rgba(50, 55, 65, 0.98) 0%, rgba(40, 45, 55, 0.98) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  padding: 10px;
+  animation: fadeIn 0.15s ease;
+}
+
+.submenuHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #c0c0c0;
+}
+
+.submenuQtyBadge {
+  margin-left: auto;
+  background: rgba(74, 144, 226, 0.3);
+  color: #4a90e2;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.submenuTargets {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.submenuTargetBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+
+  &:hover:not(:disabled) {
+    background: rgba(74, 144, 226, 0.2);
+    border-color: rgba(74, 144, 226, 0.5);
+  }
+}
+
+.submenuTargetDisabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.submenuUnavailable {
+  margin-left: auto;
+  font-size: 10px;
+  color: #f44336;
+}
+
+.submenuCancelBtn {
+  width: 100%;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #a0a0a0;
+  cursor: pointer;
+  font-size: 12px;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+}
+
+// 拖拽数量选择对话框（在松手位置弹出）
+.dragQuantityOverlay {
+  position: fixed;
+  z-index: 500;
+  transform: translate(-50%, -50%);
+}
+
+.dragQuantityDialog {
+  min-width: 220px;
+  background: linear-gradient(135deg, rgba(50, 55, 65, 0.98) 0%, rgba(40, 45, 55, 0.98) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  padding: 12px;
+}
+
+.dragQuantityItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #fff;
+}
+
+.dragQuantityIcon {
+  font-size: 20px;
+  color: #4a90e2;
+}
+
+.dragQuantityTotal {
+  margin-left: auto;
+  color: #a0a0a0;
+  font-size: 12px;
+}
+
+.dragQuantityControls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.dragQuantityWeight {
+  font-size: 11px;
+  color: #808080;
+  margin-bottom: 10px;
+}
+
+.dragQuantityActions {
+  display: flex;
+  gap: 6px;
+}
+
+.dragQtyCancelBtn,
+.dragQtyConfirmBtn {
+  flex: 1;
+  padding: 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dragQtyCancelBtn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #a0a0a0;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+}
+
+.dragQtyConfirmBtn {
+  background: rgba(74, 144, 226, 0.3);
+  border: 1px solid rgba(74, 144, 226, 0.5);
+  color: #fff;
+
+  &:hover {
+    background: rgba(74, 144, 226, 0.5);
+  }
+}
+
+// 错误提示 toast
+.errorToast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(244, 67, 54, 0.95);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 13px;
+  z-index: 600;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  animation: fadeIn 0.2s ease;
+}
+
 // 物品操作菜单（浮层）
 .menuOverlay {
   position: fixed;
@@ -173,27 +386,121 @@
 }
 
 .quantityBtn {
-  width: 26px;
-  height: 26px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
   color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
 
-  &:hover { background: rgba(255, 255, 255, 0.2); }
+  &:hover {
+    background: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+
+  &:active {
+    background: rgba(74, 144, 226, 0.3);
+  }
+}
+
+.quantityMaxBtn {
+  min-width: 44px;
+  height: 32px;
+  padding: 0 8px;
+  background: rgba(74, 144, 226, 0.18);
+  border: 1px solid rgba(74, 144, 226, 0.5);
+  border-radius: 6px;
+  color: #4a90e2;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(74, 144, 226, 0.3);
+    color: #fff;
+  }
+
+  &:active:not(:disabled) {
+    background: rgba(74, 144, 226, 0.5);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #808080;
+  }
 }
 
 .quantityInput {
-  width: 50px;
-  height: 26px;
+  width: 54px;
+  height: 32px;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
+  border-radius: 6px;
   color: #fff;
+  font-size: 14px;
   text-align: center;
+  -moz-appearance: textfield;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
 
   &:focus { outline: none; border-color: #4a90e2; }
+}
+
+// 拖拽数量框的滑块（在 +/- 按钮下方）
+.dragQuantitySlider {
+  width: 100%;
+  margin: 0 0 8px 0;
+  padding: 0 4px;
+
+  input[type="range"] {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    -webkit-appearance: none;
+    cursor: pointer;
+
+    &::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      background: #4a90e2;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid #fff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    }
+
+    &::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      background: #4a90e2;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid #fff;
+    }
+  }
 }
 
 .menuActions {

@@ -1,14 +1,14 @@
-import { useState } from 'react';
 import { Icon } from '@iconify/react';
 import backpack from '@iconify-icons/material-symbols/backpack-outline';
-import { ScavengeCharacter } from '../character';
 import { InventoryItem } from '../../ScavengeItems/inventory';
-import { getItemName, getItemIcon, getItemRarityColor, getItemById, isEquipment, isConsumable } from '../../ScavengeItems/items';
+import { getItemName, getItemIcon, getItemRarityColor, isEquipment, isConsumable, isQuestItem } from '../../ScavengeItems/items';
 import styles from './ScavengeCharacterInventory.module.scss';
 
-type ItemFilter = 'all' | 'consumable' | 'equipment' | 'material';
+type ItemFilter = 'all' | 'consumable' | 'equipment' | 'material' | 'quest';
 
 interface ScavengeCharacterInventoryProps {
+  /** 所属角色 ID（用于拖拽时标识 source） */
+  characterId?: string;
   inventory: (InventoryItem | null)[];
   totalWeight: number;
   maxWeight: number;
@@ -22,9 +22,20 @@ interface ScavengeCharacterInventoryProps {
   onQuantityChange: (qty: number) => void;
   onExecuteAction: (action: string) => void;
   onCloseMenu: () => void;
+  /** 转移请求回调（点击菜单"转移"时调用） */
+  onTransferRequest?: (item: InventoryItem) => void;
+  /** 物品拖拽开始（用于全局面板统一管理拖拽状态） */
+  onItemDragStart?: (item: InventoryItem, e: React.DragEvent) => void;
+  /** 物品拖拽结束 */
+  onItemDragEnd?: () => void;
+  /** 卡片作为 drop target 的回调（其他卡片拖到这张卡片时） */
+  onCardDrop?: (e: React.DragEvent) => void;
+  /** 是否有 drag 元素悬停在本卡上（用于高亮） */
+  isCardDragOver?: boolean;
 }
 
 export const ScavengeCharacterInventory = ({
+  characterId,
   inventory,
   totalWeight,
   maxWeight,
@@ -38,10 +49,12 @@ export const ScavengeCharacterInventory = ({
   onQuantityChange,
   onExecuteAction,
   onCloseMenu,
+  onTransferRequest,
+  onItemDragStart,
+  onItemDragEnd,
+  onCardDrop,
+  isCardDragOver,
 }: ScavengeCharacterInventoryProps) => {
-  // 过滤物品
-  // - "all" 视图保留所有槽位（包括空槽位），用于显示稳定的占位布局
-  // - 其他 tag 视图只显示匹配的物品，空槽位被过滤掉（紧凑显示）
   const filteredInventory: (InventoryItem | null)[] = (() => {
     if (itemFilter === 'all') {
       return inventory;
@@ -51,6 +64,7 @@ export const ScavengeCharacterInventory = ({
       if (itemFilter === 'consumable') return isConsumable(invItem.itemId);
       if (itemFilter === 'equipment') return isEquipment(invItem.itemId);
       if (itemFilter === 'material') return invItem.itemId.startsWith('material_');
+      if (itemFilter === 'quest') return isQuestItem(invItem.itemId);
       return true;
     });
   })();
@@ -59,26 +73,41 @@ export const ScavengeCharacterInventory = ({
   const remaining = maxWeight - totalWeight;
 
   return (
-    <div className={styles.inventoryPanel}>
+    <div
+      className={`${styles.inventoryPanel} ${isCardDragOver ? styles.dropTargetOver : ''}`}
+      onDragOver={(e) => {
+        if (onCardDrop) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+        }
+      }}
+      onDrop={(e) => {
+        if (onCardDrop) {
+          e.preventDefault();
+          onCardDrop(e);
+        }
+      }}
+    >
       <div className={styles.sectionTitle}>
         <Icon icon={backpack} className={styles.sectionIcon} />
         <span>背包</span>
       </div>
 
-      {/* 筛选标签 */}
       <div className={styles.filterTabs}>
-        {(['all', 'consumable', 'equipment', 'material'] as ItemFilter[]).map(filter => (
+        {(['all', 'consumable', 'equipment', 'material', 'quest'] as ItemFilter[]).map(filter => (
           <button
             key={filter}
             className={`${styles.filterTab} ${itemFilter === filter ? styles.active : ''}`}
             onClick={() => onFilterChange(filter)}
           >
-            {filter === 'all' ? '全部' : filter === 'consumable' ? '消耗品' : filter === 'equipment' ? '装备' : '材料'}
+            {filter === 'all' ? '全部' :
+             filter === 'consumable' ? '消耗品' :
+             filter === 'equipment' ? '装备' :
+             filter === 'material' ? '材料' : '任务'}
           </button>
         ))}
       </div>
 
-      {/* 负重信息 */}
       <div className={styles.weightInfo}>
         <div className={styles.weightBar}>
           <div
@@ -94,21 +123,28 @@ export const ScavengeCharacterInventory = ({
         </span>
       </div>
 
-      {/* 物品网格 */}
       {filteredInventory.every((slot) => slot === null) ? (
         <div className={styles.empty}>背包是空的</div>
       ) : (
         <div className={styles.inventoryGrid}>
           {filteredInventory.map((invItem, index) => {
-            // 空槽位：渲染占位的不可点击格子
             if (!invItem) {
               return <div key={`empty-${index}`} className={styles.gridItemEmpty} />;
             }
             const rarityColor = getItemRarityColor(invItem.itemId);
             return (
               <div
-                key={`${invItem.itemId}-${index}`}
+                key={invItem.instanceId}
                 className={styles.gridItem}
+                draggable={!!onItemDragStart}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('text/scavenge-instance-id', invItem.instanceId);
+                  e.dataTransfer.setData('text/scavenge-item-id', invItem.itemId);
+                  e.dataTransfer.setData('text/scavenge-source-char', characterId ?? '');
+                  e.dataTransfer.effectAllowed = 'move';
+                  onItemDragStart?.(invItem, e);
+                }}
+                onDragEnd={() => onItemDragEnd?.()}
                 onClick={(e) => onItemClick(invItem, e)}
               >
                 <div className={styles.itemIcon} style={{ color: rarityColor }}>
@@ -132,7 +168,6 @@ export const ScavengeCharacterInventory = ({
         </div>
       )}
 
-      {/* 物品操作菜单 */}
       {showItemMenu && selectedItem && (
         <div className={styles.itemMenuOverlay} onClick={onCloseMenu}>
           <div
@@ -165,6 +200,14 @@ export const ScavengeCharacterInventory = ({
                   <button className={styles.quantityBtn} onClick={() => onQuantityChange(Math.min(selectedItem.quantity, actionQuantity + 1))}>
                     +
                   </button>
+                  <button
+                    className={styles.quantityMaxBtn}
+                    onClick={() => onQuantityChange(selectedItem.quantity)}
+                    disabled={actionQuantity >= selectedItem.quantity}
+                    title="设为最大"
+                  >
+                    MAX
+                  </button>
                 </div>
                 <div className={styles.quantitySlider}>
                   <input
@@ -189,6 +232,12 @@ export const ScavengeCharacterInventory = ({
                 <button className={styles.menuActionBtn} onClick={() => onExecuteAction('equip')}>
                   <Icon icon="material-symbols:build" />
                   装备
+                </button>
+              )}
+              {onTransferRequest && (
+                <button className={styles.menuActionBtn} onClick={() => onTransferRequest(selectedItem)}>
+                  <Icon icon="material-symbols:swap-horiz" />
+                  转移
                 </button>
               )}
               <button className={styles.menuActionBtn} onClick={() => onExecuteAction('discard')}>

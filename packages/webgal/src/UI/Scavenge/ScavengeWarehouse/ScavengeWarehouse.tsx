@@ -1,6 +1,4 @@
 import { useState } from 'react';
-import { useStageState } from '@/hooks/useStageState';
-import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { Icon } from '@iconify/react';
 import { getItemName, getItemIcon, getItemRarityColor } from '../ScavengeItems/items';
 import { InventoryItem } from '../ScavengeItems/inventory';
@@ -10,60 +8,63 @@ interface ScavengeWarehouseProps {
   onClose: () => void;
   /** 嵌入模式：用于角色面板内嵌，不显示外层 overlay 和关闭按钮 */
   embedded?: boolean;
+  /** 物品列表（由父组件传入） */
+  items: InventoryItem[];
+  /** 点击物品回调（由父组件处理，弹转移菜单） */
+  onItemClick?: (item: InventoryItem, e: React.MouseEvent) => void;
+  /** 拖拽开始回调 */
+  onItemDragStart?: (item: InventoryItem, e: React.DragEvent) => void;
+  /** 拖拽结束回调 */
+  onItemDragEnd?: () => void;
+  /** 区域作为 drop target 的回调：item 从外部拖入（item 为传入的 item）或内部移动 */
+  onDrop?: (e: React.DragEvent) => void;
+  /** 当前是否有 drag 元素悬停（用于高亮） */
+  isDragOver?: boolean;
 }
 
 type TabType = 'all' | 'consumable' | 'material' | 'equipment' | 'quest';
 
-export const ScavengeWarehouse = ({ onClose, embedded = false }: ScavengeWarehouseProps) => {
+export const ScavengeWarehouse = ({
+  onClose,
+  embedded = false,
+  items,
+  onItemClick,
+  onItemDragStart,
+  onItemDragEnd,
+  onDrop,
+  isDragOver,
+}: ScavengeWarehouseProps) => {
   const [activeTab, setActiveTab] = useState<TabType>('all');
-  const stageState = useStageState();
 
-  // 从 GameVar 获取仓库数据
-  const getWarehouseItems = (): InventoryItem[] => {
-    const warehouse = stageState.GameVar['scavenge_warehouse'];
-    if (Array.isArray(warehouse)) {
-      return warehouse as unknown as InventoryItem[];
+  // 防御性过滤：仓库永远不存 null 槽位，但脏数据可能存在
+  const safeItems = items.filter((i): i is InventoryItem => i !== null);
+
+  // 物品类型判定（与 tab 计数 / 过滤复用同一份规则，避免计数和列表对不上）
+  const isConsumableItem = (id: string) =>
+    id.startsWith('food_') || id.startsWith('drink_') || id.startsWith('medicine_');
+  const isMaterialItem = (id: string) => id.startsWith('material_');
+  const isEquipmentItem = (id: string) =>
+    id.startsWith('weapon_') || id.startsWith('armor_') || id.startsWith('tool_');
+  const isQuestItemId = (id: string) => id.startsWith('quest_');
+
+  // 按当前 tab 过滤要渲染的物品
+  const filteredItems: InventoryItem[] = (() => {
+    switch (activeTab) {
+      case 'consumable': return safeItems.filter((i) => isConsumableItem(i.itemId));
+      case 'material': return safeItems.filter((i) => isMaterialItem(i.itemId));
+      case 'equipment': return safeItems.filter((i) => isEquipmentItem(i.itemId));
+      case 'quest': return safeItems.filter((i) => isQuestItemId(i.itemId));
+      case 'all':
+      default: return safeItems;
     }
-    return [];
-  };
-
-  const items = getWarehouseItems();
-
-  // 按类型筛选
-  const filterItems = (tab: TabType) => {
-    if (tab === 'all') return items;
-    const typeMap: Record<TabType, string> = {
-      all: '',
-      consumable: 'consumable',
-      material: 'material',
-      equipment: 'equipment',
-      quest: 'quest',
-    };
-    return items; // 实际筛选逻辑需要物品类型信息
-  };
+  })();
 
   const tabs: { key: TabType; label: string; count: number }[] = [
-    { key: 'all', label: '全部', count: items.length },
-    {
-      key: 'consumable',
-      label: '消耗品',
-      count: items.filter((i) => i.itemId.startsWith('food_') || i.itemId.startsWith('drink_') || i.itemId.startsWith('medicine_')).length,
-    },
-    {
-      key: 'material',
-      label: '材料',
-      count: items.filter((i) => i.itemId.startsWith('material_')).length,
-    },
-    {
-      key: 'equipment',
-      label: '装备',
-      count: items.filter((i) => i.itemId.startsWith('weapon_') || i.itemId.startsWith('armor_') || i.itemId.startsWith('tool_')).length,
-    },
-    {
-      key: 'quest',
-      label: '任务',
-      count: items.filter((i) => i.itemId.startsWith('quest_')).length,
-    },
+    { key: 'all', label: '全部', count: safeItems.length },
+    { key: 'consumable', label: '消耗品', count: safeItems.filter((i) => isConsumableItem(i.itemId)).length },
+    { key: 'material', label: '材料', count: safeItems.filter((i) => isMaterialItem(i.itemId)).length },
+    { key: 'equipment', label: '装备', count: safeItems.filter((i) => isEquipmentItem(i.itemId)).length },
+    { key: 'quest', label: '任务', count: safeItems.filter((i) => isQuestItemId(i.itemId)).length },
   ];
 
   const content = (
@@ -95,22 +96,54 @@ export const ScavengeWarehouse = ({ onClose, embedded = false }: ScavengeWarehou
         ))}
       </div>
 
-      {/* 物品列表 */}
-      <div className={styles.itemList}>
-        {items.length === 0 ? (
-          <div className={styles.empty}>仓库是空的</div>
+      {/* 物品列表（作为 drop target） */}
+      <div
+        className={`${styles.itemList} ${isDragOver ? styles.dropTargetOver : ''}`}
+        onDragOver={(e) => {
+          if (onDrop) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+          }
+        }}
+        onDrop={(e) => {
+          if (onDrop) {
+            e.preventDefault();
+            onDrop(e);
+          }
+        }}
+      >
+        {filteredItems.length === 0 ? (
+          <div className={styles.empty}>
+            {isDragOver
+              ? '松开放入仓库'
+              : activeTab === 'all'
+                ? '仓库是空的'
+                : '该分类下没有物品'}
+          </div>
         ) : (
-          items.map((invItem, index) => {
+          filteredItems.map((invItem, index) => {
             const rarityColor = getItemRarityColor(invItem.itemId);
             return (
-              <div key={`${invItem.itemId}-${index}`} className={styles.itemCard}>
+              <div
+                key={invItem.instanceId}
+                className={styles.itemCard}
+                title={`${getItemName(invItem.itemId)} x${invItem.quantity}`}
+                draggable={!!onItemDragStart}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('text/scavenge-instance-id', invItem.instanceId);
+                  e.dataTransfer.setData('text/scavenge-item-id', invItem.itemId);
+                  e.dataTransfer.setData('text/scavenge-item-index', String(index));
+                  e.dataTransfer.setData('text/scavenge-source', 'warehouse');
+                  e.dataTransfer.effectAllowed = 'move';
+                  onItemDragStart?.(invItem, e);
+                }}
+                onDragEnd={() => onItemDragEnd?.()}
+                onClick={(e) => onItemClick?.(invItem, e)}
+              >
                 <div className={styles.itemIcon} style={{ color: rarityColor }}>
                   <Icon icon={getItemIcon(invItem.itemId)} />
                 </div>
-                <div className={styles.itemInfo}>
-                  <span className={styles.itemName}>{getItemName(invItem.itemId)}</span>
-                  <span className={styles.itemQuantity}>x{invItem.quantity}</span>
-                </div>
+                <div className={styles.itemQuantity}>x{invItem.quantity}</div>
                 {invItem.durability !== undefined && (
                   <div className={styles.durability}>
                     <div

@@ -3,7 +3,7 @@
  * 角色数据定义和操作
  */
 
-import { InventoryItem } from '../ScavengeItems/inventory';
+import { InventoryItem, migrateInventory } from '../ScavengeItems/inventory';
 
 export interface ScavengeCharacter {
   /** 角色ID */
@@ -114,12 +114,29 @@ export const getStatusBarColor = (value: number, maxValue: number = 100): string
 };
 
 /**
- * 规范化角色数据（处理 0/1 转 boolean 等类型问题）
+ * 规范化角色数据（处理 0/1 转 boolean 等类型问题 + 迁移旧 inventory 数据）
+ *
+ * 迁移内容：旧数据可能没有 `instanceId`，这里统一补一个；同时过滤掉 null 槽位之间的非法值。
  */
 export const normalizeCharacter = (char: ScavengeCharacter): ScavengeCharacter => {
+  const rawInventory = char.inventory ?? [];
+  // 给非 null 的 entry 补 instanceId，null 槽位保留
+  const migrated: (InventoryItem | null)[] = rawInventory.map((slot) => {
+    if (slot === null) return null;
+    return slot;
+  });
+  // 一次性把 null 之间的非 null 项提取出来补 instanceId
+  const nonNullEntries = migrated.filter((s): s is InventoryItem => s !== null);
+  const migratedNonNull = migrateInventory(nonNullEntries);
+  // 还原到原数组（保持 null 位置不变）
+  let cursor = 0;
+  const finalInventory: (InventoryItem | null)[] = migrated.map((slot) => {
+    if (slot === null) return null;
+    return migratedNonNull[cursor++];
+  });
   return {
     ...char,
     isExploring: Boolean(char.isExploring),
-    inventory: char.inventory ?? [],
+    inventory: finalInventory,
   };
 };
