@@ -5,6 +5,9 @@
 
 import { InventoryItem, migrateInventory } from '../ScavengeItems/inventory';
 
+/** 主属性（升级时自动 +2 的属性） */
+export type MainStat = 'str' | 'agi' | 'end' | 'int';
+
 export interface ScavengeCharacter {
   /** 角色ID */
   id: string;
@@ -36,10 +39,10 @@ export interface ScavengeCharacter {
   sanity: number;
   /** 最大精神值 */
   maxSanity: number;
-  /** 疲劳值 */
-  fatigue: number;
-  /** 最大疲劳值 */
-  maxFatigue: number;
+  /** 体力值（剩余体力，0 = 精疲力竭） */
+  stamina: number;
+  /** 最大体力值（受 end 影响：100 + (end-5)*5） */
+  maxStamina: number;
   /** 装备的武器ID */
   weaponId?: string;
   /** 装备的护甲ID */
@@ -56,6 +59,17 @@ export interface ScavengeCharacter {
   armorDurability?: number;
   /** 工具耐久度 */
   toolDurability?: number;
+  // ============== 经验/升级系统 ==============
+  /** 当前经验值 */
+  exp: number;
+  /** 当前等级（1 起） */
+  level: number;
+  /** 升到下一级所需经验 */
+  expToNext: number;
+  /** 未分配的属性点（升级 +1） */
+  statPoints: number;
+  /** 主属性：升级时自动 +2 */
+  mainStat: MainStat;
   /** 背包物品列表（属于角色数据的一部分，null 表示空槽位） */
   inventory: (InventoryItem | null)[];
 }
@@ -78,9 +92,14 @@ export const DEFAULT_CHARACTER: ScavengeCharacter = {
   maxThirst: 100,
   sanity: 100,
   maxSanity: 100,
-  fatigue: 0,
-  maxFatigue: 100,
+  stamina: 100,
+  maxStamina: 100,
   isExploring: false,
+  exp: 0,
+  level: 1,
+  expToNext: 100,
+  statPoints: 0,
+  mainStat: 'str',
   inventory: [],
 };
 
@@ -94,8 +113,9 @@ export const getCharacterStatusText = (character: ScavengeCharacter): string => 
   if (character.hp <= 0) {
     return '无法行动';
   }
-  if (character.fatigue >= 80) {
-    return '疲劳';
+  // 体力 < 20 算"精疲力竭"
+  if (character.stamina < 20) {
+    return '精疲力竭';
   }
   if (character.hunger <= 30 || character.thirst <= 30) {
     return '需要物资';
@@ -114,9 +134,13 @@ export const getStatusBarColor = (value: number, maxValue: number = 100): string
 };
 
 /**
- * 规范化角色数据（处理 0/1 转 boolean 等类型问题 + 迁移旧 inventory 数据）
+ * 规范化角色数据（处理 0/1 转 boolean 等类型问题 + 迁移旧 inventory 数据 + 旧字段兼容）
  *
- * 迁移内容：旧数据可能没有 `instanceId`，这里统一补一个；同时过滤掉 null 槽位之间的非法值。
+ * 迁移内容：
+ * 1. inventory 槽位可能没有 `instanceId`，统一补一个
+ * 2. 旧数据使用 `fatigue` / `maxFatigue` → 改名为 `stamina` / `maxStamina`
+ * 3. 旧数据可能没有 exp/level/statPoints/mainStat 字段，初始化默认值
+ * 4. 旧数据的 `stamina`（如果之前是 fatigue 字段）可能从 0 开始累积，迁移时把 (maxFatigue - fatigue) 作为新 stamina 初值
  */
 export const normalizeCharacter = (char: ScavengeCharacter): ScavengeCharacter => {
   const rawInventory = char.inventory ?? [];
@@ -125,18 +149,41 @@ export const normalizeCharacter = (char: ScavengeCharacter): ScavengeCharacter =
     if (slot === null) return null;
     return slot;
   });
-  // 一次性把 null 之间的非 null 项提取出来补 instanceId
   const nonNullEntries = migrated.filter((s): s is InventoryItem => s !== null);
   const migratedNonNull = migrateInventory(nonNullEntries);
-  // 还原到原数组（保持 null 位置不变）
   let cursor = 0;
   const finalInventory: (InventoryItem | null)[] = migrated.map((slot) => {
     if (slot === null) return null;
     return migratedNonNull[cursor++];
   });
+
+  // 旧字段兼容：fatigue → stamina
+  // 旧 stamina = maxFatigue - fatigue（剩余体力 = 上限 - 累积疲劳）
+  const legacyFatigue = (char as unknown as { fatigue?: number; maxFatigue?: number }).fatigue;
+  const legacyMaxFatigue = (char as unknown as { maxFatigue?: number }).maxFatigue ?? 100;
+  const migratedStamina = char.stamina ?? Math.max(0, legacyMaxFatigue - (legacyFatigue ?? 0));
+  const migratedMaxStamina = char.maxStamina ?? 100;
+
   return {
     ...char,
     isExploring: Boolean(char.isExploring),
+    stamina: migratedStamina,
+    maxStamina: migratedMaxStamina,
+    exp: char.exp ?? 0,
+    level: char.level ?? 1,
+    expToNext: char.expToNext ?? 100,
+    statPoints: char.statPoints ?? 0,
+    mainStat: char.mainStat ?? 'str',
     inventory: finalInventory,
   };
+};
+
+/**
+ * 主属性名（中英映射，给 UI 显示用）
+ */
+export const MAIN_STAT_NAMES: Record<MainStat, string> = {
+  str: '力量',
+  agi: '敏捷',
+  end: '耐力',
+  int: '智力',
 };

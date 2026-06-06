@@ -57,6 +57,23 @@
   }
 }
 
+.filterTabCount {
+  margin-left: 6px;
+  padding: 1px 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  font-size: 10px;
+  color: #a0a0a0;
+  font-variant-numeric: tabular-nums;
+  min-width: 18px;
+  text-align: center;
+}
+
+.filterTab.active .filterTabCount {
+  background: rgba(74, 144, 226, 0.4);
+  color: #fff;
+}
+
 // 负重信息
 .weightInfo {
   display: flex;

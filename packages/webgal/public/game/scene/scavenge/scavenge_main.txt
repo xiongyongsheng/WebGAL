@@ -21,7 +21,8 @@ setVar:scavenge_show_menu=true;
 
 
 ; 初始化所有角色数据（背包作为角色属性，统一存档）
-setVar:scavenge_characters=[{"id":"player_1","name":"主角","str":5,"agi":5,"end":5,"int":5,"hp":100,"maxHp":100,"hunger":100,"maxHunger":100,"thirst":100,"maxThirst":100,"sanity":100,"maxSanity":100,"fatigue":0,"maxFatigue":100,"isExploring":false,"inventory":[{"itemId":"food_apple","quantity":5},{"itemId":"drink_water","quantity":3},{"itemId":"medicine_bandage","quantity":2},{"itemId":"weapon_crowbar","quantity":1,"durability":85},{"itemId":"weapon_knife","quantity":1,"durability":100},{"itemId":"weapon_hammer","quantity":1,"durability":70},{"itemId":"armor_vest","quantity":1,"durability":90},{"itemId":"tool_flashlight","quantity":1,"durability":100}]}];
+; 注意：fatigue/maxFatigue 字段已废弃，由 stamina/maxStamina 替代（normalizeCharacter 兼容旧数据）
+setVar:scavenge_characters=[{"id":"player_1","name":"主角","str":5,"agi":5,"end":5,"int":5,"hp":100,"maxHp":100,"hunger":100,"maxHunger":100,"thirst":100,"maxThirst":100,"sanity":100,"maxSanity":100,"stamina":100,"maxStamina":100,"isExploring":false,"exp":0,"level":1,"expToNext":100,"statPoints":0,"mainStat":"str","inventory":[{"itemId":"food_apple","quantity":5},{"itemId":"drink_water","quantity":3},{"itemId":"medicine_bandage","quantity":2},{"itemId":"weapon_crowbar","quantity":1,"durability":85},{"itemId":"weapon_knife","quantity":1,"durability":100},{"itemId":"weapon_hammer","quantity":1,"durability":70},{"itemId":"armor_vest","quantity":1,"durability":90},{"itemId":"tool_flashlight","quantity":1,"durability":100}]}];
 
 ; 进入拾荒主界面
 scavengeStart:拾荒主界面;

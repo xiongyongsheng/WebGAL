@@ -22,6 +22,7 @@ import {
   addToWarehouse, removeFromWarehouse,
   generateInstanceId, migrateInventory, canAddToInventory,
 } from '../../ScavengeItems/inventory';
+import { applyPendingStatPoints } from '../characterExperience';
 import { ScavengeCharacterHeader } from '../ScavengeCharacterHeader/ScavengeCharacterHeader';
 import { ScavengeCharacterStatus } from '../ScavengeCharacterStatus/ScavengeCharacterStatus';
 import { ScavengeCharacterAttributes } from '../ScavengeCharacterAttributes/ScavengeCharacterAttributes';
@@ -224,8 +225,11 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleFilterChange = (_charId: string, _filter: string) => {
-    // tag 切换不需要做任何处理（过滤在组件内完成）
+  // 每个角色独立的 filter tab 状态（默认 'all'）
+  const [filtersByChar, setFiltersByChar] = useState<Record<string, 'all' | 'consumable' | 'equipment' | 'material' | 'quest'>>({});
+
+  const handleFilterChange = (charId: string, filter: 'all' | 'consumable' | 'equipment' | 'material' | 'quest') => {
+    setFiltersByChar(prev => ({ ...prev, [charId]: filter }));
   };
 
   // ==================== 角色物品操作 ====================
@@ -311,6 +315,23 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
     (updated as any)[slotKey] = invItem.itemId;
     (updated as any)[durKey] = invItem.durability ?? equipmentItem.maxDurability;
 
+    updateCharacter(updated);
+    refresh();
+  };
+
+  /**
+   * 玩家点"保存加点"时：把 Attributes 组件的暂存批量写入角色数据。
+   * statPoints -= total；对应属性 += pending[stat]。
+   * 注：end 改变后，maxStamina / maxHp 会在下次 period effect 同步重算。
+   */
+  const handleApplyPending = (
+    charId: string,
+    pending: { str: number; agi: number; end: number; int: number },
+  ) => {
+    const characters = getCharacters();
+    const char = characters.find(c => c.id === charId);
+    if (!char) return;
+    const updated = applyPendingStatPoints(char, pending);
     updateCharacter(updated);
     refresh();
   };
@@ -643,6 +664,7 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
                       agiBonus={calculateEquipBonus(charData, 'agi')}
                       endBonus={calculateEquipBonus(charData, 'end')}
                       intBonus={calculateEquipBonus(charData, 'int')}
+                      onApplyPending={(pending) => handleApplyPending(charData.id, pending)}
                     />
                     <ScavengeCharacterEquip
                       charData={charData}
@@ -654,7 +676,7 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
                       totalWeight={totalWeight}
                       maxWeight={maxWeight}
                       onItemClick={(item, e) => handleItemClick(charData.id, item, e)}
-                      itemFilter="all"
+                      itemFilter={filtersByChar[charData.id] ?? 'all'}
                       onFilterChange={(f) => handleFilterChange(charData.id, f)}
                       selectedItem={menuCharId === charData.id ? selectedItem?.item ?? null : null}
                       showItemMenu={showItemMenu && menuCharId === charData.id}

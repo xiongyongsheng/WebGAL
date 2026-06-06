@@ -4,7 +4,9 @@ import restaurant from '@iconify-icons/material-symbols/restaurant';
 import waterDrop from '@iconify-icons/material-symbols/water-drop';
 import psychology from '@iconify-icons/material-symbols/psychology';
 import localFireDepartment from '@iconify-icons/material-symbols/local-fire-department';
+import militaryTech from '@iconify-icons/material-symbols/military-tech';
 import { ScavengeCharacter, getStatusBarColor } from '../character';
+import { getExpProgress } from '../characterExperience';
 import styles from './ScavengeCharacterStatus.module.scss';
 
 interface StatusBarProps {
@@ -20,6 +22,7 @@ interface ScavengeCharacterStatusProps {
   maxHp: number;
   maxHunger: number;
   maxThirst: number;
+  // 注：属性加点 UI 已迁出到 ScavengeCharacterAttributes（暂存+保存模式）
 }
 
 const StatusBar = ({ icon, label, value, maxValue, color }: StatusBarProps) => {
@@ -45,9 +48,36 @@ const StatusBar = ({ icon, label, value, maxValue, color }: StatusBarProps) => {
   );
 };
 
-export const ScavengeCharacterStatus = ({ charData, maxHp, maxHunger, maxThirst }: ScavengeCharacterStatusProps) => {
+export const ScavengeCharacterStatus = ({
+  charData,
+  maxHp,
+  maxHunger,
+  maxThirst,
+}: ScavengeCharacterStatusProps) => {
+  const expPercent = getExpProgress(charData) * 100;
+  const hasPoints = charData.statPoints > 0;
+
   return (
     <div className={styles.statusPanel}>
+      {/* 等级 + 经验条 */}
+      <div className={styles.levelRow}>
+        <Icon icon={militaryTech} className={styles.levelIcon} style={{ color: '#FFD700' }} />
+        <span className={styles.levelLabel}>Lv.</span>
+        <span className={styles.levelValue}>{charData.level}</span>
+        <span className={styles.expText}>
+          {charData.exp} / {charData.expToNext} EXP
+        </span>
+        {hasPoints && (
+          <span className={styles.statPointBadge}>+{charData.statPoints} 点</span>
+        )}
+      </div>
+      <div className={styles.expBar}>
+        <div
+          className={styles.expBarFill}
+          style={{ width: `${expPercent}%` }}
+        />
+      </div>
+
       <StatusBar
         icon={favorite}
         label="生命值"
@@ -78,10 +108,10 @@ export const ScavengeCharacterStatus = ({ charData, maxHp, maxHunger, maxThirst 
       />
       <StatusBar
         icon={localFireDepartment}
-        label="疲劳值"
-        value={charData.fatigue}
-        maxValue={charData.maxFatigue}
-        color={getStatusBarColor(charData.maxFatigue - charData.fatigue, charData.maxFatigue)}
+        label="体力值"
+        value={charData.stamina}
+        maxValue={charData.maxStamina}
+        color={getStatusBarColor(charData.stamina, charData.maxStamina)}
       />
     </div>
   );

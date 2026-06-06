@@ -46,3 +46,70 @@
   border-radius: 4px;
   transition: width 0.3s ease;
 }
+
+// ============== 等级 / 经验 ==============
+
+.levelRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border-top: 1px dashed rgba(255, 215, 0, 0.2);
+  border-bottom: 1px dashed rgba(255, 215, 0, 0.2);
+  margin-bottom: 4px;
+}
+
+.levelIcon {
+  font-size: 18px;
+}
+
+.levelLabel {
+  font-size: 12px;
+  color: #a0a0a0;
+}
+
+.levelValue {
+  font-size: 18px;
+  color: #FFD700;
+  font-weight: 700;
+}
+
+.expText {
+  margin-left: auto;
+  font-size: 11px;
+  color: #808080;
+  font-variant-numeric: tabular-nums;
+}
+
+.statPointBadge {
+  background: #FFD700;
+  color: #1a1a1a;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-left: 6px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.expBar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: -8px;
+}
+
+.expBarFill {
+  height: 100%;
+  background: linear-gradient(90deg, #FFD700 0%, #FFA500 100%);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+// 注：加点 UI 已迁出到 ScavengeCharacterAttributes 组件（暂存+保存模式）

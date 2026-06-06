@@ -11,28 +11,183 @@
   margin-bottom: 12px;
 }
 
-.attrGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.attrItem {
+.attrList {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px;
+  gap: 8px;
+}
+
+.attrRow {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
   background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.attrRowPending {
+  background: rgba(255, 215, 0, 0.08);
+  border-color: rgba(255, 215, 0, 0.3);
 }
 
 .attrName {
-  font-size: 12px;
+  font-size: 13px;
+  color: #e0e0e0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.attrKey {
+  font-size: 10px;
   color: #808080;
+  font-weight: 700;
+  letter-spacing: 0.5px;
 }
 
 .attrValue {
-  font-size: 24px;
-  font-weight: bold;
+  font-size: 20px;
+  font-weight: 700;
   color: #4a90e2;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.attrBonus {
+  font-size: 11px;
+  font-weight: 600;
+  color: #4CAF50;
+}
+
+.attrPendingDelta {
+  font-size: 12px;
+  font-weight: 700;
+  color: #FFD700;
+  background: rgba(255, 215, 0, 0.15);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.attrControls {
+  display: flex;
+  gap: 4px;
+}
+
+.attrBtn {
+  width: 28px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 215, 0, 0.2);
+    border-color: #FFD700;
+    color: #FFD700;
+  }
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+}
+
+// 底部操作区
+.attrActions {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(255, 215, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.remainingPoints {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 12px;
+  color: #a0a0a0;
+}
+
+.remainingLabel {
+  color: #a0a0a0;
+}
+
+.remainingValue {
+  font-size: 18px;
+  font-weight: 700;
+  color: #FFD700;
+  font-variant-numeric: tabular-nums;
+}
+
+.remainingSeparator {
+  color: #808080;
+}
+
+.remainingTotal {
+  font-size: 14px;
+  color: #a0a0a0;
+  font-variant-numeric: tabular-nums;
+}
+
+.attrActionBtns {
+  display: flex;
+  gap: 6px;
+}
+
+.cancelBtn {
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  color: #a0a0a0;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+}
+
+.saveBtn {
+  padding: 6px 16px;
+  background: rgba(74, 144, 226, 0.25);
+  border: 1px solid rgba(74, 144, 226, 0.5);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(74, 144, 226, 0.5);
+    border-color: #4a90e2;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #808080;
+  }
 }

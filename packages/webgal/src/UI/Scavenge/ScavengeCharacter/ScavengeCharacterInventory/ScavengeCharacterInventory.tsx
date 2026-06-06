@@ -6,6 +6,18 @@ import styles from './ScavengeCharacterInventory.module.scss';
 
 type ItemFilter = 'all' | 'consumable' | 'equipment' | 'material' | 'quest';
 
+/** 算某分类下有多少个物品 entry（不是 quantity 总和） */
+function getTabCount(filter: ItemFilter, items: InventoryItem[]): number {
+  if (filter === 'all') return items.length;
+  return items.filter((inv) => {
+    if (filter === 'consumable') return isConsumable(inv.itemId);
+    if (filter === 'equipment') return isEquipment(inv.itemId);
+    if (filter === 'material') return inv.itemId.startsWith('material_');
+    if (filter === 'quest') return isQuestItem(inv.itemId);
+    return false;
+  }).length;
+}
+
 interface ScavengeCharacterInventoryProps {
   /** 所属角色 ID（用于拖拽时标识 source） */
   characterId?: string;
@@ -55,6 +67,11 @@ export const ScavengeCharacterInventory = ({
   onCardDrop,
   isCardDragOver,
 }: ScavengeCharacterInventoryProps) => {
+  // 非 null entry 列表（用于 tab 计数 + 过滤）
+  const nonNullInventory: InventoryItem[] = inventory.filter(
+    (s): s is InventoryItem => s !== null,
+  );
+
   const filteredInventory: (InventoryItem | null)[] = (() => {
     if (itemFilter === 'all') {
       return inventory;
@@ -104,6 +121,7 @@ export const ScavengeCharacterInventory = ({
              filter === 'consumable' ? '消耗品' :
              filter === 'equipment' ? '装备' :
              filter === 'material' ? '材料' : '任务'}
+            <span className={styles.filterTabCount}>{getTabCount(filter, nonNullInventory)}</span>
           </button>
         ))}
       </div>
