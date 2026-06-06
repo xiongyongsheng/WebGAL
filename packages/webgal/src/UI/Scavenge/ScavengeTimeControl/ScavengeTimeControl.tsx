@@ -5,6 +5,8 @@ import { RootState } from '@/store/store';
 import { useStageState } from '@/hooks/useStageState';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { saveGame } from '@/Core/controller/storage/saveGame';
+import { ScavengeCharacter, normalizeCharacter } from '../ScavengeCharacter/character';
+import { applyPeriodEffectsToCharacters } from './characterTimeEffects';
 import styles from './ScavengeTimeControl.module.scss';
 
 type TimePeriod = '清晨' | '上午' | '下午' | '半晚' | '黑夜';
@@ -50,13 +52,45 @@ export const ScavengeTimeControl = () => {
     const nextState = getNextPeriod(currentPeriodIndex);
     const newDay = currentDay + nextState.day;
     const newPeriodIndex = nextState.periodIndex;
+    const isOvernight = nextState.day > 0;
 
     stageStateManager.setStageVarAndCommit({ key: 'current_day', value: newDay });
     stageStateManager.setStageVarAndCommit({ key: 'current_period_index', value: newPeriodIndex });
 
-    console.log(`时间推进: 第${newDay}天 ${nextState.period}`);
+    // 应用时间效果到所有角色（消耗/恢复/触底扣血）
+    const rawChars = stageStateManager.getCalculationStageState().GameVar['scavenge_characters'];
+    const chars: ScavengeCharacter[] = (() => {
+      if (typeof rawChars === 'string') {
+        try {
+          const parsed = JSON.parse(rawChars);
+          if (Array.isArray(parsed)) return parsed.map((c) => normalizeCharacter(c as ScavengeCharacter));
+        } catch { /* ignore */ }
+      }
+      if (Array.isArray(rawChars)) {
+        return (rawChars as unknown as ScavengeCharacter[]).map((c) => normalizeCharacter(c));
+      }
+      return [];
+    })();
+    if (chars.length > 0) {
+      const updated = applyPeriodEffectsToCharacters(chars, isOvernight);
+      stageStateManager.setStageVarAndCommit({
+        key: 'scavenge_characters',
+        value: JSON.stringify(updated),
+      });
+      // 调试输出
+      const exhausted = updated.filter(c => c.hunger === 0 || c.thirst === 0).length;
+      const dead = updated.filter(c => c.hp === 0).length;
+      console.log(
+        `时间推进: 第${newDay}天 ${nextState.period}` +
+        (isOvernight ? ' (过夜恢复)' : '') +
+        (exhausted > 0 ? ` [${exhausted} 人饥/渴=0]` : '') +
+        (dead > 0 ? ` [${dead} 人濒死]` : ''),
+      );
+    } else {
+      console.log(`时间推进: 第${newDay}天 ${nextState.period}`);
+    }
 
-    if (nextState.day > 0) {
+    if (isOvernight) {
       console.log('新的一天开始，自动存档到槽位 0！');
       saveGame(0);
     }

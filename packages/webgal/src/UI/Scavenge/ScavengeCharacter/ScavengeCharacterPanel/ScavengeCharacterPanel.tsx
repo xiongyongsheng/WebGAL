@@ -10,6 +10,7 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
+import { useStageState } from '@/hooks/useStageState';
 import { ScavengeCharacter, normalizeCharacter, getCharacterStatusText } from '../character';
 import {
   getItemName, getItemById, isEquipment, isConsumable, getEquipmentSlot,
@@ -60,6 +61,9 @@ interface DragQuantityDialogState {
 }
 
 export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps) => {
+  // 订阅 stageState 变化：外部模块（如 ScavengeTimeControl 时间推进）改 GameVar 时自动重渲染
+  // 内部修改仍然走 refresh()（forceUpdate）
+  useStageState();
   // 强制刷新
   const [, forceUpdate] = useState({});
   const refresh = () => forceUpdate({});
@@ -186,9 +190,10 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
     return MAX_CARRY_WEIGHT + (totalEnd - 5) * 3;
   };
 
+  // 饥/渴上限固定 100（生理上限，不随 end / 装备变化）
+  // 2026-06-05 与产品确认
   const getMaxHungerThirst = (charData: ScavengeCharacter): number => {
-    const totalEnd = getFinalAttr(charData, 'end');
-    return 100 + (totalEnd - 5) * 5;
+    return charData.maxHunger;
   };
 
   const compactAll = () => {
