@@ -1,14 +1,18 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useStageState } from '@/hooks/useStageState';
+import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import {
   SCAVENGE_LOCATIONS,
   ScavengeLocationItem,
-  getRegionDisplayName,
   getDangerStars,
 } from './locations';
 import { Icon } from '@iconify/react';
 import locationOn from '@iconify-icons/material-symbols/location-on';
 import lock from '@iconify-icons/material-symbols/lock';
+import person from '@iconify-icons/material-symbols/person';
+import schedule from '@iconify-icons/material-symbols/schedule';
+import { readMissions } from '../ScavengeMissions/missions';
+import { ScavengeCharacter, normalizeCharacter } from '../ScavengeCharacter/character';
 import styles from './ScavengeMap.module.scss';
 import CityMap from '@/assets/images/map/city-map.png';
 
@@ -20,22 +24,55 @@ export const ScavengeMap = ({ onLocationSelect }: ScavengeMapProps) => {
   const stageState = useStageState();
   const [hoveredLocation, setHoveredLocation] = useState<string | null>(null);
 
-  // 检查地图是否应该显示
   const isVisible = (stageState.GameVar['show_scavenge_map'] as boolean) ?? true;
   if (!isVisible) return null;
 
-  // 获取当前正在探索的角色和地点
-  const exploringCharacterId = stageState.GameVar['scavenge_exploring_character_id'] as string | undefined;
-  const exploringLocationId = stageState.GameVar['scavenge_exploring_location_id'] as string | undefined;
+  const currentDay = (stageState.GameVar['current_day'] as number) ?? 1;
+  const currentPeriodIndex = (stageState.GameVar['current_period_index'] as number) ?? 0;
 
-  // 获取角色名称
-  const getCharacterName = (characterId: string): string => {
-    const character = stageState.GameVar[`scavenge_character_${characterId}`];
-    if (character && typeof character === 'object') {
-      return (character as { name?: string }).name ?? characterId;
+  // 解析角色（每个 location 派遣中的角色需要名字 / 头像）
+  const getCharacters = (): ScavengeCharacter[] => {
+    const raw = stageStateManager.getCalculationStageState().GameVar['scavenge_characters'];
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.map(c => normalizeCharacter(c as ScavengeCharacter));
+      } catch { /* ignore */ }
     }
-    return characterId;
+    if (Array.isArray(raw)) return (raw as unknown as ScavengeCharacter[]).map(c => normalizeCharacter(c));
+    return [];
   };
+  const characters = useMemo(getCharacters, [stageState]);
+
+  // 计算派遣中 missions（按 location 分组）
+  const activeMissionsByLocation = useMemo(() => {
+    const missions = readMissions();
+    const map = new Map<string, Array<{
+      missionId: string;
+      characterId: string;
+      characterName: string;
+      remainingPeriods: number;
+    }>>();
+    for (const m of missions) {
+      if (m.status !== 'active') continue;
+      const char = characters.find(c => c.id === m.characterId);
+      if (!char) continue;
+      // 还需多少 period：returnDay*5 + returnPeriodIndex - (currentDay*5 + currentPeriodIndex)
+      const totalTarget = m.returnDay * 5 + m.returnPeriodIndex;
+      const totalCurrent = currentDay * 5 + currentPeriodIndex;
+      const remaining = Math.max(0, totalTarget - totalCurrent);
+      const arr = map.get(m.locationId) ?? [];
+      arr.push({
+        missionId: m.id,
+        characterId: m.characterId,
+        characterName: char.name,
+        remainingPeriods: remaining,
+      });
+      map.set(m.locationId, arr);
+    }
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageState, characters]);
 
   const handleLocationClick = (location: ScavengeLocationItem) => {
     if (!location.isUnlocked) return;
@@ -47,25 +84,21 @@ export const ScavengeMap = ({ onLocationSelect }: ScavengeMapProps) => {
       <div className={styles.mapTitle}>大都市地图</div>
 
       <div className={styles.mapWrapper}>
-        {/* 地图背景 */}
         <div className={styles.mapBackground}>
-          <img
-            src={CityMap}
-            alt="城市地图"
-            className={styles.mapImage}
-          />
+          <img src={CityMap} alt="城市地图" className={styles.mapImage} />
         </div>
 
-        {/* 地点标记层 */}
         <div className={styles.locationsLayer}>
           {SCAVENGE_LOCATIONS.map((location) => {
-            const isExploring = exploringLocationId === location.id;
+            const isUnlocked = location.isUnlocked;
+            const activeMissions = activeMissionsByLocation.get(location.id) ?? [];
+            const isActive = activeMissions.length > 0;
             const isHovered = hoveredLocation === location.id;
 
             return (
               <div
                 key={location.id}
-                className={`${styles.locationMarker} ${!location.isUnlocked ? styles.locked : ''} ${isExploring ? styles.exploring : ''}`}
+                className={`${styles.locationMarker} ${!isUnlocked ? styles.locked : ''} ${isActive ? styles.active : ''}`}
                 style={{
                   left: `${location.position.x}%`,
                   top: `${location.position.y}%`,
@@ -75,21 +108,33 @@ export const ScavengeMap = ({ onLocationSelect }: ScavengeMapProps) => {
                 onMouseEnter={() => setHoveredLocation(location.id)}
                 onMouseLeave={() => setHoveredLocation(null)}
               >
-                {location.isUnlocked ? (
-                  <Icon icon={locationOn} className={styles.markerIcon} />
-                ) : (
-                  <Icon icon={lock} className={styles.markerIcon} />
-                )}
+                {/* 标记主图标 */}
+                <div className={styles.markerCircle}>
+                  {isUnlocked ? (
+                    <Icon icon={locationOn} className={styles.markerIcon} />
+                  ) : (
+                    <Icon icon={lock} className={styles.markerIcon} />
+                  )}
+                </div>
 
-                {/* 探索中的角色指示器 */}
-                {isExploring && (
-                  <div className={styles.exploringIndicator}>
-                    {getCharacterName(exploringCharacterId ?? '')}
+                {/* 派遣中：上方显示角色头像 + 还需回合 */}
+                {isActive && (
+                  <div className={styles.dispatchingBar}>
+                    {activeMissions.map((m) => (
+                      <div key={m.missionId} className={styles.dispatcherChip}>
+                        <Icon icon={person} className={styles.dispatcherAvatar} />
+                        <span className={styles.dispatcherName}>{m.characterName}</span>
+                        <span className={styles.dispatcherRemaining}>
+                          <Icon icon={schedule} className={styles.remainingIcon} />
+                          {m.remainingPeriods}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 )}
 
                 {/* 悬停提示 */}
-                {isHovered && location.isUnlocked && (
+                {isHovered && isUnlocked && (
                   <div className={styles.tooltip}>
                     <div className={styles.tooltipName}>{location.name}</div>
                     <div className={styles.tooltipInfo}>

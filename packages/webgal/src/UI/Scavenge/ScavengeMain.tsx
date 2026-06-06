@@ -4,7 +4,7 @@
  * 所有显示状态和数据都存储在 GameVar 中，跟随场景存档
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useStageState } from '@/hooks/useStageState';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { ScavengeTimeControl } from './ScavengeTimeControl/ScavengeTimeControl';
@@ -13,6 +13,8 @@ import { ScavengeMapDetail } from './ScavengeMap/ScavengeMapDetail';
 import { ScavengeLocationItem } from './ScavengeMap/locations';
 import { ScavengeCharacterPanel } from './ScavengeCharacter/ScavengeCharacterPanel/ScavengeCharacterPanel';
 import { ScavengeMenuButton } from './ScavengeMenuButton/ScavengeMenuButton';
+import { readMissions } from './ScavengeMissions/missions';
+import { ScavengeMissionOutcomeModal } from './ScavengeMissionOutcomeModal/ScavengeMissionOutcomeModal';
 import styles from './ScavengeMain.module.scss';
 
 export const ScavengeMain = () => {
@@ -65,6 +67,18 @@ export const ScavengeMain = () => {
   // 角色列表显示状态
   const showCharacterList = (stageState.GameVar['scavenge_show_character_list'] as boolean) ?? false;
 
+  // 监听 missions 列表：找 status='completed' && !outcomeShown 的最新一个，弹结果窗
+  // 用 stageState 订阅触发重渲染（missions 变化会通过 setStageState 通知）
+  const pendingOutcomeMission = useMemo(() => {
+    const missions = readMissions();
+    return missions.find(m =>
+      (m.status === 'completed' || m.status === 'failed' || m.status === 'cancelled') &&
+      m.outcome &&
+      !m.outcomeShown,
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageState]);
+
   if (!isMapVisible && !isTimeControlVisible && !isMenuVisible) return null;
 
   return (
@@ -94,6 +108,20 @@ export const ScavengeMain = () => {
       {/* 角色列表全屏弹框（包含角色详情卡片 + 仓库） */}
       {showCharacterList && (
         <ScavengeCharacterPanel onClose={handleCloseCharacterList} />
+      )}
+
+      {/* 派遣结算结果弹窗（监听 missions 变化，弹出未展示的） */}
+      {pendingOutcomeMission && (
+        <ScavengeMissionOutcomeModal
+          mission={pendingOutcomeMission}
+          onClose={() => {
+            // modal 内部已 markMissionOutcomeShown，强制刷新以重新计算 pending
+            stageStateManager.setStageVarAndCommit({
+              key: '_mission_outcome_dismissed_at',
+              value: Date.now(),
+            });
+          }}
+        />
       )}
     </>
   );

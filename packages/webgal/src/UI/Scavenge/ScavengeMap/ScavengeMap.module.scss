@@ -46,45 +46,78 @@
   inset: 0;
 }
 
+// ============== 地点标记 ==============
+
 .locationMarker {
   position: absolute;
   transform: translate(-50%, -50%);
   cursor: pointer;
   z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   transition: transform 0.2s ease;
 
   &:hover {
-    transform: translate(-50%, -50%) scale(1.2);
+    transform: translate(-50%, -50%) scale(1.05);
     z-index: 20;
   }
 
   &.locked {
     cursor: not-allowed;
-    opacity: 0.5;
+    opacity: 0.45;
 
     &:hover {
       transform: translate(-50%, -50%);
     }
   }
 
-  &.exploring {
-    animation: pulse 1.5s infinite;
+  &.active {
+    z-index: 15;
   }
 }
 
-@keyframes pulse {
+.markerCircle {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 25, 35, 0.85);
+  border: 3px solid var(--region-color);
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 0 2px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+}
+
+.locationMarker:hover .markerCircle {
+  background: rgba(74, 144, 226, 0.3);
+  border-color: #fff;
+  box-shadow: 0 4px 16px rgba(74, 144, 226, 0.5), 0 0 0 3px rgba(0, 0, 0, 0.4);
+  transform: scale(1.05);
+}
+
+.locationMarker.active .markerCircle {
+  background: rgba(76, 175, 80, 0.25);
+  border-color: #FFD700;
+  box-shadow: 0 0 0 2px #FFD700, 0 0 20px rgba(255, 215, 0, 0.4);
+  animation: pulseRing 1.5s infinite;
+}
+
+@keyframes pulseRing {
   0%, 100% {
-    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 0 0 0 2px #FFD700, 0 0 20px rgba(255, 215, 0, 0.4);
   }
   50% {
-    transform: translate(-50%, -50%) scale(1.2);
+    box-shadow: 0 0 0 2px #FFD700, 0 0 32px rgba(255, 215, 0, 0.7);
   }
 }
 
 .markerIcon {
-  font-size: 28px;
+  font-size: 32px;
   color: var(--region-color);
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
   transition: color 0.2s ease;
 }
 
@@ -92,27 +125,84 @@
   color: #fff;
 }
 
-.exploringIndicator {
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-top: 4px;
-  padding: 2px 8px;
-  background: rgba(76, 175, 80, 0.9);
-  border-radius: 4px;
-  font-size: 11px;
-  color: #fff;
-  white-space: nowrap;
-  font-weight: 500;
+.locationMarker.active .markerIcon {
+  color: #FFD700;
 }
 
-.tooltip {
+// ============== 派遣中：上方显示头像 + 还需回合 ==============
+
+.dispatchingBar {
   position: absolute;
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
   margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 25;
+  pointer-events: none;
+}
+
+.dispatcherChip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 4px;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.95) 0%, rgba(255, 165, 0, 0.95) 100%);
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #1a1a1a;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  min-width: 90px;
+}
+
+.dispatcherAvatar {
+  font-size: 16px;
+  color: #1a1a1a;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dispatcherName {
+  flex: 1;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.dispatcherRemaining {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 5px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #FFD700;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.remainingIcon {
+  font-size: 10px;
+}
+
+// ============== 悬停提示 ==============
+
+.tooltip {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 8px;
   padding: 8px 12px;
   background: rgba(30, 35, 45, 0.95);
   border-radius: 8px;
@@ -121,6 +211,7 @@
   min-width: 100px;
   text-align: center;
   z-index: 30;
+  pointer-events: none;
 }
 
 .tooltipName {
@@ -134,6 +225,8 @@
   font-size: 12px;
   color: #a0a0a0;
 }
+
+// ============== 图例 ==============
 
 .legend {
   padding: 12px;

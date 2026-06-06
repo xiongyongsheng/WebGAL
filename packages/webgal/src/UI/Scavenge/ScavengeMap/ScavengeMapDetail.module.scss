@@ -252,3 +252,67 @@
     background: rgba(255, 255, 255, 0.15);
   }
 }
+
+.errorMsg {
+  margin: 0 20px 12px;
+  padding: 8px 12px;
+  background: rgba(244, 67, 54, 0.15);
+  border: 1px solid rgba(244, 67, 54, 0.4);
+  border-radius: 6px;
+  color: #ff8a80;
+  font-size: 13px;
+}
+
+// 选角色浮层
+.charList {
+  padding: 12px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.charCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: rgba(74, 144, 226, 0.15);
+    border-color: rgba(74, 144, 226, 0.5);
+    transform: translateX(2px);
+  }
+}
+
+.charInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.charName {
+  font-size: 15px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.charStats {
+  font-size: 11px;
+  color: #a0a0a0;
+  font-variant-numeric: tabular-nums;
+}
+
+.charStatus {
+  font-size: 11px;
+  color: #4CAF50;
+}

@@ -49,10 +49,14 @@ export interface ScavengeCharacter {
   armorId?: string;
   /** 装备的工具ID */
   toolId?: string;
-  /** 是否在探索中 */
+  /** 是否在探索中（包含派遣：派遣期间 isExploring=true，角色被锁） */
   isExploring: boolean;
   /** 探索地点ID */
   exploringLocationId?: string;
+  /** 派遣/探索结束时间：第几天（与 isExploring + exploringLocationId 配合使用） */
+  returnDay?: number;
+  /** 派遣/探索结束时间：哪个 period（0=清晨, 1=上午, 2=下午, 3=半晚, 4=黑夜） */
+  returnPeriodIndex?: number;
   /** 武器耐久度 */
   weaponDurability?: number;
   /** 护甲耐久度 */
@@ -108,7 +112,7 @@ export const DEFAULT_CHARACTER: ScavengeCharacter = {
  */
 export const getCharacterStatusText = (character: ScavengeCharacter): string => {
   if (character.isExploring) {
-    return '探索中';
+    return '派遣中';
   }
   if (character.hp <= 0) {
     return '无法行动';
@@ -164,9 +168,17 @@ export const normalizeCharacter = (char: ScavengeCharacter): ScavengeCharacter =
   const migratedStamina = char.stamina ?? Math.max(0, legacyMaxFatigue - (legacyFatigue ?? 0));
   const migratedMaxStamina = char.maxStamina ?? 100;
 
+  // 派遣字段兜底：旧数据 isExploring=true 但缺 returnDay/PeriodIndex 时
+  // 视为"立即返回"（返回时间=当前 0/0），下次推进会被 checkMissionsProgress 结算/清空
+  const isExploring = Boolean(char.isExploring);
+  const returnDay = isExploring ? (char.returnDay ?? 0) : char.returnDay;
+  const returnPeriodIndex = isExploring ? (char.returnPeriodIndex ?? 0) : char.returnPeriodIndex;
+
   return {
     ...char,
-    isExploring: Boolean(char.isExploring),
+    isExploring,
+    returnDay,
+    returnPeriodIndex,
     stamina: migratedStamina,
     maxStamina: migratedMaxStamina,
     exp: char.exp ?? 0,
