@@ -113,3 +113,61 @@
 }
 
 // 注：加点 UI 已迁出到 ScavengeCharacterAttributes 组件（暂存+保存模式）
+
+// ============== 战斗派生属性 ==============
+
+.combatStats {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(255, 100, 100, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.combatStatsTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #d0d0d0;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.combatTitleIcon {
+  font-size: 16px;
+  color: #ff8a65;
+}
+
+.combatGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 14px;
+}
+
+.combatItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 3px 0;
+}
+
+.combatIcon {
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.combatLabel {
+  color: #a0a0a0;
+  flex: 1;
+}
+
+.combatValue {
+  color: #fff;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  min-width: 32px;
+  text-align: right;
+}

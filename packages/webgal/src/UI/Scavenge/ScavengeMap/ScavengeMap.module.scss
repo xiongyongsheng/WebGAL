@@ -159,6 +159,17 @@
   min-width: 90px;
 }
 
+.dispatcherChipPreparing {
+  // 准备中用蓝色（区别于活跃期金色）
+  background: linear-gradient(135deg, rgba(74, 144, 226, 0.95) 0%, rgba(53, 122, 189, 0.95) 100%);
+  color: #fff;
+}
+
+.dispatcherChipPreparing .dispatcherAvatar {
+  background: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
 .dispatcherAvatar {
   font-size: 16px;
   color: #1a1a1a;

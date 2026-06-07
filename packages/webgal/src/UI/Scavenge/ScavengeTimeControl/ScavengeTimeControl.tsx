@@ -5,11 +5,14 @@ import { RootState } from '@/store/store';
 import { useStageState } from '@/hooks/useStageState';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { saveGame } from '@/Core/controller/storage/saveGame';
+import { generateInstanceId } from '../ScavengeItems/inventory';
 import { ScavengeCharacter, normalizeCharacter } from '../ScavengeCharacter/character';
 import { applyPeriodEffectsToCharacters } from './characterTimeEffects';
 import {
   readMissions, writeMissions,
-  checkMissionsProgress, applyMissionOutcomeToCharacter,
+  applyMissionOutcomeToCharacter, completeMission,
+  encounterCheck, isTimeReached,
+  Mission, EncounterLog,
 } from '../ScavengeMissions/missions';
 import { SCAVENGE_LOCATIONS } from '../ScavengeMap/locations';
 import styles from './ScavengeTimeControl.module.scss';
@@ -79,34 +82,126 @@ export const ScavengeTimeControl = () => {
     if (chars.length > 0) {
       const updated = applyPeriodEffectsToCharacters(chars, isOvernight);
 
-      // 派遣系统钩子：检查是否有 active 派遣到点
+      // 派遣系统钩子：合并"遭遇检查" + "时间到点"判定
+      // 重要：先 encounterCheck（即使已到 returnTime 也跑最后一次遭遇），再判定是否结算
       const oldMissions = readMissions();
-      const check = checkMissionsProgress(
-        oldMissions,
-        updated,
-        SCAVENGE_LOCATIONS,
-        newDay,
-        newPeriodIndex,
-      );
-
-      // 把"刚完成"的 outcome 应用到对应角色
       let finalChars = updated;
-      if (check.justCompleted.length > 0) {
-        finalChars = updated.map(c => {
-          const completedForChar = check.justCompleted.find(m => m.characterId === c.id);
-          if (completedForChar?.outcome) {
-            return applyMissionOutcomeToCharacter(c, completedForChar.outcome);
+      const resultMissions: Mission[] = [];
+      let justCompletedCount = 0;
+      let failedCount = 0;
+      const allEncounters: EncounterLog[] = [];
+
+      for (const m of oldMissions) {
+        if (m.status !== 'active') {
+          resultMissions.push(m);
+          continue;
+        }
+        const char = finalChars.find(c => c.id === m.characterId);
+        const loc = SCAVENGE_LOCATIONS.find(l => l.id === m.locationId);
+        if (!char || !loc) {
+          resultMissions.push(m);
+          continue;
+        }
+
+        // 1. 准备期判定：第 1 次推进（m.encounters 还没任何记录）算准备期
+        // 后续每次推进往 encounters 插占位（kind='no_encounter'）让"准备期"标记持久化
+        const hasAnyEncounter = (m.encounters ?? []).length > 0;
+        const isPreparing = !hasAnyEncounter;
+        // 2. 活跃期判定：currentTime < returnTime
+        const totalReturn = m.returnDay * 5 + m.returnPeriodIndex;
+        const totalCurrent = newDay * 5 + newPeriodIndex;
+        const isActivePeriod = totalCurrent < totalReturn;
+
+        // 3. 处理三种状态
+        let encounter: EncounterLog | null = null;
+        let updatedChar = char;
+        let missionOver = false;
+        let mWithEncounters: Mission = m;
+
+        if (isPreparing) {
+          // 准备期：插一个 no_encounter 占位（标记"准备完成"）
+          mWithEncounters = {
+            ...m,
+            encounters: [{
+              id: generateInstanceId(),
+              triggerDay: newDay,
+              triggerPeriodIndex: newPeriodIndex,
+              kind: 'no_encounter',
+              message: '准备完成',
+            }],
+          };
+        } else if (isActivePeriod) {
+          // 活跃期：跑 encounterCheck
+          const result = encounterCheck(m, char, loc, newDay, newPeriodIndex);
+          encounter = result.encounter;
+          updatedChar = result.updatedChar;
+          missionOver = result.missionOver;
+          finalChars = finalChars.map(c => c.id === char.id ? updatedChar : c);
+          allEncounters.push(encounter);
+          mWithEncounters = { ...m, encounters: [...m.encounters, encounter] };
+        }
+        // 准备 + 活跃都结束（isPreparing=false && !isActivePeriod）：returnTime 当期，不跑 encounterCheck
+        // 直接走到下面的 reached 判定
+
+        // 3. 判定是否到 returnTime
+        const reached = isTimeReached(newDay, newPeriodIndex, m.returnDay, m.returnPeriodIndex);
+
+        if (encounter && missionOver) {
+          // 战斗败：标记 failed + 立即结算
+          const failed: Mission = {
+            ...mWithEncounters,
+            status: 'failed',
+            returnDay: newDay,
+            returnPeriodIndex: newPeriodIndex,
+            outcome: {
+              success: false,
+              reason: 'character_dead',
+              message: encounter.message,
+              itemsGained: [],
+              expGained: 0,
+              hpLost: Math.abs(encounter.hpDelta ?? 0),
+            },
+            outcomeShown: false,
+          };
+          resultMissions.push(failed);
+          if (failed.outcome) {
+            finalChars = finalChars.map(c =>
+              c.id === char.id ? applyMissionOutcomeToCharacter(c, failed.outcome!) : c
+            );
           }
-          return c;
-        });
-        // 调试输出每个完成的派遣
-        for (const m of check.justCompleted) {
-          if (m.outcome) {
+          failedCount++;
+          console.log(
+            `[派遣/失败] 角色=${char.name} 地点=${loc.name} 遭遇=${encounter.kind} ` +
+            `敌人=${encounter.enemiesEncountered} HP变化=${encounter.hpDelta}`,
+          );
+        } else if (reached) {
+          // 时间到：正常完成（outcome.itemsGained 从 encounters 收集）
+          const completed = completeMission(mWithEncounters, char, loc);
+          resultMissions.push(completed);
+          if (completed.outcome) {
+            finalChars = finalChars.map(c =>
+              c.id === char.id ? applyMissionOutcomeToCharacter(c, completed.outcome!) : c
+            );
+          }
+          justCompletedCount++;
+          // 只算"真实遭遇"（排除准备期 no_encounter 占位）
+          const realEncounters = mWithEncounters.encounters.filter(e => e.kind !== 'no_encounter').length;
+          console.log(
+            `[派遣/完成] 角色=${char.name} 地点=${loc.name} 物品=${completed.outcome?.itemsGained.length ?? 0}类 ` +
+            `经验+${completed.outcome?.expGained ?? 0} 真实遭遇${realEncounters}次`,
+          );
+        } else {
+          // 继续 active
+          resultMissions.push(mWithEncounters);
+          if (encounter && encounter.kind !== 'no_encounter') {
             console.log(
-              `[派遣] ${m.outcome.success ? '✓ 完成' : '✗ 失败'} ` +
-              `角色ID=${m.characterId} 地点ID=${m.locationId} ` +
-              `物品=${m.outcome.itemsGained.length}类 经验+${m.outcome.expGained} HP-${m.outcome.hpLost} ` +
-              `原因=${m.outcome.reason}`,
+              `[派遣/遭遇] ${encounter.kind} 角色=${char.name} 地点=${loc.name}  ` +
+              (encounter.itemsGained ? `物品+${encounter.itemsGained.length}` : ''),
+            );
+          } else if (!hasAnyEncounter) {
+            // 准备期（占位已加，调试输出）
+            console.log(
+              `[派遣/准备] 角色=${char.name} 地点=${loc.name}（准备完成，下次开始活跃）`,
             );
           }
         }
@@ -116,26 +211,22 @@ export const ScavengeTimeControl = () => {
         key: 'scavenge_characters',
         value: JSON.stringify(finalChars),
       });
-
-      // 写回 missions：active + justCompleted(已填outcome) + 老的 completed/cancelled/failed
-      const allMissions = [
-        ...check.active,
-        ...check.justCompleted,
-        ...oldMissions.filter(m => m.status !== 'active'),
-      ];
-      writeMissions(allMissions);
+      writeMissions(resultMissions);
 
       // 调试输出
       const exhausted = finalChars.filter(c => c.hunger === 0 || c.thirst === 0).length;
       const dead = finalChars.filter(c => c.hp <= 0).length;
       const onMission = finalChars.filter(c => c.isExploring).length;
+      const encounterCount = allEncounters.filter(e => e.kind !== 'no_encounter').length;
       console.log(
         `时间推进: 第${newDay}天 ${nextState.period}` +
         (isOvernight ? ' (过夜恢复)' : '') +
         (exhausted > 0 ? ` [${exhausted} 人饥/渴=0]` : '') +
         (dead > 0 ? ` [${dead} 人濒死]` : '') +
         (onMission > 0 ? ` [${onMission} 人派遣中]` : '') +
-        (check.justCompleted.length > 0 ? ` [${check.justCompleted.length} 派遣完成]` : ''),
+        (justCompletedCount > 0 ? ` [${justCompletedCount} 派遣完成]` : '') +
+        (failedCount > 0 ? ` [${failedCount} 派遣失败]` : '') +
+        (encounterCount > 0 ? ` [${encounterCount} 遭遇]` : ''),
       );
     } else {
       console.log(`时间推进: 第${newDay}天 ${nextState.period}`);

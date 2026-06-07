@@ -51,21 +51,24 @@ export const ScavengeMap = ({ onLocationSelect }: ScavengeMapProps) => {
       missionId: string;
       characterId: string;
       characterName: string;
+      phase: 'preparing' | 'active';
       remainingPeriods: number;
     }>>();
     for (const m of missions) {
       if (m.status !== 'active') continue;
       const char = characters.find(c => c.id === m.characterId);
       if (!char) continue;
-      // 还需多少 period：returnDay*5 + returnPeriodIndex - (currentDay*5 + currentPeriodIndex)
-      const totalTarget = m.returnDay * 5 + m.returnPeriodIndex;
+      const totalStart = m.startDay * 5 + m.startPeriodIndex;
+      const totalReturn = m.returnDay * 5 + m.returnPeriodIndex;
       const totalCurrent = currentDay * 5 + currentPeriodIndex;
-      const remaining = Math.max(0, totalTarget - totalCurrent);
+      const phase: 'preparing' | 'active' = totalCurrent <= totalStart ? 'preparing' : 'active';
+      const remaining = Math.max(0, totalReturn - totalCurrent);
       const arr = map.get(m.locationId) ?? [];
       arr.push({
         missionId: m.id,
         characterId: m.characterId,
         characterName: char.name,
+        phase,
         remainingPeriods: remaining,
       });
       map.set(m.locationId, arr);
@@ -117,16 +120,19 @@ export const ScavengeMap = ({ onLocationSelect }: ScavengeMapProps) => {
                   )}
                 </div>
 
-                {/* 派遣中：上方显示角色头像 + 还需回合 */}
+                {/* 派遣中：上方显示角色头像 + 还需回合（含"准备中"阶段） */}
                 {isActive && (
                   <div className={styles.dispatchingBar}>
                     {activeMissions.map((m) => (
-                      <div key={m.missionId} className={styles.dispatcherChip}>
+                      <div
+                        key={m.missionId}
+                        className={`${styles.dispatcherChip} ${m.phase === 'preparing' ? styles.dispatcherChipPreparing : ''}`}
+                      >
                         <Icon icon={person} className={styles.dispatcherAvatar} />
                         <span className={styles.dispatcherName}>{m.characterName}</span>
                         <span className={styles.dispatcherRemaining}>
                           <Icon icon={schedule} className={styles.remainingIcon} />
-                          {m.remainingPeriods}
+                          {m.phase === 'preparing' ? '准备' : m.remainingPeriods}
                         </span>
                       </div>
                     ))}

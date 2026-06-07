@@ -5,6 +5,7 @@
 
 // 重新导出角色类型，方便地图系统使用
 export type { ScavengeCharacter } from '../ScavengeCharacter/character';
+import { EnemyPoolEntry, ENEMY_POOL_BY_DANGER } from '../ScavengeEnemies/enemies';
 
 export type LocationDangerLevel = 0 | 1 | 2 | 3 | 4 | 5;
 
@@ -27,6 +28,8 @@ export interface ScavengeLocationItem {
   timeDisplay: string;
   /** 产出物资类型 */
   lootTypes: string[];
+  /** 敌人分布（按 dangerLevel 自动套用 ENEMY_POOL_BY_DANGER，未指定时 fallback） */
+  enemyPool?: EnemyPoolEntry[];
   /** 解锁条件 */
   unlockCondition: string;
   /** 地图坐标 */
@@ -36,6 +39,11 @@ export interface ScavengeLocationItem {
   /** 区域颜色（用于地图显示） */
   regionColor: string;
 }
+
+/** 读 location 的 enemyPool（fallback 到 ENEMY_POOL_BY_DANGER） */
+export const getLocationEnemyPool = (location: ScavengeLocationItem): EnemyPoolEntry[] => {
+  return location.enemyPool ?? ENEMY_POOL_BY_DANGER[location.dangerLevel] ?? [];
+};
 
 /**
  * 大都市地图地点数据

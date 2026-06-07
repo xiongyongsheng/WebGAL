@@ -11,6 +11,8 @@ interface ScavengeCharacterAttributesProps {
   intBonus: number;
   /** 玩家点"保存加点"时回调：父组件更新 GameVar */
   onApplyPending?: (pending: { str: number; agi: number; end: number; int: number }) => void;
+  /** 玩家切换拾荒策略时回调：父组件更新 GameVar */
+  onChangeStrategy?: (strategy: 'stealth' | 'combat') => void;
 }
 
 const STAT_KEYS: MainStat[] = ['str', 'agi', 'end', 'int'];
@@ -23,6 +25,7 @@ export const ScavengeCharacterAttributes = ({
   endBonus,
   intBonus,
   onApplyPending,
+  onChangeStrategy,
 }: ScavengeCharacterAttributesProps) => {
   // 暂存状态：玩家在 UI 上点 +/- 调整，点"保存加点"才真正提交
   const [pending, setPending] = useState({ ...ZERO_PENDING });
@@ -128,6 +131,29 @@ export const ScavengeCharacterAttributes = ({
               onClick={handleSave}
             >
               保存加点
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 拾荒策略切换（始终显示，派遣前/后都能改） */}
+      {onChangeStrategy && (
+        <div className={styles.strategyRow}>
+          <span className={styles.strategyLabel}>拾荒策略</span>
+          <div className={styles.strategyBtns}>
+            <button
+              className={`${styles.strategyBtn} ${charData.strategy === 'stealth' ? styles.strategyBtnActive : ''}`}
+              onClick={() => onChangeStrategy('stealth')}
+              title="优先隐蔽，失败再战斗"
+            >
+              隐蔽
+            </button>
+            <button
+              className={`${styles.strategyBtn} ${charData.strategy === 'combat' ? styles.strategyBtnActive : ''}`}
+              onClick={() => onChangeStrategy('combat')}
+              title="直接战斗"
+            >
+              战斗
             </button>
           </div>
         </div>

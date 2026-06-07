@@ -13,8 +13,9 @@ import { ScavengeMapDetail } from './ScavengeMap/ScavengeMapDetail';
 import { ScavengeLocationItem } from './ScavengeMap/locations';
 import { ScavengeCharacterPanel } from './ScavengeCharacter/ScavengeCharacterPanel/ScavengeCharacterPanel';
 import { ScavengeMenuButton } from './ScavengeMenuButton/ScavengeMenuButton';
-import { readMissions } from './ScavengeMissions/missions';
+import { readMissions, EncounterLog } from './ScavengeMissions/missions';
 import { ScavengeMissionOutcomeModal } from './ScavengeMissionOutcomeModal/ScavengeMissionOutcomeModal';
+import { ScavengeCombatLogModal } from './ScavengeCombatLogModal/ScavengeCombatLogModal';
 import styles from './ScavengeMain.module.scss';
 
 export const ScavengeMain = () => {
@@ -68,7 +69,7 @@ export const ScavengeMain = () => {
   const showCharacterList = (stageState.GameVar['scavenge_show_character_list'] as boolean) ?? false;
 
   // 监听 missions 列表：找 status='completed' && !outcomeShown 的最新一个，弹结果窗
-  // 用 stageState 订阅触发重渲染（missions 变化会通过 setStageState 通知）
+  // 派遣结算结果弹窗（监听 missions 变化，弹出未展示的）
   const pendingOutcomeMission = useMemo(() => {
     const missions = readMissions();
     return missions.find(m =>
@@ -76,6 +77,26 @@ export const ScavengeMain = () => {
       m.outcome &&
       !m.outcomeShown,
     );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageState]);
+
+  // 遭遇结果弹窗（监听 missions 变化，弹最新"未展示的真实遭遇"）
+  // 排除 no_encounter（准备期占位 / 安静路过）和 失败 mission（失败结果由 outcome modal 处理）
+  const pendingEncounter = useMemo(() => {
+    const missions = readMissions();
+    // 倒序遍历 missions，从最新 mission 开始找
+    for (let i = missions.length - 1; i >= 0; i--) {
+      const m = missions[i];
+      const encounters = m.encounters ?? [];
+      // 倒序遍历 encounters，找最新未展示的真实遭遇
+      for (let j = encounters.length - 1; j >= 0; j--) {
+        const e = encounters[j];
+        if (e.kind === 'no_encounter') continue;
+        if (e.shown) continue;
+        return { missionId: m.id, encounter: e };
+      }
+    }
+    return null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stageState]);
 
@@ -118,6 +139,21 @@ export const ScavengeMain = () => {
             // modal 内部已 markMissionOutcomeShown，强制刷新以重新计算 pending
             stageStateManager.setStageVarAndCommit({
               key: '_mission_outcome_dismissed_at',
+              value: Date.now(),
+            });
+          }}
+        />
+      )}
+
+      {/* 遭遇结果弹窗（每个派遣期遭遇的资源点/战斗都弹一次） */}
+      {pendingEncounter && (
+        <ScavengeCombatLogModal
+          missionId={pendingEncounter.missionId}
+          encounter={pendingEncounter.encounter}
+          onClose={() => {
+            // modal 内部已 markEncounterShown，强制刷新
+            stageStateManager.setStageVarAndCommit({
+              key: '_encounter_dismissed_at',
               value: Date.now(),
             });
           }}

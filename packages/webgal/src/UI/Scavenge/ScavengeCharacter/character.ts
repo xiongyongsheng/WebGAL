@@ -74,6 +74,9 @@ export interface ScavengeCharacter {
   statPoints: number;
   /** 主属性：升级时自动 +2 */
   mainStat: MainStat;
+  // ============== 战斗系统 ==============
+  /** 拾荒策略：'stealth' 优先隐蔽回避 / 'combat' 优先战斗。默认 combat。 */
+  strategy: 'stealth' | 'combat';
   /** 背包物品列表（属于角色数据的一部分，null 表示空槽位） */
   inventory: (InventoryItem | null)[];
 }
@@ -104,6 +107,7 @@ export const DEFAULT_CHARACTER: ScavengeCharacter = {
   expToNext: 100,
   statPoints: 0,
   mainStat: 'str',
+  strategy: 'combat',
   inventory: [],
 };
 
@@ -186,6 +190,7 @@ export const normalizeCharacter = (char: ScavengeCharacter): ScavengeCharacter =
     expToNext: char.expToNext ?? 100,
     statPoints: char.statPoints ?? 0,
     mainStat: char.mainStat ?? 'str',
+    strategy: (char.strategy === 'stealth' || char.strategy === 'combat') ? char.strategy : 'combat',
     inventory: finalInventory,
   };
 };

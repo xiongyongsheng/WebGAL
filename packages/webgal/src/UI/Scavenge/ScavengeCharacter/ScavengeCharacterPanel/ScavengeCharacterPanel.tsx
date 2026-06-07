@@ -336,6 +336,18 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
     refresh();
   };
 
+  /**
+   * 切换拾荒策略（stealth/combat）
+   */
+  const handleChangeStrategy = (charId: string, strategy: 'stealth' | 'combat') => {
+    const characters = getCharacters();
+    const char = characters.find(c => c.id === charId);
+    if (!char || char.strategy === strategy) return;
+    const updated = { ...char, strategy };
+    updateCharacter(updated);
+    refresh();
+  };
+
   // 点击物品：显示菜单
   const handleItemClick = (charId: string, invItem: InventoryItem, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -665,6 +677,7 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
                       endBonus={calculateEquipBonus(charData, 'end')}
                       intBonus={calculateEquipBonus(charData, 'int')}
                       onApplyPending={(pending) => handleApplyPending(charData.id, pending)}
+                      onChangeStrategy={(s) => handleChangeStrategy(charData.id, s)}
                     />
                     <ScavengeCharacterEquip
                       charData={charData}

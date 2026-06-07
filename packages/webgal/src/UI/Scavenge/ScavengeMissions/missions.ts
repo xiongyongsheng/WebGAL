@@ -14,7 +14,11 @@
 import { ScavengeCharacter } from '../ScavengeCharacter/character';
 import { gainExp } from '../ScavengeCharacter/characterExperience';
 import { InventoryItem, addToInventory, generateInstanceId } from '../ScavengeItems/inventory';
-import { ScavengeLocationItem } from '../ScavengeMap/locations';
+import { ScavengeLocationItem, getLocationEnemyPool } from '../ScavengeMap/locations';
+import {
+  EnemyInstance, spawnEnemiesFromPool, pickRandomEncounterEnemies,
+} from '../ScavengeEnemies/enemies';
+import { CombatLogEntry, runCombat, rollStealth } from '../ScavengeCombat/combat';
 
 export const MISSIONS_GAMEVAR_KEY = 'scavenge_missions';
 
@@ -63,6 +67,42 @@ export interface Mission {
   createdAt: string;
   /** 随机事件占位（暂未启用，**接口预留**） */
   events?: MissionEvent[];
+  // ============== 战斗系统扩展 ==============
+  /** 角色 strategy 副本（派遣开始时复制） */
+  strategy: 'stealth' | 'combat';
+  /** 派遣期间遭遇历史（按时间顺序） */
+  encounters: EncounterLog[];
+  /** 是否已被玩家手动取消（UI 召回按钮用） */
+  cancelled?: boolean;
+}
+
+/** 派遣期间的遭遇记录（被 encounterCheck 追加） */
+export type EncounterKind =
+  | 'no_encounter'             // 没遇到任何东西
+  | 'evade_success'            // 隐蔽成功
+  | 'evade_fail_combat_victory' // 隐蔽失败 + 战斗胜
+  | 'evade_fail_combat_defeat'  // 隐蔽失败 + 战斗败
+  | 'combat_victory'           // 直接战斗 + 胜
+  | 'combat_defeat'            // 直接战斗 + 败
+  | 'resource';                // 资源点（无敌人）
+
+export interface EncounterLog {
+  id: string;
+  triggerDay: number;
+  triggerPeriodIndex: number;
+  kind: EncounterKind;
+  /** 遭遇敌人数量 */
+  enemiesEncountered?: number;
+  /** 战斗日志（如果是战斗） */
+  combatLog?: CombatLogEntry[];
+  /** 获得的物品（资源点 / 战斗胜） */
+  itemsGained?: InventoryItem[];
+  /** 角色 HP 变化（负=扣，正=回，正数实际不发生） */
+  hpDelta?: number;
+  /** 文字说明（UI 弹窗用） */
+  message: string;
+  /** 弹窗是否已展示过（点过"确定"后置 true，避免刷新页面重弹） */
+  shown?: boolean;
 }
 
 /** 派遣事件（**接口预留**，暂不实现） */
@@ -135,10 +175,23 @@ export const isTimeReached = (
 /**
  * 创建派遣任务。
  *
+ * 时间模型（2026-06-05 增"准备阶段"）：
+ * - 玩家在 startTime 选派遣
+ * - 准备期 1 period（不计 duration）："早上选→到上午才开始"
+ * - 活跃期 duration 个 period：从 startTime+1 到 startTime+duration
+ * - returnTime = startTime + 1 + duration
+ * - 遭遇只在活跃期跑（currentTime > startTime && currentTime < returnTime）
+ *
+ * 例：park (duration=1)，startTime=day1 period0（清晨）选派遣
+ *   - 准备：period 0 → period 1（上午）
+ *   - 活跃：period 1 → period 2（下午，returnTime=2）
+ *   - 玩家需推进 2 次才完成：第 1 次（准备完）+ 第 2 次（活跃 1 期 + 结算）
+ *
  * @param characterId 派遣角色 ID
  * @param location 派遣地点
  * @param currentDay 当前第几天
  * @param currentPeriodIndex 当前 period
+ * @param strategy 派遣策略（从角色 strategy 复制）
  * @returns 新 Mission
  */
 export const startMission = (
@@ -146,9 +199,11 @@ export const startMission = (
   location: ScavengeLocationItem,
   currentDay: number,
   currentPeriodIndex: number,
+  strategy: 'stealth' | 'combat' = 'combat',
 ): Mission => {
   const duration = Math.max(1, location.explorationTime);
-  const { day, periodIndex } = calcReturnTime(currentDay, currentPeriodIndex, duration);
+  // 加 1 期作为准备期
+  const { day, periodIndex } = calcReturnTime(currentDay, currentPeriodIndex, duration + 1);
   return {
     id: generateInstanceId(),
     characterId,
@@ -159,6 +214,8 @@ export const startMission = (
     returnDay: day,
     returnPeriodIndex: periodIndex,
     status: 'active',
+    strategy,
+    encounters: [],
     createdAt: new Date().toISOString(),
   };
 };
@@ -196,17 +253,8 @@ export const cancelMissionInList = (
 
 // ============== 派遣完成 / 结算 ==============
 
-/** 难度 0/1 → 1 个物品；2/3 → 2 个；4/5 → 3 个 */
-const lootCountForDanger = (dangerLevel: number): number => {
-  if (dangerLevel <= 1) return 1;
-  if (dangerLevel <= 3) return 2;
-  return 3;
-};
-
-/** 随机 1~max（不均，含两端） */
-const randInt = (min: number, max: number): number => {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-};
+// 注：原 lootCountForDanger / randInt 工具已不再使用（物品由 encounters 提供）
+// 如需恢复随机基础物资，重新启用并在这里调用
 
 /**
  * 派遣完成 → 结算
@@ -244,28 +292,10 @@ export const completeMission = (
     };
   }
 
-  // 随机选 N 个 lootType
-  const lootCount = lootCountForDanger(location.dangerLevel);
-  const available = location.lootTypes ?? [];
-  const chosen: string[] = [];
-  if (available.length > 0) {
-    const pool = [...available];
-    while (chosen.length < lootCount && pool.length > 0) {
-      const idx = Math.floor(Math.random() * pool.length);
-      chosen.push(pool[idx]);
-      pool.splice(idx, 1);
-    }
-  }
-
-  // 映射到 itemId + 随机数量
-  const itemsGained: InventoryItem[] = chosen
-    .map((lootType) => LOOT_TYPE_TO_ITEM[lootType])
-    .filter((itemId): itemId is string => Boolean(itemId))
-    .map((itemId) => ({
-      instanceId: generateInstanceId(),
-      itemId,
-      quantity: randInt(1, 3),
-    }));
+  // 物资 = 派遣期间 encounters 累计获取（资源点 / 战斗胜）
+  // 不再额外随机生成：避免"无遭遇也白送"的双发奖励
+  const itemsGained: InventoryItem[] = (mission.encounters ?? [])
+    .flatMap((e) => e.itemsGained ?? []);
 
   // 经验
   const expGained = MISSION_BASE_EXP + location.dangerLevel * MISSION_EXP_PER_DANGER;
@@ -279,12 +309,207 @@ export const completeMission = (
     outcome: {
       success: true,
       reason: 'completed',
-      message: `任务完成！从【${location.name}】带回 ${itemsGained.length} 类物资，获得 ${expGained} 经验。`,
+      message: itemsGained.length > 0
+        ? `任务完成！从【${location.name}】带回 ${itemsGained.length} 类物资，获得 ${expGained} 经验。`
+        : `任务完成。获得 ${expGained} 经验（未获取物资）。`,
       itemsGained,
       expGained,
       hpLost,
     },
     outcomeShown: false,
+  };
+};
+
+// ============== 遭遇检查（派遣中每个 period 调一次） ==============
+
+/** 资源点类型 → itemId 映射（复用 missions.ts 里的） */
+const RESOURCE_TYPE_TO_ITEM: Record<string, string> = {
+  food: 'food_apple',
+  drink: 'drink_water',
+  beverage: 'drink_water',
+  medicine: 'medicine_bandage',
+  bandage: 'medicine_bandage',
+  parts: 'material_parts',
+  tools: 'material_tools',
+  cloth: 'material_cloth',
+  metal: 'material_metal',
+  daily: 'material_parts',
+  weapon: 'weapon_knife',
+  armor: 'armor_vest',
+};
+
+/**
+ * 派遣期间每个 period 调一次：决定是否遭遇 + 触发战斗/资源
+ *
+ * 判定流程：
+ * 1. 60% 不遭遇 / 40% 遭遇
+ * 2. 遭遇时 80% 丧尸 / 20% 资源点
+ * 3. 丧尸：按 location.enemyPool 随机生成 1~N 个
+ *    - char.strategy='stealth'：先隐蔽判定，失败再进入战斗
+ *    - char.strategy='combat'：直接进入战斗
+ * 4. 战斗：用 runCombat 算胜负
+ *    - 胜：可获得物资 + 经验
+ *    - 败：扣 HP，mission 标记失败（completeMission 时不再给奖励）
+ *
+ * @returns { encounter, updatedChar } encounter 记录 + 角色 HP 更新后的副本
+ */
+export const encounterCheck = (
+  mission: Mission,
+  character: ScavengeCharacter,
+  location: ScavengeLocationItem,
+  triggerDay: number,
+  triggerPeriodIndex: number,
+): { encounter: EncounterLog; updatedChar: ScavengeCharacter; missionOver: boolean } => {
+  const encId = generateInstanceId();
+  const baseItems: InventoryItem[] = [];
+
+  // 1. 60% 不遭遇
+  if (Math.random() >= 0.4) {
+    return {
+      encounter: {
+        id: encId,
+        triggerDay,
+        triggerPeriodIndex,
+        kind: 'no_encounter',
+        message: '这一段路没遇到任何威胁',
+      },
+      updatedChar: character,
+      missionOver: false,
+    };
+  }
+
+  // 2. 遭遇：80% 丧尸 / 20% 资源点
+  const isResource = Math.random() < 0.2;
+  if (isResource) {
+    // 资源点：按 location.lootTypes 随机 1 类
+    const available = location.lootTypes ?? [];
+    if (available.length > 0) {
+      const loot = available[Math.floor(Math.random() * available.length)];
+      const itemId = RESOURCE_TYPE_TO_ITEM[loot];
+      if (itemId) {
+        const item: InventoryItem = {
+          instanceId: generateInstanceId(),
+          itemId,
+          quantity: 1 + Math.floor(Math.random() * 3), // 1~3
+        };
+        baseItems.push(item);
+      }
+    }
+    let updatedChar: ScavengeCharacter = character;
+    if (baseItems.length > 0) {
+      updatedChar = {
+        ...character,
+        inventory: addToInventory(character.inventory ?? [], baseItems[0]),
+      };
+    }
+    return {
+      encounter: {
+        id: encId,
+        triggerDay,
+        triggerPeriodIndex,
+        kind: 'resource',
+        itemsGained: baseItems,
+        message: baseItems.length > 0 ? '发现了一处资源点！' : '看上去像资源点，但已经被人搜刮过了',
+      },
+      updatedChar,
+      missionOver: false,
+    };
+  }
+
+  // 3. 丧尸：从 location.enemyPool 生成 1~N 个
+  const pool = getLocationEnemyPool(location);
+  if (pool.length === 0) {
+    // 没有敌人池（很罕见，比如 danger=0）→ 当成不遭遇
+    return {
+      encounter: {
+        id: encId,
+        triggerDay,
+        triggerPeriodIndex,
+        kind: 'no_encounter',
+        message: '没有发现敌人',
+      },
+      updatedChar: character,
+      missionOver: false,
+    };
+  }
+  const allEnemies = spawnEnemiesFromPool(pool);
+  const encounterEnemies = pickRandomEncounterEnemies(allEnemies);
+
+  // 4. 战略判定
+  if (mission.strategy === 'stealth') {
+    const evaded = rollStealth(character);
+    if (evaded) {
+      return {
+        encounter: {
+          id: encId,
+          triggerDay,
+          triggerPeriodIndex,
+          kind: 'evade_success',
+          enemiesEncountered: encounterEnemies.length,
+          message: `遭遇 ${encounterEnemies.length} 个敌人，隐蔽成功！悄悄溜过`,
+        },
+        updatedChar: character,
+        missionOver: false,
+      };
+    }
+    // 隐蔽失败 → 进入战斗
+  }
+
+  // 战斗
+  const combatResult = runCombat(character, encounterEnemies);
+  const hpDelta = combatResult.characterFinalHp - character.hp;
+  const updatedChar: ScavengeCharacter = {
+    ...character,
+    hp: Math.max(0, combatResult.characterFinalHp),
+  };
+
+  if (combatResult.characterWon) {
+    // 胜：随机给点物资（来自 location.lootTypes）
+    const available = location.lootTypes ?? [];
+    if (available.length > 0) {
+      const loot = available[Math.floor(Math.random() * available.length)];
+      const itemId = RESOURCE_TYPE_TO_ITEM[loot];
+      if (itemId) {
+        baseItems.push({
+          instanceId: generateInstanceId(),
+          itemId,
+          quantity: 1 + Math.floor(Math.random() * 2), // 1~2
+        });
+        // 加到角色背包
+        updatedChar.inventory = addToInventory(updatedChar.inventory ?? [], baseItems[0]);
+      }
+    }
+    return {
+      encounter: {
+        id: encId,
+        triggerDay,
+        triggerPeriodIndex,
+        kind: combatResult.characterWon ? (mission.strategy === 'stealth' ? 'evade_fail_combat_victory' : 'combat_victory') : 'combat_defeat',
+        enemiesEncountered: encounterEnemies.length,
+        combatLog: combatResult.log,
+        itemsGained: baseItems.length > 0 ? baseItems : undefined,
+        hpDelta,
+        message: `战胜了 ${encounterEnemies.length} 个敌人！${hpDelta < 0 ? `（扣血 ${-hpDelta}）` : ''}`,
+      },
+      updatedChar,
+      missionOver: false, // 战斗胜不结束 mission，继续探索
+    };
+  }
+
+  // 败：mission 失败
+  return {
+    encounter: {
+      id: encId,
+      triggerDay,
+      triggerPeriodIndex,
+      kind: mission.strategy === 'stealth' ? 'evade_fail_combat_defeat' : 'combat_defeat',
+      enemiesEncountered: encounterEnemies.length,
+      combatLog: combatResult.log,
+      hpDelta,
+      message: `被 ${encounterEnemies.length} 个敌人击败！任务失败，紧急撤退`,
+    },
+    updatedChar,
+    missionOver: true, // 战斗败 → 立即结束 mission
   };
 };
 
@@ -435,5 +660,20 @@ export const markMissionOutcomeShown = (missionId: string): void => {
   const updated = missions.map(m =>
     m.id === missionId ? { ...m, outcomeShown: true } : m,
   );
+  writeMissions(updated);
+};
+
+/** 标记某个 encounter 已展示（按 missionId + encounterId） */
+export const markEncounterShown = (missionId: string, encounterId: string): void => {
+  const missions = readMissions();
+  const updated = missions.map(m => {
+    if (m.id !== missionId) return m;
+    return {
+      ...m,
+      encounters: (m.encounters ?? []).map(e =>
+        e.id === encounterId ? { ...e, shown: true } : e
+      ),
+    };
+  });
   writeMissions(updated);
 };
