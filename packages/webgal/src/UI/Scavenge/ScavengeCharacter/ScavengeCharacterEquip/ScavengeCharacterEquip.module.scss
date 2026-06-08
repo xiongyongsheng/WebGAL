@@ -11,50 +11,161 @@
   margin-bottom: 12px;
 }
 
-.equipList {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+// ============== 装备分组 ==============
+
+.equipGroup {
+  margin-bottom: 14px;
 }
+
+.groupTitle {
+  font-size: 11px;
+  color: #a0a0a0;
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+}
+
+// ============== 护甲 6 部位网格 ==============
+
+.armorGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 8px;
+}
+
+// ============== 单个装备行 ==============
 
 .equipItem {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.05);
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 6px;
+  transition: background 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.07);
+  }
+}
+
+.equipIcon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  flex-shrink: 0;
+  color: #b0b0b0;
+}
+
+.iconSvg {
+  font-size: 18px;
+}
+
+.equipInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.equipHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
 }
 
 .equipType {
-  font-size: 11px;
+  font-size: 10px;
   color: #808080;
-  padding: 2px 8px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  width: 40px;
-  text-align: center;
+  padding: 1px 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  flex-shrink: 0;
+  letter-spacing: 0.3px;
 }
 
 .equipName {
-  font-size: 14px;
+  font-size: 13px;
   color: #e0e0e0;
-  flex: 1;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.unequipButton {
-  margin-left: auto;
-  padding: 4px 10px;
+.equipEmpty {
+  font-size: 12px;
+  color: #606060;
+  font-style: italic;
+}
+
+// ============== 耐久条 ==============
+
+.durabilityRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.durabilityTrack {
+  flex: 1;
+  height: 4px;
   background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.durabilityFill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.durabilityText {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  flex-shrink: 0;
+  min-width: 50px;
+  text-align: right;
+}
+
+// ============== 警告文字 ==============
+
+.reqWarning {
+  font-size: 10px;
+  color: #ff6b6b;
+  margin-top: 2px;
+  font-weight: 500;
+}
+
+.brokenWarning {
+  font-size: 10px;
+  color: #ff5252;
+  margin-top: 2px;
+  font-weight: 500;
+}
+
+// ============== 卸下按钮 ==============
+
+.unequipButton {
+  padding: 3px 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 4px;
   color: #a0a0a0;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   transition: all 0.2s ease;
+  flex-shrink: 0;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.2);
-    color: #fff;
+    background: rgba(255, 100, 100, 0.2);
+    color: #ff6b6b;
+    border-color: rgba(255, 100, 100, 0.4);
   }
 }

@@ -98,6 +98,118 @@ export interface CanAddResult {
 /** 背包最大负重（单位：kg） */
 export const MAX_CARRY_WEIGHT = 30;
 
+// ============== 装备实例工厂（2026-06-07 战斗系统重构） ==============
+
+/**
+ * 创建一件装备实例
+ *
+ * 用法：任务/商店/拾荒掉落时调用，自动设置 instanceId + 初始 durability = maxDurability
+ *
+ * @param itemId 物品 ID（必须注册在 items.ts）
+ * @param overrides 覆盖项（一般不需要）
+ * @returns InventoryItem 实例
+ */
+export const createEquipmentInstance = (
+  itemId: string,
+  overrides?: Partial<InventoryItem>,
+): InventoryItem => {
+  const def = getItemById(itemId);
+  const isEquip = isEquipment(itemId);
+  const maxDura = (def && def.type === 'equipment') ? def.maxDurability : 0;
+  return {
+    instanceId: overrides?.instanceId ?? generateInstanceId(),
+    itemId,
+    quantity: overrides?.quantity ?? 1,
+    // 装备类：默认满耐久；非装备不设
+    ...(isEquip ? { durability: overrides?.durability ?? maxDura } : {}),
+    ...overrides,
+  };
+};
+
+/**
+ * 读取实例耐久度（无耐久时返回 maxDurability 当作 0 - 装备未损坏前显示 100%）
+ */
+export const getItemDurability = (item: InventoryItem): number => {
+  if (item.durability !== undefined) return item.durability;
+  // 兜底：旧数据没有 durability 字段
+  const def = getItemById(item.itemId);
+  if (def?.type === 'equipment') return def.maxDurability;
+  return 0;
+};
+
+/**
+ * 读取实例最大耐久度（无注册物品时返回 0）
+ */
+export const getItemMaxDurability = (item: InventoryItem): number => {
+  const def = getItemById(item.itemId);
+  if (def?.type === 'equipment') return def.maxDurability;
+  return 0;
+};
+
+/**
+ * 消耗实例耐久度（clamp 到 0）
+ * @returns 实际扣除量（受当前耐久限制）
+ */
+export const damageItem = (item: InventoryItem, amount: number): number => {
+  if (item.durability === undefined) return 0;
+  const before = item.durability;
+  item.durability = Math.max(0, item.durability - amount);
+  return before - item.durability;
+};
+
+/**
+ * 判断装备是否"已坏"（耐久 = 0）
+ */
+export const isItemBroken = (item: InventoryItem): boolean => {
+  if (item.durability === undefined) return false;
+  return item.durability <= 0;
+};
+
+// ============== 未知物品清理（2026-06-07 新增）==============
+
+/**
+ * 过滤出"未在 items.ts 注册"的物品 ID
+ *
+ * 用于清理老存档 / 脏数据中残留的未知 itemId，
+ * 避免 UI 显示"未知物品"且 getItemName 兜底报错。
+ */
+export const findUnknownItemIds = (
+  items: readonly (InventoryItem | null)[],
+): string[] => {
+  const unknown = new Set<string>();
+  for (const slot of items) {
+    if (slot && !getItemById(slot.itemId)) {
+      unknown.add(slot.itemId);
+    }
+  }
+  return Array.from(unknown);
+};
+
+/**
+ * 过滤掉未注册的物品（保留 null 槽位）
+ * @returns valid: 合法物品（含 null 槽位），removed: 被移除的物品 ID 列表
+ *
+ * 入参接受 `InventoryItem[]` 或 `(InventoryItem | null)[]`（仓库只存物品，背包可含 null 槽位）
+ */
+export const filterUnknownItems = <T extends InventoryItem | null>(
+  items: readonly T[],
+): { valid: T[]; removed: string[] } => {
+  const valid: T[] = [];
+  const removed: string[] = [];
+  for (const slot of items) {
+    if (slot === null) {
+      valid.push(slot);
+      continue;
+    }
+    if (getItemById(slot.itemId)) {
+      valid.push(slot);
+    } else {
+      removed.push(slot.itemId);
+    }
+  }
+  return { valid, removed };
+};
+
 // ============== 仓库容量配置（根据 DESIGN_PLAN） ==============
 
 /** 消耗品仓库容量 */

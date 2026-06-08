@@ -3,10 +3,17 @@
  * 角色数据定义和操作
  */
 
-import { InventoryItem, migrateInventory } from '../ScavengeItems/inventory';
+import { InventoryItem, migrateInventory, compactInventorySlots, filterUnknownItems } from '../ScavengeItems/inventory';
+import { getItemById, ArmorSlot } from '../ScavengeItems/items';
 
 /** 主属性（升级时自动 +2 的属性） */
 export type MainStat = 'str' | 'agi' | 'end' | 'int';
+
+/** 装备 slot key（2026-06-07 改）：装备实例存在 `equipped[key]` 里，不在 inventory */
+export type EquipSlotKey = 'weapon' | 'helmet' | 'chest' | 'arms' | 'gloves' | 'legs' | 'boots' | 'tool';
+
+// 2026-06-07：未知物品警告去重（同一 ID 只 warn 一次，避免 React 重渲染时刷屏）
+const _warnedUnknownIds = new Set<string>();
 
 export interface ScavengeCharacter {
   /** 角色ID */
@@ -43,12 +50,31 @@ export interface ScavengeCharacter {
   stamina: number;
   /** 最大体力值（受 end 影响：100 + (end-5)*5） */
   maxStamina: number;
-  /** 装备的武器ID */
+  /** 装备的武器ID（itemId，inventory 中对应实例提供 durability） */
   weaponId?: string;
-  /** 装备的护甲ID */
-  armorId?: string;
-  /** 装备的工具ID */
+  /** 装备的头盔 ID（itemId） */
+  helmetId?: string;
+  /** 装备的躯干/盔甲 ID（itemId） */
+  chestId?: string;
+  /** 装备的护臂 ID（itemId） */
+  armsId?: string;
+  /** 装备的手套 ID（itemId） */
+  glovesId?: string;
+  /** 装备的护腿 ID（itemId） */
+  legsId?: string;
+  /** 装备的靴子 ID（itemId） */
+  bootsId?: string;
+  /** 装备的工具ID（itemId） */
   toolId?: string;
+  /**
+   * 装备实例（2026-06-07 改）：key = slot 名字，value = InventoryItem
+   *
+   * 装备后的 instance 从 inventory **移到这里**（不是复制），所以：
+   * - inventory 只显示"真正在背包里"的物品
+   * - 战斗/UI 直接读 equipped 拿耐久
+   * - 卸下时再把 instance 移回 inventory
+   */
+  equipped?: Partial<Record<EquipSlotKey, InventoryItem>>;
   /** 是否在探索中（包含派遣：派遣期间 isExploring=true，角色被锁） */
   isExploring: boolean;
   /** 探索地点ID */
@@ -57,12 +83,6 @@ export interface ScavengeCharacter {
   returnDay?: number;
   /** 派遣/探索结束时间：哪个 period（0=清晨, 1=上午, 2=下午, 3=半晚, 4=黑夜） */
   returnPeriodIndex?: number;
-  /** 武器耐久度 */
-  weaponDurability?: number;
-  /** 护甲耐久度 */
-  armorDurability?: number;
-  /** 工具耐久度 */
-  toolDurability?: number;
   // ============== 经验/升级系统 ==============
   /** 当前经验值 */
   exp: number;
@@ -178,6 +198,101 @@ export const normalizeCharacter = (char: ScavengeCharacter): ScavengeCharacter =
   const returnDay = isExploring ? (char.returnDay ?? 0) : char.returnDay;
   const returnPeriodIndex = isExploring ? (char.returnPeriodIndex ?? 0) : char.returnPeriodIndex;
 
+  // 旧 armorId 迁移到 6 个 slot（2026-06-07 重构）：
+  // 旧 armorId 装备只有 1 个 slot，新系统按物品的 armorSlot 字段自动归位
+  const legacyArmorId = (char as unknown as { armorId?: string }).armorId;
+  const migratedHelmetId = char.helmetId;
+  const migratedChestId = char.chestId;
+  const migratedArmsId = char.armsId;
+  const migratedGlovesId = char.glovesId;
+  const migratedLegsId = char.legsId;
+  const migratedBootsId = char.bootsId;
+  let finalHelmetId = migratedHelmetId;
+  let finalChestId = migratedChestId;
+  let finalArmsId = migratedArmsId;
+  let finalGlovesId = migratedGlovesId;
+  let finalLegsId = migratedLegsId;
+  let finalBootsId = migratedBootsId;
+  if (legacyArmorId && !migratedHelmetId && !migratedChestId && !migratedArmsId && !migratedGlovesId && !migratedLegsId && !migratedBootsId) {
+    const def = getItemById(legacyArmorId);
+    const slot: ArmorSlot = (def && def.type === 'equipment' && def.armorSlot) ? def.armorSlot : 'chest';
+    if (slot === 'helmet') finalHelmetId = legacyArmorId;
+    else if (slot === 'chest') finalChestId = legacyArmorId;
+    else if (slot === 'arms') finalArmsId = legacyArmorId;
+    else if (slot === 'gloves') finalGlovesId = legacyArmorId;
+    else if (slot === 'legs') finalLegsId = legacyArmorId;
+    else if (slot === 'boots') finalBootsId = legacyArmorId;
+  }
+  // 旧 weaponDurability / armorDurability 已废弃（耐久迁到 InventoryItem.durability），这里只兜底
+
+  // 2026-06-07 装备实例迁移：把 inventory 里的装备移到 equipped
+  // 老数据：itemId 字段指向的 instance 还在 inventory 里
+  // 新数据：itemId 字段只用于识别，instance 必须在 equipped 里
+  const slotMappings: Array<{ idField: keyof ScavengeCharacter; equippedKey: EquipSlotKey }> = [
+    { idField: 'weaponId', equippedKey: 'weapon' },
+    { idField: 'helmetId', equippedKey: 'helmet' },
+    { idField: 'chestId', equippedKey: 'chest' },
+    { idField: 'armsId', equippedKey: 'arms' },
+    { idField: 'glovesId', equippedKey: 'gloves' },
+    { idField: 'legsId', equippedKey: 'legs' },
+    { idField: 'bootsId', equippedKey: 'boots' },
+    { idField: 'toolId', equippedKey: 'tool' },
+  ];
+  let workingInventory: (InventoryItem | null)[] = [...finalInventory];
+  const workingEquipped: Partial<Record<EquipSlotKey, InventoryItem>> = { ...(char.equipped ?? {}) };
+  for (const { idField, equippedKey } of slotMappings) {
+    const itemId = char[idField] as string | undefined;
+    if (!itemId) continue;
+    if (workingEquipped[equippedKey]) continue; // 已有 equipped 记录，跳过
+    // 在 inventory 里找第一个 itemId 匹配的 instance
+    const idx = workingInventory.findIndex((s) => s !== null && s.itemId === itemId);
+    if (idx < 0) continue;
+    const instance = workingInventory[idx] as InventoryItem;
+    workingEquipped[equippedKey] = instance;
+    workingInventory[idx] = null;
+  }
+  // 清理掉 null 槽位
+  workingInventory = compactInventorySlots(workingInventory);
+
+  // 2026-06-07 清理未注册的物品（老存档/脏数据导致 UI 显示"未知物品"）
+  // 注意：先做 equipped 迁移再做这一步，否则迁移时找不到已装装备的 instance
+  {
+    const { valid, removed } = filterUnknownItems(workingInventory);
+    if (removed.length > 0) {
+      // 只 warn 第一次见到的新 ID
+      const newUnknown = removed.filter((id) => !_warnedUnknownIds.has(id));
+      newUnknown.forEach((id) => _warnedUnknownIds.add(id));
+      if (newUnknown.length > 0) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[Scavenge] 自动清理了 ${newUnknown.length} 件未注册物品：` +
+          newUnknown.map((id) => `'${id}'`).join(', ') +
+          `（角色 ${char.id}，原因为 items.ts 中没有对应注册）` +
+          `\n→ 如果这些物品应该保留，请在 items.ts 中补全对应 ID。`,
+        );
+      }
+    }
+    workingInventory = valid;
+  }
+  // 同样清理 equipped 中的未知 ID
+  for (const key of Object.keys(workingEquipped) as EquipSlotKey[]) {
+    const inst = workingEquipped[key];
+    if (inst && !getItemById(inst.itemId)) {
+      const warnKey = `equipped.${key}:${inst.itemId}`;
+      if (!_warnedUnknownIds.has(warnKey)) {
+        _warnedUnknownIds.add(warnKey);
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[Scavenge] 自动清理 equipped.${key} 上的未注册物品 '${inst.itemId}'（角色 ${char.id}）`,
+        );
+      }
+      delete workingEquipped[key];
+      // 清掉对应的 slotId 字段
+      const idField = `${key}Id` as keyof ScavengeCharacter;
+      (char as any)[idField] = undefined;
+    }
+  }
+
   return {
     ...char,
     isExploring,
@@ -191,7 +306,14 @@ export const normalizeCharacter = (char: ScavengeCharacter): ScavengeCharacter =
     statPoints: char.statPoints ?? 0,
     mainStat: char.mainStat ?? 'str',
     strategy: (char.strategy === 'stealth' || char.strategy === 'combat') ? char.strategy : 'combat',
-    inventory: finalInventory,
+    inventory: workingInventory,
+    equipped: workingEquipped,
+    helmetId: finalHelmetId,
+    chestId: finalChestId,
+    armsId: finalArmsId,
+    glovesId: finalGlovesId,
+    legsId: finalLegsId,
+    bootsId: finalBootsId,
   };
 };
 

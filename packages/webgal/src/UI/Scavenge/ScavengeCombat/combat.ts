@@ -1,5 +1,5 @@
 /**
- * 拾荒系统 - 战斗判定（ATB 1vN 版本，2026-06-05 重构）
+ * 拾荒系统 - 战斗判定（2026-06-07 重构：ATB 1vN + 武器/护甲耐久系统）
  *
  * ATB 累加器：每个参战者（角色 + 所有敌人）有 currentTick：
  * - 战斗开始：所有 currentTick = 0
@@ -8,78 +8,80 @@
  * - 行动完后所有存活者继续累加
  * - 角色 HP=0 或所有敌人 HP=0 → 战斗结束
  *
- * 目标选择：
- * - 角色触发：选当前 HP 最少的存活敌人
- * - 敌人触发：永远攻击角色
+ * ===== 武器系统（2026-06-07）=====
+ * - 当前武器耐久 = 0 → 触发 weapon_break 日志 → 自动扫描背包找可用武器
+ * - 找不到 → 触发 fist_fallback 日志，使用拳头（FIST_DAMAGE = 2）
+ * - 每次成功命中消耗 1 点武器耐久
  *
- * 攻击流程（每次触发 1 次）：
- * 1. 命中判定：attacker.accuracy vs defender.evasion
- * 2. 暴击判定（仅命中）：attacker.critRate
- * 3. 伤害 = max(1, attacker.attackDamage * (暴击? critMultiplier: 1) - defender.armor)
- * 4. defender.currentHp -= damage
+ * ===== 护甲系统（2026-06-07）=====
+ * - 6 个护甲 slot（helmet/chest/arms/gloves/legs/boots）
+ * - 每次被击中：随机选一个"还有耐久"的 slot 扣耐久，超出归 HP
+ * - 角色面板的 armor 派生值 = 6 slot 当前耐久之和（不是减伤值）
  *
- * 设计（2026-06-05 与产品确认）：
- * - 角色 attackSpeed = agi * 6（基础 5 时 = 30，约 3.3 tick 触发一次）
- * - 敌人 attackSpeed 固定：游荡者 20 / 追逐者 30 / 防暴者 15
- * - 战斗无轮数上限，跑到一方全倒为止（防御性 MAX_TICKS 兜底）
- * - 1vN：多敌人一起战斗，不是 1v1
+ * ===== 伤害公式（2026-06-07）=====
+ * - 角色攻击：rollWeaponDamage(weapon.id) * (1 + str/100) * critMult，floor
+ * - 敌人攻击：attackDamage * critMult - flatArmor，floor（保持旧公式）
  */
 
 import { ScavengeCharacter } from '../ScavengeCharacter/character';
-import { computeDerivedStats, DerivedCombatStats } from '../ScavengeCharacter/characterCombat';
+import {
+  computeDerivedStats, FIST_DAMAGE, ARMOR_SLOT_KINDS,
+  getEquippedWeapon, getEquippedArmorPieces, findUsableWeaponInInventory,
+  rollWeaponDamage, getItemDurability, isItemBroken,
+} from '../ScavengeCharacter/characterCombat';
 import { ENEMY_TEMPLATES, EnemyInstance, EnemyType } from '../ScavengeEnemies/enemies';
+import {
+  getItemById, getItemName, ArmorSlot, getWeaponSpeedModifier,
+  SPEED_MODIFIER_MULTIPLIER, ARMOR_SLOT_NAMES, EquipmentItem,
+} from '../ScavengeItems/items';
+import { InventoryItem, damageItem } from '../ScavengeItems/inventory';
 
 // ============== 战斗日志 ==============
 
-export type CombatLogKind = 'attack' | 'hit' | 'crit' | 'miss' | 'death' | 'system';
+export type CombatLogKind =
+  | 'attack' | 'hit' | 'crit' | 'miss' | 'death' | 'system'
+  | 'weapon_durability_loss' | 'weapon_break' | 'weapon_switch'
+  | 'fist_fallback' | 'armor_absorb';
 
 export interface CombatLogEntry {
-  /** 唯一 ID（用于 React key） */
   id: string;
-  /** tick 序号（1 起） */
   tick: number;
-  /** 日志类型 */
   kind: CombatLogKind;
-  /** 攻击者名字（角色或敌人 + 编号） */
   attackerName: string;
-  /** 防御者名字 */
   defenderName: string;
-  /** 攻击伤害（未命中时为 0） */
   damage: number;
-  /** 防御者剩余 HP */
   defenderHp: number;
-  /** 防御者最大 HP */
   defenderMaxHp: number;
-  /** 额外文本（"暴击"等） */
   flavor?: string;
 }
 
 // ============== 调参常量 ==============
 
-/** ATB 触发阈值 */
 const ATB_THRESHOLD = 100;
-
-/** 防御性 tick 上限（防死循环；正常战斗几十 tick 内结束） */
 const MAX_TICKS = 500;
+const WEAPON_DURABILITY_PER_HIT = 1; // 每次成功命中扣 1 点
 
 // ============== 内部数据结构 ==============
 
-/** 战斗参战者（统一类型：角色或敌人） */
 interface Combatant {
-  /** 唯一 key（敌人用 #N 编号） */
   name: string;
-  /** true=角色（行动不会变） */
   isCharacter: boolean;
   currentHp: number;
   maxHp: number;
-  attackDamage: number;
   attackSpeed: number;
-  armor: number;
   accuracy: number;
   evasion: number;
   critRate: number;
   critMultiplier: number;
   currentTick: number;
+  // Enemy 专属
+  attackDamage: number;
+  armor: number;
+  // Character 专属
+  weaponInstance: InventoryItem | null;
+  weaponDef: EquipmentItem | null;
+  armorPieces: Record<ArmorSlot, { def: EquipmentItem; instance: InventoryItem } | null>;
+  isFists: boolean;
 }
 
 let _logIdCounter = 0;
@@ -95,8 +97,170 @@ const rollCrit = (critRate: number): boolean => {
   return Math.random() < critRate;
 };
 
-const calcDamage = (attackDamage: number, critMult: number, armor: number): number => {
+/** 敌人攻击伤害（保持旧公式：base * critMult - flatArmor，floor） */
+const calcEnemyDamage = (attackDamage: number, critMult: number, armor: number): number => {
   return Math.max(1, Math.floor(attackDamage * critMult - armor));
+};
+
+/** 角色攻击伤害：weapon.damage * (1 + str/100) * critMult，floor */
+const calcCharacterDamage = (char: ScavengeCharacter, combatant: Combatant, critMult: number): number => {
+  let base: number;
+  if (combatant.isFists || !combatant.weaponDef) {
+    base = FIST_DAMAGE;
+  } else {
+    base = rollWeaponDamage(combatant.weaponDef.id);
+  }
+  return Math.max(1, Math.floor(base * (1 + char.str / 100) * critMult));
+};
+
+/** 角色 attackSpeed（按当前武器/fist 状态计算） */
+const computeCharacterAttackSpeed = (char: ScavengeCharacter, combatant: Combatant): number => {
+  if (combatant.isFists || !combatant.weaponDef) {
+    return char.agi * 6;
+  }
+  const speedMod = getWeaponSpeedModifier(combatant.weaponDef.id);
+  const speedMult = SPEED_MODIFIER_MULTIPLIER[speedMod];
+  const weaponAgiBonus = combatant.weaponDef.attributes?.agi
+    ? combatant.weaponDef.attributes.agi * 0.5
+    : 0;
+  return char.agi * 6 * speedMult + weaponAgiBonus;
+};
+
+// ============== 护甲吸收伤害 ==============
+
+/**
+ * 对角色施加伤害（走护甲吸收流程）：
+ * - 找一个 random slot（有耐久的）
+ * - 扣该 slot 耐久，剩余伤害走 HP
+ */
+const applyDamageToCharacter = (
+  combatant: Combatant,
+  damage: number,
+  log: CombatLogEntry[],
+  tick: number,
+): void => {
+  // 找所有有耐久的 slot
+  // 2026-06-07 修复：必须用 ARMOR_SLOT_KINDS（ArmorSlot 值），不能用 ARMOR_SLOT_IDS（字段名）
+  // 否则 `armorPieces[helmetId]` 是 undefined，命中检测全空，走"无护甲"分支
+  const availableSlots: ArmorSlot[] = [];
+  for (const slot of ARMOR_SLOT_KINDS) {
+    const piece = combatant.armorPieces[slot];
+    if (piece && getItemDurability(piece.instance) > 0) {
+      availableSlots.push(slot);
+    }
+  }
+
+  if (availableSlots.length === 0) {
+    // 没护甲：全吃
+    combatant.currentHp = Math.max(0, combatant.currentHp - damage);
+    return;
+  }
+
+  // 随机选一个 slot
+  const randomSlot = availableSlots[Math.floor(Math.random() * availableSlots.length)];
+  const piece = combatant.armorPieces[randomSlot]!;
+  const slotDurBefore = getItemDurability(piece.instance);
+  const absorbed = Math.min(damage, slotDurBefore);
+  const excess = damage - absorbed;
+
+  // 扣耐久
+  damageItem(piece.instance, absorbed);
+  const slotDurAfter = getItemDurability(piece.instance);
+
+  // 日志：护甲吸收
+  log.push({
+    id: nextLogId(),
+    tick,
+    kind: 'armor_absorb',
+    attackerName: '',
+    defenderName: piece.def.name,
+    damage: absorbed,
+    defenderHp: slotDurAfter,
+    defenderMaxHp: piece.def.maxDurability,
+    flavor: `护甲 [${ARMOR_SLOT_NAMES[randomSlot]}] 抵消 ${absorbed} 伤害`,
+  });
+
+  // 剩余伤害走 HP
+  if (excess > 0) {
+    combatant.currentHp = Math.max(0, combatant.currentHp - excess);
+  }
+};
+
+// ============== 武器可用性检查 ==============
+
+/**
+ * 角色行动前检查：当前武器是否还能用（耐久 > 0）
+ * - 不可用 → 触发 weapon_break 日志 → 找背包里可用的武器
+ * - 找到 → 触发 weapon_switch 日志，切换
+ * - 找不到 → 触发 fist_fallback 日志，使用拳头
+ *
+ * @returns true = 武器/fist 状态有变化（已处理日志），false = 状态没变
+ */
+const ensureUsableWeapon = (
+  character: ScavengeCharacter,
+  combatant: Combatant,
+  log: CombatLogEntry[],
+  tick: number,
+): void => {
+  if (!combatant.isCharacter) return;
+
+  // 没武器（或拳头状态）：不做
+  if (combatant.isFists) return;
+
+  if (combatant.weaponInstance && isItemBroken(combatant.weaponInstance)) {
+    // 当前武器已坏
+    const oldWeaponName = combatant.weaponDef ? getItemName(combatant.weaponDef.id) : '武器';
+    const brokenInstanceId = combatant.weaponInstance.instanceId;
+
+    log.push({
+      id: nextLogId(),
+      tick,
+      kind: 'weapon_break',
+      attackerName: combatant.name,
+      defenderName: oldWeaponName,
+      damage: 0,
+      defenderHp: 0,
+      defenderMaxHp: 0,
+      flavor: `${oldWeaponName} 已损坏`,
+    });
+
+    const newWeapon = findUsableWeaponInInventory(character, brokenInstanceId);
+    if (newWeapon) {
+      const newDef = getItemById(newWeapon.itemId) as EquipmentItem;
+      log.push({
+        id: nextLogId(),
+        tick,
+        kind: 'weapon_switch',
+        attackerName: combatant.name,
+        defenderName: getItemName(newWeapon.itemId),
+        damage: 0,
+        defenderHp: 0,
+        defenderMaxHp: 0,
+        flavor: `自动切换到 ${getItemName(newWeapon.itemId)}`,
+      });
+      combatant.weaponInstance = newWeapon;
+      combatant.weaponDef = newDef;
+      combatant.isFists = false;
+      combatant.attackSpeed = computeCharacterAttackSpeed(character, combatant);
+    } else {
+      // 找不到可用武器，用拳头
+      log.push({
+        id: nextLogId(),
+        tick,
+        kind: 'fist_fallback',
+        attackerName: combatant.name,
+        defenderName: '',
+        damage: 0,
+        defenderHp: 0,
+        defenderMaxHp: 0,
+        flavor: '无武器可用，使用拳头',
+      });
+      combatant.weaponInstance = null;
+      combatant.weaponDef = null;
+      combatant.isFists = true;
+      combatant.attackSpeed = computeCharacterAttackSpeed(character, combatant);
+    }
+  }
 };
 
 // ============== 公共 API ==============
@@ -116,23 +280,54 @@ export const runCombat = (
   character: ScavengeCharacter,
   enemies: EnemyInstance[],
 ): CombatResult => {
+  // ----- 角色参战者初始化 -----
+  const equippedWeapon = getEquippedWeapon(character);
+  const armorPieces = getEquippedArmorPieces(character);
+
+  let weaponInstance: InventoryItem | null = null;
+  let weaponDef: EquipmentItem | null = null;
+  let isFists = false;
+
+  if (equippedWeapon) {
+    if (isItemBroken(equippedWeapon.instance)) {
+      // 装备的武器已坏：找背包里其他可用的
+      const replacement = findUsableWeaponInInventory(character, equippedWeapon.instance.instanceId);
+      if (replacement) {
+        weaponInstance = replacement;
+        weaponDef = getItemById(replacement.itemId) as EquipmentItem;
+      } else {
+        isFists = true;
+      }
+    } else {
+      weaponInstance = equippedWeapon.instance;
+      weaponDef = equippedWeapon.def;
+    }
+  } else {
+    isFists = true;
+  }
+
   const charStats = computeDerivedStats(character);
   const charCombatant: Combatant = {
     name: character.name,
     isCharacter: true,
     currentHp: character.hp,
     maxHp: character.hp,
-    attackDamage: charStats.attackDamage,
-    attackSpeed: charStats.attackSpeed,
-    armor: charStats.armor,
+    attackSpeed: 0, // 下面用 computeCharacterAttackSpeed 算
+    attackDamage: charStats.attackDamage, // UI 显示用
+    armor: charStats.armor, // UI 显示用（=6 slot 耐久总和）
     accuracy: charStats.accuracy,
     evasion: charStats.evasion,
     critRate: charStats.critRate,
-    critMultiplier: 1.5, // 角色暴击倍率固定 1.5
+    critMultiplier: 1.5,
     currentTick: 0,
+    weaponInstance,
+    weaponDef,
+    armorPieces,
+    isFists,
   };
+  charCombatant.attackSpeed = computeCharacterAttackSpeed(character, charCombatant);
 
-  // 敌人参战者（多敌人时加 #1 #2 ... 编号）
+  // ----- 敌人参战者 -----
   const enemyCombatants: Combatant[] = enemies.map((e, idx) => {
     const t = ENEMY_TEMPLATES[e.type];
     const suffix = enemies.length > 1 ? ` #${idx + 1}` : '';
@@ -141,25 +336,26 @@ export const runCombat = (
       isCharacter: false,
       currentHp: e.currentHp,
       maxHp: e.maxHp,
-      attackDamage: t.attackDamage,
       attackSpeed: e.attackSpeed,
+      attackDamage: t.attackDamage,
       armor: t.armor,
       accuracy: t.accuracy,
       evasion: t.evasion,
       critRate: t.critRate,
       critMultiplier: t.critMultiplier,
       currentTick: 0,
+      weaponInstance: null,
+      weaponDef: null,
+      armorPieces: { helmet: null, chest: null, arms: null, gloves: null, legs: null, boots: null },
+      isFists: false,
     };
   });
 
-  // 全部参战者（含角色，isCharacter 区分）
   const all: Combatant[] = [charCombatant, ...enemyCombatants];
-  // 单独的敌人数组（用于"选血最少的敌人"）
   const aliveEnemies = (): Combatant[] => all.filter(c => !c.isCharacter && c.currentHp > 0);
 
   const log: CombatLogEntry[] = [];
 
-  // 空敌人直接胜利
   if (enemies.length === 0) {
     return {
       characterWon: true,
@@ -174,17 +370,15 @@ export const runCombat = (
   let tick = 0;
   while (tick < MAX_TICKS) {
     tick++;
-    // 1. 累加（所有存活者）
+    // 1. 累加
     all.forEach(c => {
       if (c.currentHp > 0) c.currentTick += c.attackSpeed;
     });
 
-    // 2. 检查结束条件
     if (charCombatant.currentHp <= 0) break;
     if (aliveEnemies().length === 0) break;
 
-    // 3. 找谁先触发（currentTick >= 100）
-    //    注意：可能多人都触发，按 currentTick 大小顺序处理
+    // 2. 找 actor
     let actor: Combatant | null = null;
     let maxTick = ATB_THRESHOLD;
     for (const c of all) {
@@ -194,31 +388,33 @@ export const runCombat = (
           maxTick = c.currentTick;
           actor = c;
         } else if (actor === null) {
-          // 平手：取第一个
           actor = c;
           maxTick = c.currentTick;
         }
       }
     }
-    if (!actor) continue; // 没人触发，下一 tick
+    if (!actor) continue;
 
-    // 4. 触发：扣减 currentTick（保留余数）
     actor.currentTick -= ATB_THRESHOLD;
 
-    // 5. 决定目标
+    // 3. 角色行动前确保武器可用
+    if (actor.isCharacter) {
+      ensureUsableWeapon(character, actor, log, tick);
+      if (charCombatant.currentHp <= 0) break;
+    }
+
+    // 4. 目标选择
     let target: Combatant | null = null;
     if (actor.isCharacter) {
-      // 角色触发：选 HP 最少的存活敌人
       const alive = aliveEnemies();
       if (alive.length === 0) break;
       target = alive.reduce((a, b) => (a.currentHp <= b.currentHp ? a : b));
     } else {
-      // 敌人触发：永远攻击角色
       if (charCombatant.currentHp <= 0) break;
       target = charCombatant;
     }
 
-    // 6. 命中/暴击/伤害
+    // 5. 命中判定
     const hit = rollHit(actor.accuracy, target.evasion);
     if (!hit) {
       log.push({
@@ -235,9 +431,27 @@ export const runCombat = (
       continue;
     }
 
+    // 6. 暴击
     const crit = rollCrit(actor.critRate);
-    const damage = calcDamage(actor.attackDamage, crit ? actor.critMultiplier : 1, target.armor);
-    target.currentHp = Math.max(0, target.currentHp - damage);
+
+    // 7. 伤害计算
+    let damage: number;
+    if (actor.isCharacter) {
+      damage = calcCharacterDamage(character, actor, crit ? actor.critMultiplier : 1);
+    } else {
+      damage = calcEnemyDamage(actor.attackDamage, crit ? actor.critMultiplier : 1, target.armor);
+    }
+
+    // 8. 应用伤害
+    if (target.isCharacter) {
+      // 走护甲吸收
+      applyDamageToCharacter(target, damage, log, tick);
+    } else {
+      // 敌人：直接扣 HP
+      target.currentHp = Math.max(0, target.currentHp - damage);
+    }
+
+    // 9. 攻击日志
     log.push({
       id: nextLogId(),
       tick,
@@ -250,7 +464,7 @@ export const runCombat = (
       flavor: crit ? '暴击！' : undefined,
     });
 
-    // 7. 死亡记录（敌人死了才记"被击倒"）
+    // 10. 死亡日志
     if (target.currentHp <= 0 && !target.isCharacter) {
       log.push({
         id: nextLogId(),
@@ -265,7 +479,12 @@ export const runCombat = (
       });
     }
 
-    // 8. 角色死了立即结束
+    // 11. 角色攻击成功后：扣武器耐久
+    if (actor.isCharacter && !actor.isFists && actor.weaponInstance) {
+      damageItem(actor.weaponInstance, WEAPON_DURABILITY_PER_HIT);
+    }
+
+    // 12. 结束检查
     if (charCombatant.currentHp <= 0) break;
     if (aliveEnemies().length === 0) break;
   }

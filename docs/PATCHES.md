@@ -16,23 +16,38 @@
 
 ### `combat-system-design`
 
-战斗系统整体设计决策（2026-06-05 与产品确认，**任何战斗相关修改前必查**）：
+战斗系统整体设计决策（2026-06-05 立项，2026-06-07 武器/护甲耐久系统重构，**任何战斗相关修改前必查**）：
 
 #### A. 角色派生属性公式（线性，[characterCombat.ts](../../packages/webgal/src/UI/Scavenge/ScavengeCharacter/characterCombat.ts)）
 
+**角色攻击伤害**（2026-06-07 改）：
+- 公式 = `rollWeaponDamage() × (1 + str/100) × critMult`，floor
+- `rollWeaponDamage()` = 武器 `damageRange` 内随机（每件武器独立范围）
+- str 5 时 = ×1.05，str 10 时 = ×1.10
+- 无武器时使用拳头 `FIST_DAMAGE = 2`
+
+**ATB 攻击速度累加值**（2026-06-07 改）：
+- 公式 = `agi × 6 × speedModMult + weapon.attributes.agi × 0.5`
+- 武器 `speedModifier`：`fast × 1.3` / `normal × 1.0` / `slow × 0.7`
+- 基础 5 agi normal = 30，约 3.3 tick 触发一次
+
+**护甲"总耐久"**（2026-06-07 改）：
+- **不再用作减伤**，改为"6 个护甲 slot 当前耐久之和"（仅 UI 显示）
+- 战斗时：被击中 → 随机选一个"还有耐久"的 slot → 扣耐久，超出归 HP
+
 | 属性 | 公式 | 基础 5 时 | 装备加成 |
 |------|------|---------|----------|
-| `attackDamage` | `str * 2` | 10 | `equip.attributes.str * 0.5` |
-| `attackSpeed` | `agi * 6` | 30 | `equip.attributes.agi * 0.5` |
-| `armor` | `end * 1.5` | 7.5 | `equip.attributes.end * 0.5` |
-| `stealth` | `agi * 2%` | 10% | 无 |
-| `accuracy` | `50% + agi * 3%` | 65% | 无 |
-| `evasion` | `agi * 2%` | 10% | 无 |
-| `critRate` | `5% + agi * 1%` | 10% | 无 |
+| `attackDamage` | `weapon.damage × (1 + str/100)` | 6 (撬棍 7×1.05) | 由武器决定 |
+| `attackSpeed` | `agi × 6 × speedModMult` | 30 (normal) | 武器 agi × 0.5 |
+| `armor` | `sum(6 slot 当前耐久)` | 取决于装备 | 取决于装备 |
+| `stealth` | `agi × 2%` | 10% | 无 |
+| `accuracy` | `50% + agi × 3%` | 65% | 无 |
+| `evasion` | `agi × 2%` | 10% | 无 |
+| `critRate` | `5% + agi × 1%` | 10% | 无 |
 
-派生属性**不存 GameVar**——每次战斗实时计算。装备加成当前只读 attributes.str/end/agi，未来可扩展。
+派生属性**不存 GameVar**——每次战斗实时计算。
 
-`attackSpeed` 含义：ATB 累加器每 tick += attackSpeed，累加到 ≥ 100 触发攻击，重置 -= 100 保留余数（2026-06-05 从"每 period 攻击次数"改为"ATB 累加值"）。
+`attackSpeed` 含义：ATB 累加器每 tick += attackSpeed，累加到 ≥ 100 触发攻击，重置 -= 100 保留余数。
 
 #### B. 敌人系统（[enemies.ts](../../packages/webgal/src/UI/Scavenge/ScavengeEnemies/enemies.ts)）
 
@@ -144,6 +159,95 @@ const isActivePeriod = totalCurrent < totalReturn;                  // 中间 = 
 `ScavengeCharacter.strategy: 'stealth' | 'combat'`，默认 `'combat'`。  
 迁移：`normalizeCharacter` 兜底（任何不在两个值之一的都回退到 'combat'）。  
 UI：角色面板 `ScavengeCharacterAttributes` 底部有"隐蔽 / 战斗"切换按钮。
+
+#### I. 武器系统（2026-06-07 改，[items.ts](../../packages/webgal/src/UI/Scavenge/ScavengeItems/items.ts) + [combat.ts](../../packages/webgal/src/UI/Scavenge/ScavengeCombat/combat.ts)）
+
+**EquipmentItem 武器专属字段**（[items.ts](../../packages/webgal/src/UI/Scavenge/ScavengeItems/items.ts)）：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `damageRange` | `[min, max]` | 每件武器独立伤害范围，命中时随机 |
+| `speedModifier` | `'fast' \| 'normal' \| 'slow'` | fast × 1.3 / normal × 1.0 / slow × 0.7 |
+| `requirements` | `EquipmentAttribute` | 任意属性 < 门槛则无法使用（不设 = 无门槛） |
+
+**当前武器**（5 件）：
+
+| ID | 名字 | 稀有 | 伤害 | 速度 | 门槛 | 耐久 |
+|----|------|------|------|------|------|------|
+| `weapon_stick` | 木棍 | common | [5,6] | slow | str 3 | 80 |
+| `weapon_crowbar` | 撬棍 | common | [6,7] | normal | str 4 | 100 |
+| `weapon_knife` | 砍刀 | common | [7,8] | fast | str 4 agi 4 | 100 |
+| `weapon_axe` | 消防斧 | rare | [10,12] | slow | str 6 | 120 |
+| `weapon_dagger` | 战术匕首 | rare | [6,8] | fast | agi 5 | 150 |
+
+**战斗流程**：
+1. 角色 ATB 触发行动
+2. `ensureUsableWeapon()`：检查当前武器 `durability > 0`
+3. 不可用 → 触发 `weapon_break` 日志 → `findUsableWeaponInInventory(char, excludeInstanceId)` 找背包里下一个可用的
+4. 找到 → 触发 `weapon_switch` 日志，切换
+5. 找不到 → 触发 `fist_fallback` 日志，使用拳头（FIST_DAMAGE=2）
+6. 命中判定 → 暴击判定 → 伤害 = `rollWeaponDamage × (1+str/100) × critMult`
+7. 应用伤害给目标
+8. **每次成功命中消耗 1 点武器耐久**
+
+**武器扫描范围**：仅角色背包（不含仓库），要求满足 requirements + 耐久 > 0。
+
+**耐久 UI**：装备区每件武器显示 `当前耐久/最大耐久` 进度条（绿/黄/红）。战斗日志不单独输出"耐久-1"，合并到 hit 日志的 `flavor`。
+
+**修理机制（暂未实现）**：后续通过工作台消耗材料修复。
+
+#### J. 护甲系统（2026-06-07 改，[items.ts](../../packages/webgal/src/UI/Scavenge/ScavengeItems/items.ts) + [character.ts](../../packages/webgal/src/UI/Scavenge/ScavengeCharacter/character.ts) + [combat.ts](../../packages/webgal/src/UI/Scavenge/ScavengeCombat/combat.ts)）
+
+**6 个护甲 slot**（替代旧的 1 个 `armorId`）：
+
+| 字段 | 部位 | 部位 key |
+|------|------|---------|
+| `helmetId` | 头盔 | `'helmet'` |
+| `chestId` | 躯干/盔甲 | `'chest'` |
+| `armsId` | 护臂 | `'arms'` |
+| `glovesId` | 手套 | `'gloves'` |
+| `legsId` | 护腿 | `'legs'` |
+| `bootsId` | 靴子 | `'boots'` |
+
+**EquipmentItem 护甲专属字段**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `armorSlot` | `ArmorSlot` | 6 个部位之一 |
+| `requirements` | `EquipmentAttribute` | 任意属性 < 门槛则无法使用 |
+
+**当前护甲**（12 件，每部位 2 件：common 基础 + rare 进阶）：
+
+| 部位 | common | rare |
+|------|--------|------|
+| helmet | `armor_helmet` (str 3, 180) | （稀有 = 自身） |
+| chest | `armor_jacket` (无门槛, 100) / `armor_vest` (str 4, 150) / `armor_tactical` (str 5, 200) | - |
+| arms | `armor_arms_guard` (无门槛, 80) | `armor_arms_tactical` (str 3, 130) |
+| gloves | `armor_gloves_work` (无门槛, 70) | `armor_gloves_tactical` (agi 4, 110) |
+| legs | `armor_legs_pants` (无门槛, 100) | `armor_legs_tactical` (str 4, 150) |
+| boots | `armor_boots_combat` (无门槛, 90) | `armor_boots_tactical` (str 4, 140) |
+
+**战斗流程**（被击中时）：
+1. 收集所有"还有耐久"的 slot
+2. 没护甲：全伤害走 HP
+3. 有护甲：random 选 1 个 slot → 扣 `min(damage, slotDur)` → 超出走 HP
+4. 触发 `armor_absorb` 日志（含 slot 名字 + 抵消量）
+
+**耐久 UI**：`armor` 派生属性 = 6 slot 当前耐久**总和**（仅显示用，不参与减伤）。装备区每件护甲显示耐久进度条。
+
+**数据迁移**：`normalizeCharacter` 把旧 `armorId` 装备按 `armorSlot` 字段自动归位（chest/arms/legs/boots/gloves/helmet）。旧 `weaponDurability` / `armorDurability` / `toolDurability` 字段已废弃，耐久全在 `InventoryItem.durability` 上。
+
+#### K. 战斗日志新增类型（2026-06-07 改）
+
+| kind | 触发时机 | 显示 |
+|------|---------|------|
+| `armor_absorb` | 角色被击中，护甲吸收伤害 | `护甲 [部位] 抵消 N 伤害` |
+| `weapon_break` | 武器耐久归 0 | `武器名 已损坏` |
+| `weapon_switch` | 武器坏后自动切换 | `自动切换到 新武器名` |
+| `fist_fallback` | 找不到可用武器 | `无武器可用，使用拳头` |
+| `weapon_durability_loss` | 每次成功命中 | （保留类型，当前未单独输出） |
+
+UI 颜色：护甲吸收=蓝、武器损坏=橙、切换武器=绿、拳头=红。
 
 ---
 

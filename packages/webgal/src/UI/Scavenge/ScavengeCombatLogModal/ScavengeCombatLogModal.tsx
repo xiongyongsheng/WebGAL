@@ -249,25 +249,62 @@ const CombatLogRow = ({ entry }: { entry: CombatLogEntry }) => {
       kindIcon = cancel;
       kindLabel = '击倒';
       break;
+    // 2026-06-07 新增：武器/护甲系统
+    case 'armor_absorb':
+      kindColor = '#90caf9';
+      kindIcon = shield;
+      kindLabel = '护甲吸收';
+      break;
+    case 'weapon_break':
+      kindColor = '#ff7043';
+      kindIcon = swords;
+      kindLabel = '武器损坏';
+      break;
+    case 'weapon_switch':
+      kindColor = '#81c784';
+      kindIcon = swords;
+      kindLabel = '切换武器';
+      break;
+    case 'fist_fallback':
+      kindColor = '#ff5252';
+      kindIcon = swords;
+      kindLabel = '拳头';
+      break;
+    case 'weapon_durability_loss':
+      kindColor = '#a0a0a0';
+      kindIcon = swords;
+      kindLabel = '耐久-1';
+      break;
   }
   return (
     <div className={styles.logRow}>
-      <span className={styles.logRound}>R{entry.round}</span>
+      <span className={styles.logRound}>T{entry.tick}</span>
       <span className={styles.logKind} style={{ color: kindColor }}>
         <Icon icon={kindIcon} className={styles.logKindIcon} />
         {kindLabel}
       </span>
-      <span className={styles.logAttacker}>{entry.attackerName}</span>
-      <span className={styles.logConnector}>→</span>
-      <span className={styles.logDefender}>{entry.defenderName}</span>
+      {entry.attackerName && (
+        <span className={styles.logAttacker}>{entry.attackerName}</span>
+      )}
+      {entry.attackerName && entry.defenderName && (
+        <span className={styles.logConnector}>→</span>
+      )}
+      {entry.defenderName && (
+        <span className={styles.logDefender}>{entry.defenderName}</span>
+      )}
       {entry.damage > 0 && (
         <span className={styles.logDamage} style={{ color: kindColor }}>
           -{entry.damage}
         </span>
       )}
-      <span className={styles.logHp}>
-        {entry.defenderHp}/{entry.defenderMaxHp}
-      </span>
+      {(entry.defenderHp > 0 || entry.defenderMaxHp > 0) && (
+        <span className={styles.logHp}>
+          {entry.defenderHp}/{entry.defenderMaxHp}
+        </span>
+      )}
+      {entry.flavor && (
+        <span className={styles.logFlavor}>{entry.flavor}</span>
+      )}
     </div>
   );
 };

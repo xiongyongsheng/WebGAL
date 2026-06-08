@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Icon } from '@iconify/react';
 import { getItemName, getItemIcon, getItemRarityColor } from '../ScavengeItems/items';
-import { InventoryItem } from '../ScavengeItems/inventory';
+import { InventoryItem, getItemDurability, getItemMaxDurability } from '../ScavengeItems/inventory';
 import styles from './ScavengeWarehouse.module.scss';
 
 interface ScavengeWarehouseProps {
@@ -20,6 +20,15 @@ interface ScavengeWarehouseProps {
   onDrop?: (e: React.DragEvent) => void;
   /** 当前是否有 drag 元素悬停（用于高亮） */
   isDragOver?: boolean;
+  /** hover 弹 tooltip 的事件集工厂（panel 共享 state） */
+  makeItemHoverProps?: (
+    itemId: string,
+    instance?: InventoryItem,
+  ) => {
+    onMouseEnter: (e: React.MouseEvent) => void;
+    onMouseMove: (e: React.MouseEvent) => void;
+    onMouseLeave: (e: React.MouseEvent) => void;
+  };
 }
 
 type TabType = 'all' | 'consumable' | 'material' | 'equipment' | 'quest';
@@ -33,6 +42,7 @@ export const ScavengeWarehouse = ({
   onItemDragEnd,
   onDrop,
   isDragOver,
+  makeItemHoverProps,
 }: ScavengeWarehouseProps) => {
   const [activeTab, setActiveTab] = useState<TabType>('all');
 
@@ -139,22 +149,29 @@ export const ScavengeWarehouse = ({
                 }}
                 onDragEnd={() => onItemDragEnd?.()}
                 onClick={(e) => onItemClick?.(invItem, e)}
+                {...(makeItemHoverProps ? makeItemHoverProps(invItem.itemId, invItem) : {})}
               >
                 <div className={styles.itemIcon} style={{ color: rarityColor }}>
                   <Icon icon={getItemIcon(invItem.itemId)} />
                 </div>
                 <div className={styles.itemQuantity}>x{invItem.quantity}</div>
-                {invItem.durability !== undefined && (
-                  <div className={styles.durability}>
-                    <div
-                      className={styles.durabilityBar}
-                      style={{
-                        width: `${(invItem.durability / 100) * 100}%`,
-                        backgroundColor: invItem.durability > 50 ? '#4CAF50' : '#F44336',
-                      }}
-                    />
-                  </div>
-                )}
+                {invItem.durability !== undefined && (() => {
+                  const cur = getItemDurability(invItem);
+                  const max = getItemMaxDurability(invItem);
+                  const ratio = max > 0 ? Math.max(0, Math.min(1, cur / max)) : 0;
+                  const color = ratio >= 0.6 ? '#4CAF50' : ratio >= 0.3 ? '#FFC107' : '#F44336';
+                  return (
+                    <div className={styles.durability}>
+                      <div
+                        className={styles.durabilityBar}
+                        style={{
+                          width: `${ratio * 100}%`,
+                          backgroundColor: color,
+                        }}
+                      />
+                    </div>
+                  );
+                })()}
               </div>
             );
           })

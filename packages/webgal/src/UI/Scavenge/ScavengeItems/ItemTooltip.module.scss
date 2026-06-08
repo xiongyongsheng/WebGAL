@@ -1,0 +1,156 @@
+// ============== 物品详情弹框（2026-06-07 新增） ==============
+
+.tooltip {
+  position: fixed;
+  z-index: 9999;
+  width: 280px;
+  max-width: 90vw;
+  background: rgba(20, 22, 28, 0.98);
+  border: 1px solid #4a90e2;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  padding: 0;
+  pointer-events: none;
+  font-size: 12px;
+  color: #e0e0e0;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  user-select: none;
+}
+
+// ============== Header ==============
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid;
+  // 颜色由 inline style 设置（稀有度色）
+}
+
+.icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.headerText {
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #909090;
+}
+
+.typeLabel {
+  color: #c0c0c0;
+}
+
+.rarityLabel {
+  font-weight: 600;
+}
+
+.slotLabel {
+  color: #808080;
+  font-size: 10px;
+}
+
+// ============== 描述 ==============
+
+.description {
+  padding: 8px 12px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #b0b0b0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-style: italic;
+}
+
+// ============== 详情块 ==============
+
+.detailsBlock {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.detailRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.detailLabel {
+  color: #808080;
+  flex-shrink: 0;
+  min-width: 56px;
+}
+
+.detailValue {
+  color: #e0e0e0;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  word-break: break-all;
+}
+
+.detailHint {
+  color: #707070;
+  font-size: 10px;
+  font-weight: 400;
+  margin-left: 2px;
+}
+
+.durabilityBar {
+  display: inline-block;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+// ============== Footer ==============
+
+.footer {
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #808080;
+  flex-wrap: wrap;
+}
+
+.footerItem {
+  color: #909090;
+}
+
+.footerDivider {
+  color: #505050;
+}

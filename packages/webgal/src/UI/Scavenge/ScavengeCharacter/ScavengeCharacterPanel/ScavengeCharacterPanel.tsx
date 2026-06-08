@@ -11,22 +11,24 @@ import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { useStageState } from '@/hooks/useStageState';
-import { ScavengeCharacter, normalizeCharacter, getCharacterStatusText } from '../character';
+import { ScavengeCharacter, normalizeCharacter, getCharacterStatusText, EquipSlotKey } from '../character';
 import {
   getItemName, getItemById, isEquipment, isConsumable, getEquipmentSlot,
-  ConsumableItem, EquipmentItem,
+  getArmorSlot, ConsumableItem, EquipmentItem, ArmorSlot,
 } from '../../ScavengeItems/items';
 import {
   InventoryItem, MAX_CARRY_WEIGHT, addToInventory, removeFromInventory,
   compactInventorySlots, replaceInventoryItemAt,
   addToWarehouse, removeFromWarehouse,
   generateInstanceId, migrateInventory, canAddToInventory,
+  filterUnknownItems,
 } from '../../ScavengeItems/inventory';
 import { applyPendingStatPoints } from '../characterExperience';
 import { ScavengeCharacterHeader } from '../ScavengeCharacterHeader/ScavengeCharacterHeader';
 import { ScavengeCharacterStatus } from '../ScavengeCharacterStatus/ScavengeCharacterStatus';
 import { ScavengeCharacterAttributes } from '../ScavengeCharacterAttributes/ScavengeCharacterAttributes';
 import { ScavengeCharacterEquip } from '../ScavengeCharacterEquip/ScavengeCharacterEquip';
+import { ItemTooltip, ItemTooltipData } from '../../ScavengeItems/ItemTooltip';
 import { ScavengeCharacterInventory } from '../ScavengeCharacterInventory/ScavengeCharacterInventory';
 import { ScavengeWarehouse } from '../../ScavengeWarehouse/ScavengeWarehouse';
 import styles from './ScavengeCharacterPanel.module.scss';
@@ -35,7 +37,8 @@ interface ScavengeCharacterPanelProps {
   onClose: () => void;
 }
 
-// 转移操作的源/目标
+// 2026-06-07：仓库未知物品警告去重（同一 ID 只 warn 一次）
+const _warnedUnknownWarehouseIds = new Set<string>();
 type TransferSource =
   | { kind: 'character'; characterId: string }
   | { kind: 'warehouse' };
@@ -92,6 +95,27 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
   } | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<string | null>(null); // 'warehouse' | characterId
 
+  // 2026-06-07：hover tooltip 共享 state
+  const [hoveredItem, setHoveredItem] = useState<ItemTooltipData | null>(null);
+  /**
+   * 给一个物品生成 hover 事件处理器集合（onMouseEnter/Move/Leave）
+   * 共享 panel 的 hoveredItem state，保证同一时间只显示一个 tooltip
+   */
+  const makeItemHoverProps = (
+    itemId: string,
+    instance?: InventoryItem,
+    charForReq?: Pick<ScavengeCharacter, 'str' | 'agi' | 'end' | 'int'>,
+  ) => ({
+    onMouseEnter: (e: React.MouseEvent) =>
+      setHoveredItem({ itemId, instance, x: e.clientX, y: e.clientY, charForReq }),
+    onMouseMove: (e: React.MouseEvent) =>
+      setHoveredItem((prev) =>
+        prev && prev.itemId === itemId ? { ...prev, x: e.clientX, y: e.clientY } : prev,
+      ),
+    onMouseLeave: () =>
+      setHoveredItem((prev) => (prev && prev.itemId === itemId ? null : prev)),
+  });
+
   // ==================== 数据读写 ====================
 
   const getCharacters = (): ScavengeCharacter[] => {
@@ -99,7 +123,9 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
     if (typeof data === 'string') {
       try {
         const parsed = JSON.parse(data);
-        if (Array.isArray(parsed)) return parsed.map(c => normalizeCharacter(c as ScavengeCharacter));
+        if (Array.isArray(parsed)) {
+          return parsed.map(c => normalizeCharacter(c as ScavengeCharacter));
+        }
       } catch { /* ignore */ }
     }
     if (Array.isArray(data)) {
@@ -131,7 +157,25 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
       const valid = arr.filter(
         (i): i is InventoryItem => i !== null && typeof i === 'object' && 'itemId' in (i as object),
       );
-      return migrateInventory(valid);
+      const migrated = migrateInventory(valid);
+      // 2026-06-07：清理未注册物品（同背包逻辑），避免 UI 显示"未知物品"
+      const { valid: knownItems, removed } = filterUnknownItems(migrated);
+      if (removed.length > 0) {
+        // 只 warn 第一次见到的新 ID（避免 React 重渲染刷屏）
+        const newUnknown = removed.filter((id) => !_warnedUnknownWarehouseIds.has(id));
+        newUnknown.forEach((id) => _warnedUnknownWarehouseIds.add(id));
+        if (newUnknown.length > 0) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[Scavenge] 仓库自动清理了 ${newUnknown.length} 件未注册物品：` +
+            newUnknown.map((id) => `'${id}'`).join(', ') +
+            `\n→ 如果这些物品应该保留，请在 items.ts 中补全对应 ID。`,
+          );
+        }
+        // 立即写回 GameVar，避免每次启动都 warn
+        setWarehouse(knownItems);
+      }
+      return knownItems;
     };
     if (typeof data === 'string') {
       try {
@@ -161,8 +205,13 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
     attr: 'str' | 'agi' | 'end' | 'int',
   ): number => {
     let bonus = 0;
-    const slots: Array<keyof ScavengeCharacter> = ['weaponId', 'armorId', 'toolId'];
-    for (const slot of slots) {
+    // 遍历所有装备 slot：武器 + 6 护甲 + 工具（2026-06-07 改）
+    const slotIds: Array<keyof ScavengeCharacter> = [
+      'weaponId',
+      'helmetId', 'chestId', 'armsId', 'glovesId', 'legsId', 'bootsId',
+      'toolId',
+    ];
+    for (const slot of slotIds) {
       const equipId = charData[slot] as string | undefined;
       if (equipId) {
         const equipItem = getItemById(equipId);
@@ -263,24 +312,28 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
     refresh();
   };
 
-  const handleUnequipItem = (charId: string, slot: 'weapon' | 'armor' | 'tool') => {
+  const handleUnequipItem = (charId: string, slot: 'weapon' | 'tool' | ArmorSlot) => {
     const characters = getCharacters();
     const char = characters.find(c => c.id === charId);
     if (!char) return;
-    const updated: ScavengeCharacter = { ...char, inventory: [...(char.inventory ?? [])] };
-    const slotKey = `${slot}Id` as keyof ScavengeCharacter;
-    const durKey = `${slot}Durability` as keyof ScavengeCharacter;
-    const equipId = updated[slotKey] as string | undefined;
-    if (!equipId) return;
+    // 2026-06-07 改：装备 instance 在 `equipped[slot]`，卸下时移到 inventory
+    const slotKey: EquipSlotKey = slot === 'weapon' ? 'weapon'
+      : slot === 'tool' ? 'tool'
+      : slot;
+    const slotIdField = `${slot}Id` as keyof ScavengeCharacter;
+    const equippedInstance = char.equipped?.[slotKey];
+    if (!equippedInstance) return;
 
-    updated.inventory = addToInventory(updated.inventory, {
-      instanceId: generateInstanceId(),
-      itemId: equipId,
-      quantity: 1,
-      durability: updated[durKey] as number | undefined,
-    });
-    (updated as any)[slotKey] = undefined;
-    (updated as any)[durKey] = undefined;
+    let newInventory = addToInventory(char.inventory ?? [], equippedInstance);
+    const newEquipped = { ...(char.equipped ?? {}) };
+    delete newEquipped[slotKey];
+
+    const updated: ScavengeCharacter = {
+      ...char,
+      inventory: newInventory,
+      equipped: newEquipped,
+    };
+    (updated as any)[slotIdField] = undefined;
 
     const newMaxHp = getMaxHp(updated);
     if (updated.hp > newMaxHp) updated.hp = newMaxHp;
@@ -301,19 +354,39 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
     const equipItem = getItemById(invItem.itemId);
     if (!equipItem || !isEquipment(invItem.itemId)) return;
 
-    const updated: ScavengeCharacter = { ...char, inventory: [...(char.inventory ?? [])] };
-    const slotKey = `${slot}Id` as keyof ScavengeCharacter;
-    const durKey = `${slot}Durability` as keyof ScavengeCharacter;
-    const currentEquipId = updated[slotKey] as string | undefined;
+    // 护甲：按 armorSlot 选 slotKey（2026-06-07 改）
+    let slotKey: EquipSlotKey;
+    let slotIdField: keyof ScavengeCharacter;
+    if (slot === 'armor') {
+      const armorSlot = getArmorSlot(invItem.itemId);
+      if (!armorSlot) return;
+      slotKey = armorSlot;
+      slotIdField = `${armorSlot}Id` as keyof ScavengeCharacter;
+    } else {
+      slotKey = slot;
+      slotIdField = `${slot}Id` as keyof ScavengeCharacter;
+    }
 
-    const replacement: InventoryItem | null = currentEquipId
-      ? { instanceId: generateInstanceId(), itemId: currentEquipId, quantity: 1, durability: updated[durKey] as number | undefined }
-      : null;
-    updated.inventory = replaceInventoryItemAt(updated.inventory, invItem.instanceId, replacement);
+    // 2026-06-07 改：装备 instance 从 inventory 移到 equipped[slotKey]
+    // （不在 inventory 留副本，所以装备后背包里看不到）
+    let newInventory = removeFromInventory(char.inventory ?? [], invItem.instanceId, 1);
+    // 若当前 slot 已有装备（旧 instance），先放回 inventory
+    const oldEquipped = char.equipped?.[slotKey];
+    if (oldEquipped) {
+      newInventory = addToInventory(newInventory, oldEquipped);
+    }
+    const newEquipped: Partial<Record<EquipSlotKey, InventoryItem>> = {
+      ...(char.equipped ?? {}),
+      [slotKey]: invItem,
+    };
 
-    const equipmentItem = equipItem as EquipmentItem;
-    (updated as any)[slotKey] = invItem.itemId;
-    (updated as any)[durKey] = invItem.durability ?? equipmentItem.maxDurability;
+    const updated: ScavengeCharacter = {
+      ...char,
+      inventory: newInventory,
+      equipped: newEquipped,
+    };
+    (updated as any)[slotIdField] = invItem.itemId;
+    // 耐久在 invItem.durability 上保持
 
     updateCharacter(updated);
     refresh();
@@ -682,6 +755,7 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
                     <ScavengeCharacterEquip
                       charData={charData}
                       onUnequip={(slot) => handleUnequipItem(charData.id, slot)}
+                      makeItemHoverProps={makeItemHoverProps}
                     />
                     <ScavengeCharacterInventory
                       characterId={charData.id}
@@ -701,6 +775,8 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
                       onTransferRequest={handleTransferRequest}
                       onItemDragStart={handleInventoryItemDragStart}
                       onItemDragEnd={handleItemDragEnd}
+                      makeItemHoverProps={makeItemHoverProps}
+                      charForReq={charData}
                     />
                   </div>
                 </div>
@@ -724,6 +800,7 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
             onItemDragStart={handleWarehouseItemDragStart}
             onItemDragEnd={handleItemDragEnd}
             isDragOver={dragOverTarget === 'warehouse'}
+            makeItemHoverProps={makeItemHoverProps}
           />
         </div>
 
@@ -874,6 +951,9 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
           </div>
         )}
       </div>
+
+      {/* 物品详情 tooltip（hover 触发，portal 渲染到 body） */}
+      {hoveredItem && <ItemTooltip data={hoveredItem} />}
     </div>
   );
 };
