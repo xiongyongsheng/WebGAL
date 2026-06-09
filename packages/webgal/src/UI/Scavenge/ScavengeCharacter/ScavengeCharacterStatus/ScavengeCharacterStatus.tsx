@@ -67,6 +67,11 @@ export const ScavengeCharacterStatus = ({
 
   // 战斗派生属性（不存 GameVar，每次渲染实时计算）
   const combat = computeDerivedStats(charData);
+  // 总潜行值（2026-06-08 第三次改）：显示 character.stealth（integer）
+  // 公式：Σ(equipped.stealth) × (1 + agi/10)，夜间 ×1.1，clamp 上界 100
+  // 负值保留（装备太暴露 → 必被发现）
+  // 不显示潜行率（百分比）：真正的成功率要按每个敌人 detection 单算（1 - min/max 公式）
+  const characterStealth = combat.stealth;
   const fmtPct = (v: number) => `${Math.round(v * 100)}%`;
   const fmtNum = (v: number) => (Number.isInteger(v) ? `${v}` : v.toFixed(1));
 
@@ -151,8 +156,16 @@ export const ScavengeCharacterStatus = ({
           </div>
           <div className={styles.combatItem}>
             <Icon icon={visibilityOff} className={styles.combatIcon} style={{ color: '#b39ddb' }} />
-            <span className={styles.combatLabel}>隐蔽率</span>
-            <span className={styles.combatValue}>{fmtPct(combat.stealth)}</span>
+            <span className={styles.combatLabel}>潜行值</span>
+            <span
+              className={styles.combatValue}
+              style={{
+                color: characterStealth > 0 ? '#4CAF50' : characterStealth < -8 ? '#F44336' : characterStealth < 0 ? '#FFC107' : '#909090',
+              }}
+              title={`Σ装备 × (1 + agi/10) × [×1.1 黑夜]`}
+            >
+              {characterStealth >= 0 ? characterStealth : characterStealth}
+            </span>
           </div>
           <div className={styles.combatItem}>
             <Icon icon={myLocation} className={styles.combatIcon} style={{ color: '#81c784' }} />

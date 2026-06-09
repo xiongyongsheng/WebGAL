@@ -34,12 +34,17 @@ interface ItemTooltipProps {
 }
 
 const TYPE_LABELS: Record<ItemType, string> = {
-  weapon: '武器',
-  armor: '护甲',
-  tool: '工具',
+  equipment: '装备',
   consumable: '消耗品',
   material: '材料',
   quest: '任务物品',
+};
+
+/** 装备子类型（武器/护甲/工具）的细粒度标签（2026-06-08 改） */
+const EQUIPMENT_SUBTYPE_LABELS: Record<'weapon' | 'armor' | 'tool', string> = {
+  weapon: '武器',
+  armor: '护甲',
+  tool: '工具',
 };
 
 const SPEED_MOD_LABELS: Record<WeaponSpeedModifier, string> = {
@@ -122,6 +127,7 @@ const renderWeaponDetails = ({ def, instance, charForReq }: RenderContext) => {
           </span>
         </div>
       )}
+      {renderStealth(equip, instance)}
       {renderDurability(instance, equip)}
     </>
   );
@@ -157,6 +163,7 @@ const renderArmorDetails = ({ def, instance, charForReq }: RenderContext) => {
           </span>
         </div>
       )}
+      {renderStealth(equip, instance)}
       {renderDurability(instance, equip)}
     </>
   );
@@ -167,8 +174,55 @@ const renderToolDetails = ({ def, instance }: RenderContext) => {
   return (
     <>
       {renderAttributes(equip.attributes)}
+      {renderStealth(equip, instance)}
       {renderDurability(instance, equip)}
     </>
+  );
+};
+
+/** 潜行值显示（2026-06-08 加，2026-06-08 改按耐久缩放）：
+ *  - 正值 = 增强潜行（绿）
+ *  - 负值 = 削弱潜行（红/橙）
+ *  - 0 或 undefined = 不显示
+ *  - 如果 instance 有耐久，显示"基础 X → 当前 Y（耐久 N/M）"
+ */
+const renderStealth = (equip: EquipmentItem, instance?: InventoryItem): React.ReactNode => {
+  const base = equip.stealth;
+  if (base === undefined || base === 0) return null;
+  // 当前潜行值（按耐久缩放）
+  let current: number | undefined;
+  if (instance) {
+    const max = equip.maxDurability ?? 0;
+    if (max > 0) {
+      const cur = instance.durability ?? 0;
+      current = base * (cur / max);
+    } else {
+      current = base;
+    }
+  }
+  const isPositive = base > 0;
+  const color = isPositive ? '#4CAF50' : base <= -8 ? '#F44336' : '#FFC107';
+  const fmtVal = (s: number) => {
+    const r = Math.round(s * 10) / 10;
+    return (r >= 0 ? '+' : '') + r.toFixed(1).replace(/\.0$/, '');
+  };
+  // 显示主值：如果有当前值（按耐久缩放），用它；否则用基础值
+  const display = current !== undefined ? current : base;
+  const showDurDegraded = current !== undefined && Math.abs(base - current) >= 0.5;
+  return (
+    <div className={styles.detailRow}>
+      <span className={styles.detailLabel}>潜行值</span>
+      <span className={styles.detailValue} style={{ color, fontWeight: 600 }}>
+        {showDurDegraded ? fmtVal(display) : (base > 0 ? `+${base}` : `${base}`)}
+        {showDurDegraded && <span className={styles.detailHint}> ↓</span>}
+        <span className={styles.detailHint}>
+          （{isPositive ? '增强隐蔽' : base <= -8 ? '严重暴露' : '轻微暴露'}）
+          {showDurDegraded && instance && equip.maxDurability
+            ? ` · 基础 ${base} → 当前 ${fmtVal(display)}（耐久 ${instance.durability}/${equip.maxDurability}）`
+            : ''}
+        </span>
+      </span>
+    </div>
   );
 };
 
@@ -256,7 +310,7 @@ const renderConsumableDetails = ({ def, instance }: RenderContext) => {
   );
 };
 
-const renderMaterialDetails = ({ def, instance }: RenderContext) => {
+const renderMaterialDetails = ({ instance }: RenderContext) => {
   if (!instance || instance.quantity <= 1) return null;
   return (
     <div className={styles.detailRow}>
@@ -333,7 +387,7 @@ export const ItemTooltip = ({ data }: ItemTooltipProps) => {
             </span>
             {isEquipment(itemId) && def.type === 'equipment' && def.slot && (
               <span className={styles.slotLabel}>
-                · {def.slot === 'weapon' ? '武器' : def.slot === 'armor' ? '护甲' : '工具'}
+                · {EQUIPMENT_SUBTYPE_LABELS[def.slot]}
               </span>
             )}
           </div>

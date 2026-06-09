@@ -5,6 +5,8 @@
 
 import { InventoryItem, migrateInventory, compactInventorySlots, filterUnknownItems } from '../ScavengeItems/inventory';
 import { getItemById, ArmorSlot } from '../ScavengeItems/items';
+import { validateCharacter, formatWarnings } from './characterValidate';
+import { logger } from '@/Core/util/logger';
 
 /** 主属性（升级时自动 +2 的属性） */
 export type MainStat = 'str' | 'agi' | 'end' | 'int';
@@ -293,7 +295,10 @@ export const normalizeCharacter = (char: ScavengeCharacter): ScavengeCharacter =
     }
   }
 
-  return {
+  // 2026-06-08：跑数据验证器（耐久 clamp、未知 ID 警告等）
+  // 位置：所有迁移完成后，作为最后一步
+  // 收益：玩家存档有 over-max 耐久等数据问题时，不再需要手动清 localStorage
+  const { char: validated, warnings } = validateCharacter({
     ...char,
     isExploring,
     returnDay,
@@ -314,7 +319,14 @@ export const normalizeCharacter = (char: ScavengeCharacter): ScavengeCharacter =
     glovesId: finalGlovesId,
     legsId: finalLegsId,
     bootsId: finalBootsId,
-  };
+  });
+  if (warnings.length > 0) {
+    logger.warn(
+      `[Scavenge] normalizeCharacter 自动修复 ${warnings.length} 项数据问题：\n` +
+      formatWarnings(warnings),
+    );
+  }
+  return validated;
 };
 
 /**

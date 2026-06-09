@@ -84,10 +84,16 @@ export interface MaterialItem extends BaseItem {
 /** 装备物品
  *
  * 字段约定（2026-06-07 改）：
- * - 通用：`requirements`（使用门槛）、`attributes`（属性加成）
+ * - 通用：`requirements`（使用门槛）、`attributes`（属性加成）、`stealth`（潜行值，2026-06-08 改）
  * - 武器（slot==='weapon'）：`damageRange`（每件独立浮动）、`speedModifier`
  * - 护甲（slot==='armor'）：`armorSlot`（6 个部位之一）
  * - 工具（slot==='tool'）：只加属性，不参与战斗伤害
+ *
+ * 潜行值（stealth）说明（2026-06-08）：
+ * - 大多数护甲 stealth 为负（沉重/会响 → 容易被发现）
+ * - 顶级特战装备 stealth 为正（轻量/消音 → 增强隐蔽）
+ * - 公式：角色潜行率 = 0.05 + Σ(equipped.stealth)/100 + agi×0.5%
+ * - 详细见 PATCHES.md
  */
 export interface EquipmentItem extends BaseItem {
   type: 'equipment';
@@ -99,6 +105,14 @@ export interface EquipmentItem extends BaseItem {
   maxDurability: number;
   /** 使用门槛（任一属性 < 门槛则无法使用 / 装备）；不设 = 无门槛 */
   requirements?: EquipmentAttribute;
+  /**
+   * 潜行值（2026-06-08 加）：
+   * - 大多数护甲为负（-2 ~ -10）
+   * - 顶级特战装备为正（+3 ~ +15）
+   * - 武器/工具一般不设（=0）
+   * 公式：每 100 点 = +100% 潜行率（可叠加，可正可负）
+   */
+  stealth?: number;
   // ----- 武器专属 -----
   /** 武器伤害浮动范围 [min, max]（每次命中在范围内随机） */
   damageRange?: [number, number];
@@ -462,6 +476,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     attributes: {},
     maxDurability: 100,
     armorSlot: 'chest',
+    stealth: -3,
   },
   {
     id: 'armor_vest',
@@ -478,6 +493,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     maxDurability: 150,
     armorSlot: 'chest',
     requirements: { str: 4 },
+    stealth: -5,
   },
   {
     id: 'armor_helmet',
@@ -494,6 +510,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     maxDurability: 180,
     armorSlot: 'helmet',
     requirements: { str: 3 },
+    stealth: -2,
   },
   {
     id: 'armor_tactical',
@@ -510,6 +527,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     maxDurability: 200,
     armorSlot: 'chest',
     requirements: { str: 5 },
+    stealth: -8,
   },
   // ----- 护臂 / 手套 / 护腿 / 靴子（2026-06-07 新增）-----
   {
@@ -526,6 +544,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     attributes: {},
     maxDurability: 80,
     armorSlot: 'arms',
+    stealth: -2,
   },
   {
     id: 'armor_arms_tactical',
@@ -542,6 +561,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     maxDurability: 130,
     armorSlot: 'arms',
     requirements: { str: 3 },
+    stealth: -4,
   },
   {
     id: 'armor_gloves_work',
@@ -557,6 +577,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     attributes: {},
     maxDurability: 70,
     armorSlot: 'gloves',
+    stealth: -1,
   },
   {
     id: 'armor_gloves_tactical',
@@ -573,6 +594,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     maxDurability: 110,
     armorSlot: 'gloves',
     requirements: { agi: 4 },
+    stealth: -2,
   },
   {
     id: 'armor_legs_pants',
@@ -588,6 +610,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     attributes: {},
     maxDurability: 100,
     armorSlot: 'legs',
+    stealth: -3,
   },
   {
     id: 'armor_legs_tactical',
@@ -604,6 +627,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     maxDurability: 150,
     armorSlot: 'legs',
     requirements: { str: 4 },
+    stealth: -5,
   },
   {
     id: 'armor_boots_combat',
@@ -619,6 +643,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     attributes: {},
     maxDurability: 90,
     armorSlot: 'boots',
+    stealth: -2,
   },
   {
     id: 'armor_boots_tactical',
@@ -635,6 +660,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     maxDurability: 140,
     armorSlot: 'boots',
     requirements: { str: 4 },
+    stealth: -3,
   },
 
   // ----- Epic 进阶（2026-06-07 新增，每部位 1 件）-----
@@ -653,6 +679,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     maxDurability: 220,
     armorSlot: 'helmet',
     requirements: { str: 5 },
+    stealth: -4,
   },
   {
     id: 'armor_chest_heavy',
@@ -669,6 +696,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     maxDurability: 260,
     armorSlot: 'chest',
     requirements: { str: 6 },
+    stealth: -10,
   },
   {
     id: 'armor_arms_heavy',
@@ -685,6 +713,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     maxDurability: 180,
     armorSlot: 'arms',
     requirements: { str: 5 },
+    stealth: -6,
   },
   {
     id: 'armor_gloves_pro',
@@ -701,6 +730,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     maxDurability: 160,
     armorSlot: 'gloves',
     requirements: { agi: 6 },
+    stealth: -3,
   },
   {
     id: 'armor_legs_heavy',
@@ -717,6 +747,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     maxDurability: 200,
     armorSlot: 'legs',
     requirements: { str: 6 },
+    stealth: -7,
   },
   {
     id: 'armor_boots_heavy',
@@ -733,6 +764,97 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     maxDurability: 200,
     armorSlot: 'boots',
     requirements: { str: 5 },
+    stealth: -4,
+  },
+
+  // ----- 潜行护甲（2026-06-08 新增，2026-06-08 改耐久 1/3）-----
+  // 耐久规则：潜行型护甲 maxDurability ≈ 同稀有度同部位普通护甲的 1/3
+  // 潜行值按当前耐久缩放：currentStealth = baseStealth × (dur / maxDur)
+  {
+    id: 'armor_chest_soft',
+    name: '软质内甲',
+    type: 'equipment',
+    rarity: 'rare',
+    description: '贴身软质内甲，便于隐蔽。',
+    stackable: false,
+    maxStack: 1,
+    weight: 0.8,
+    icon: 'material-symbols:layers',
+    slot: 'armor',
+    attributes: {},
+    // 同稀有度 chest 150 → 1/3 ≈ 50
+    maxDurability: 50,
+    armorSlot: 'chest',
+    requirements: { str: 3 },
+    stealth: 5,
+  },
+  {
+    id: 'armor_chest_ghillie',
+    name: '吉利服',
+    type: 'equipment',
+    rarity: 'epic',
+    description: '伪装用吉利服，破损快但极难被察觉。',
+    stackable: false,
+    maxStack: 1,
+    weight: 1.5,
+    icon: 'material-symbols:grass',
+    slot: 'armor',
+    attributes: {},
+    // 同稀有度 epic chest 200 → 1/3 ≈ 67
+    maxDurability: 67,
+    armorSlot: 'chest',
+    stealth: 15,
+  },
+  {
+    id: 'armor_chest_cloak',
+    name: '战术斗篷',
+    type: 'equipment',
+    rarity: 'epic',
+    description: '轻便披风，可裹住装备降低轮廓。',
+    stackable: false,
+    maxStack: 1,
+    weight: 1.0,
+    icon: 'material-symbols:checkroom-outline',
+    slot: 'armor',
+    attributes: {},
+    // 同稀有度 epic chest 200 → 1/3 ≈ 67
+    maxDurability: 67,
+    armorSlot: 'chest',
+    stealth: 8,
+  },
+  {
+    id: 'armor_boots_soft',
+    name: '软底靴',
+    type: 'equipment',
+    rarity: 'rare',
+    description: '静音鞋底，行走无声。',
+    stackable: false,
+    maxStack: 1,
+    weight: 0.6,
+    icon: 'material-symbols:do-not-touch',
+    slot: 'armor',
+    attributes: {},
+    // 同稀有度 rare boots 90 → 1/3 = 30
+    maxDurability: 30,
+    armorSlot: 'boots',
+    stealth: 4,
+  },
+  {
+    id: 'armor_gloves_thin',
+    name: '薄手套',
+    type: 'equipment',
+    rarity: 'rare',
+    description: '超薄手套，不影响精细操作。',
+    stackable: false,
+    maxStack: 1,
+    weight: 0.2,
+    icon: 'material-symbols:pan-tool-alt',
+    slot: 'armor',
+    attributes: {},
+    // 同稀有度 rare gloves 70 → 1/3 ≈ 23
+    maxDurability: 23,
+    armorSlot: 'gloves',
+    stealth: 3,
   },
 
   // 工具

@@ -15,7 +15,7 @@ import {
   getItemName, getItemById, meetsEquipmentRequirements,
   ArmorSlot, ARMOR_SLOT_NAMES,
 } from '../../ScavengeItems/items';
-import { getItemDurability, getItemMaxDurability, InventoryItem } from '../../ScavengeItems/inventory';
+import { getItemDurability, getItemMaxDurability, getItemCurrentStealth, InventoryItem } from '../../ScavengeItems/inventory';
 import styles from './ScavengeCharacterEquip.module.scss';
 
 /** 装备 slot 类型（2026-06-07 改） */
@@ -62,6 +62,10 @@ interface EquipRowProps {
   meetsRequirements: boolean;
   /** 卸下回调 */
   onUnequip: () => void;
+  /** 装备基础潜行值（2026-06-08 加，undefined = 未装备） */
+  stealth?: number;
+  /** 装备当前潜行值（2026-06-08 加，按耐久缩放，undefined = 未装备） */
+  currentStealth?: number;
   /** 鼠标事件集（用于弹 tooltip） */
   hoverProps?: {
     onMouseEnter: (e: React.MouseEvent) => void;
@@ -72,12 +76,30 @@ interface EquipRowProps {
 
 const EquipRow = ({
   displayName, icon, equipId, durability, maxDurability,
-  meetsRequirements, onUnequip, hoverProps,
+  meetsRequirements, onUnequip, hoverProps, stealth, currentStealth,
 }: EquipRowProps) => {
   const durRatio = (durability !== undefined && maxDurability && maxDurability > 0)
     ? Math.max(0, Math.min(1, durability / maxDurability))
     : 0;
   const isBroken = durability !== undefined && durability <= 0;
+  // 显示用潜行值：优先 current（按耐久缩放），否则 base
+  const displayStealth = currentStealth !== undefined ? currentStealth : stealth ?? 0;
+  // 潜行值颜色：正绿 / 轻微橙（-1~-7）/ 重度红（≤-8）
+  const stealthColor = displayStealth === 0
+    ? null
+    : displayStealth > 0
+      ? '#4CAF50'
+      : displayStealth <= -8
+        ? '#F44336'
+        : '#FFC107';
+  // 是否显示"基础 vs 当前"差异（提示耐久已衰减）
+  const showDurDegraded = stealth !== undefined && currentStealth !== undefined
+    && Math.abs(stealth - currentStealth) >= 0.5;
+  // 格式化小数（去尾零）
+  const fmtStealthVal = (s: number) => {
+    const r = Math.round(s * 10) / 10;
+    return r.toFixed(1).replace(/\.0$/, '');
+  };
 
   return (
     <div
@@ -94,6 +116,19 @@ const EquipRow = ({
             <span className={styles.equipName}>{getItemName(equipId)}</span>
           ) : (
             <span className={styles.equipEmpty}>未装备</span>
+          )}
+          {/* 潜行值标签（2026-06-08 加，2026-06-08 改显示当前缩放值） */}
+          {displayStealth !== 0 && (
+            <span
+              className={styles.stealthTag}
+              style={{ color: stealthColor, borderColor: stealthColor }}
+              title={showDurDegraded
+                ? `基础 ${stealth} → 当前 ${displayStealth >= 0 ? '+' : ''}${fmtStealthVal(displayStealth)}（耐久 ${durability}/${maxDurability}）`
+                : undefined}
+            >
+              潜行 {displayStealth > 0 ? `+${fmtStealthVal(displayStealth)}` : fmtStealthVal(displayStealth)}
+              {showDurDegraded && <span className={styles.stealthTagHint}>↓</span>}
+            </span>
           )}
         </div>
         {equipId && durability !== undefined && maxDurability !== undefined && (
@@ -149,6 +184,9 @@ export const ScavengeCharacterEquip = ({
     : true;
   const weaponDur = weaponInstance ? getItemDurability(weaponInstance) : undefined;
   const weaponMaxDur = weaponInstance ? getItemMaxDurability(weaponInstance) : undefined;
+  const weaponStealth = weaponDef?.stealth;
+  // 2026-06-08 加：当前潜行值（按耐久缩放）
+  const weaponCurrentStealth = weaponInstance ? getItemCurrentStealth(weaponInstance) : undefined;
 
   // 工具栏
   const toolInstance = charData.equipped?.tool;
@@ -158,6 +196,8 @@ export const ScavengeCharacterEquip = ({
     : true;
   const toolDur = toolInstance ? getItemDurability(toolInstance) : undefined;
   const toolMaxDur = toolInstance ? getItemMaxDurability(toolInstance) : undefined;
+  const toolStealth = toolDef?.stealth;
+  const toolCurrentStealth = toolInstance ? getItemCurrentStealth(toolInstance) : undefined;
 
   return (
     <div className={styles.equipPanel}>
@@ -175,6 +215,8 @@ export const ScavengeCharacterEquip = ({
           meetsRequirements={weaponMeetsReq}
           onUnequip={() => onUnequip('weapon')}
           hoverProps={charData.weaponId ? makeItemHoverProps(charData.weaponId, weaponInstance, charData) : undefined}
+          stealth={weaponStealth}
+          currentStealth={weaponCurrentStealth}
         />
       </div>
 
@@ -202,6 +244,8 @@ export const ScavengeCharacterEquip = ({
                 meetsRequirements={meetsReq}
                 onUnequip={() => onUnequip(kind)}
                 hoverProps={itemId ? makeItemHoverProps(itemId, instance, charData) : undefined}
+                stealth={def?.stealth}
+                currentStealth={instance ? getItemCurrentStealth(instance) : undefined}
               />
             );
           })}
@@ -220,6 +264,8 @@ export const ScavengeCharacterEquip = ({
           meetsRequirements={toolMeetsReq}
           onUnequip={() => onUnequip('tool')}
           hoverProps={charData.toolId ? makeItemHoverProps(charData.toolId, toolInstance, charData) : undefined}
+          stealth={toolStealth}
+          currentStealth={toolCurrentStealth}
         />
       </div>
     </div>

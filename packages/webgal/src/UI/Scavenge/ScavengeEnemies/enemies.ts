@@ -1,10 +1,11 @@
 /**
  * 拾荒系统 - 敌人系统
  *
- * 3 种丧尸敌人（固定属性，不随角色/装备变）：
+ * 4 种丧尸敌人（固定属性，不随角色/装备变）：
  * - 游荡者（Wanderer）：普通丧尸，HP/攻击/防御均低
  * - 追逐者（Chaser）：强化型丧尸，速度快/暴击高
  * - 防暴者（Rioter）：身着护甲，HP 高 / 减伤多
+ * - 哨兵（Sentinel）：2026-06-08 加，远距侦测型，高警觉低血
  *
  * 每个 location 配 enemyPool（按 danger level 分桶），派遣开始时按 pool 生成敌人实例。
  *
@@ -12,13 +13,19 @@
  * - 敌人属性固定，不随角色属性/装备变化
  * - 每个区域有数量有限的物资 + 敌人，派遣期间会按 period 消耗
  * - 区域 enemyPool 由 location.enemyPool 字段配置
+ *
+ * 潜行/警觉系统（2026-06-08 加）：
+ * - 每个敌人有 detection（0~1 概率），拾荒时敌人对角色做警觉判定
+ * - 角色有 stealth（0~1 概率），装备的 stealth 字段总和 + agi + 黑夜加成
+ * - 单个敌人察觉概率 = detection × (1 - stealth)
+ * - 所有敌人都没察觉 → evade_success；至少一个发现 → combat，发现的敌人 ATB 起始 50
  */
 
 import { generateInstanceId } from '../ScavengeItems/inventory';
 
 // ============== 敌人类型 ==============
 
-export type EnemyType = 'wanderer' | 'chaser' | 'rioter';
+export type EnemyType = 'wanderer' | 'chaser' | 'rioter' | 'sentinel';
 
 export interface EnemyTemplate {
   type: EnemyType;
@@ -47,6 +54,17 @@ export interface EnemyTemplate {
   critRate: number;
   /** 暴击伤害倍率 */
   critMultiplier: number;
+  /**
+   * 警觉值（2026-06-08 加，2026-06-08 改 integer）：
+   * 拾荒遭遇时与角色 stealth 整数对比。
+   * 公式：success = 1 - min(char.stealth, this) / max(char.stealth, this)
+   * - 游荡者 25（漫无目的，警觉低）
+   * - 追逐者 50
+   * - 防暴者 75（训练有素）
+   * - 哨兵   90（远距侦测，碰见基本必战）
+   * - 0 = 永远不会发现
+   */
+  detection: number;
 }
 
 export const ENEMY_TEMPLATES: Record<EnemyType, EnemyTemplate> = {
@@ -62,6 +80,7 @@ export const ENEMY_TEMPLATES: Record<EnemyType, EnemyTemplate> = {
     evasion: 0.1,
     critRate: 0.05,
     critMultiplier: 1.5,
+    detection: 25,
   },
   chaser: {
     type: 'chaser',
@@ -75,6 +94,7 @@ export const ENEMY_TEMPLATES: Record<EnemyType, EnemyTemplate> = {
     evasion: 0.15,
     critRate: 0.10,
     critMultiplier: 1.8,
+    detection: 50,
   },
   rioter: {
     type: 'rioter',
@@ -88,6 +108,21 @@ export const ENEMY_TEMPLATES: Record<EnemyType, EnemyTemplate> = {
     evasion: 0.05,
     critRate: 0.08,
     critMultiplier: 1.6,
+    detection: 75,
+  },
+  sentinel: {
+    type: 'sentinel',
+    name: '哨兵',
+    description: '远距侦测型，警觉极高，但血薄',
+    hp: 30,
+    attackDamage: 6,
+    attackSpeed: 25,
+    armor: 0,
+    accuracy: 0.8,
+    evasion: 0.2,
+    critRate: 0.10,
+    critMultiplier: 1.4,
+    detection: 90,
   },
 };
 
@@ -150,6 +185,16 @@ export interface EnemyInstance {
   evasion: number;
   critRate: number;
   critMultiplier: number;
+  // ============== 潜行/警觉系统（2026-06-08 加）==============
+  /** 警觉值（从 template 拷贝） */
+  detection: number;
+  /**
+   * 战斗初始 ATB 偏移（0~100，2026-06-08 加）：
+   * - 普通敌人：0（正常累加）
+   * - 被警觉系统发现的敌人：50（ATB 起始 50%，首轮先手）
+   * 由 encounterCheck 在警觉判定后设置
+   */
+  startAtb: number;
 }
 
 /** 随机整数（min..max，含两端） */
@@ -171,6 +216,8 @@ const spawnFromTemplate = (type: EnemyType): EnemyInstance => {
     evasion: t.evasion,
     critRate: t.critRate,
     critMultiplier: t.critMultiplier,
+    detection: t.detection,
+    startAtb: 0, // 默认无先手，由 encounterCheck 根据警觉判定设置
   };
 };
 

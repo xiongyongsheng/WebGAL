@@ -343,7 +343,8 @@ export const runCombat = (
       evasion: t.evasion,
       critRate: t.critRate,
       critMultiplier: t.critMultiplier,
-      currentTick: 0,
+      // 2026-06-08 改：用 e.startAtb 作为初始 ATB（警觉判定中发现的敌人 startAtb=50）
+      currentTick: e.startAtb ?? 0,
       weaponInstance: null,
       weaponDef: null,
       armorPieces: { helmet: null, chest: null, arms: null, gloves: null, legs: null, boots: null },

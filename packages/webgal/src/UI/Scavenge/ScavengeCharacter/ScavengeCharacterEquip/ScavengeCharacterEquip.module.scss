@@ -150,6 +150,26 @@
   font-weight: 500;
 }
 
+// ============== 潜行值标签（2026-06-08 加，2026-06-08 改↓ 提示）==============
+
+.stealthTag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border: 1px solid;
+  border-radius: 3px;
+  margin-left: 4px;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.stealthTagHint {
+  margin-left: 3px;
+  color: #FFC107;
+  font-weight: 700;
+  font-size: 11px;
+}
+
 // ============== 卸下按钮 ==============
 
 .unequipButton {

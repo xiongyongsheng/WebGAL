@@ -205,6 +205,13 @@ export const SCAVENGE_LOCATIONS: ScavengeLocationItem[] = [
     position: { x: 80, y: 50 },
     isUnlocked: false,
     regionColor: '#9C27B0',
+    // 2026-06-08 加：医院有 1 个哨兵（医疗安全警卫）
+    enemyPool: [
+      { type: 'wanderer', min: 1, max: 2 },
+      { type: 'chaser', min: 1, max: 2 },
+      { type: 'rioter', min: 0, max: 1 },
+      { type: 'sentinel', min: 1, max: 1 },
+    ],
   },
 
   // 政府区域
@@ -222,6 +229,13 @@ export const SCAVENGE_LOCATIONS: ScavengeLocationItem[] = [
     position: { x: 20, y: 35 },
     isUnlocked: false,
     regionColor: '#F44336',
+    // 2026-06-08 加：警察局有 2 个哨兵（双岗哨）
+    enemyPool: [
+      { type: 'wanderer', min: 1, max: 1 },
+      { type: 'chaser', min: 2, max: 3 },
+      { type: 'rioter', min: 1, max: 2 },
+      { type: 'sentinel', min: 2, max: 2 },
+    ],
   },
   {
     id: 'government',
@@ -237,6 +251,13 @@ export const SCAVENGE_LOCATIONS: ScavengeLocationItem[] = [
     position: { x: 15, y: 25 },
     isUnlocked: false,
     regionColor: '#E91E63',
+    // 2026-06-08 加：政府办公楼有 1 个哨兵（入口安检）
+    enemyPool: [
+      { type: 'wanderer', min: 1, max: 1 },
+      { type: 'chaser', min: 1, max: 2 },
+      { type: 'rioter', min: 1, max: 1 },
+      { type: 'sentinel', min: 1, max: 1 },
+    ],
   },
 
   // 工业区

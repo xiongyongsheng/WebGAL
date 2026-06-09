@@ -7,7 +7,7 @@
  * - 直接在面板内完成所有操作（无需再嵌套弹框）
  * - 支持背包/仓库/角色之间的物品转移（菜单 + 拖拽）
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { useStageState } from '@/hooks/useStageState';
@@ -31,6 +31,7 @@ import { ScavengeCharacterEquip } from '../ScavengeCharacterEquip/ScavengeCharac
 import { ItemTooltip, ItemTooltipData } from '../../ScavengeItems/ItemTooltip';
 import { ScavengeCharacterInventory } from '../ScavengeCharacterInventory/ScavengeCharacterInventory';
 import { ScavengeWarehouse } from '../../ScavengeWarehouse/ScavengeWarehouse';
+import { logger } from '@/Core/util/logger';
 import styles from './ScavengeCharacterPanel.module.scss';
 
 interface ScavengeCharacterPanelProps {
@@ -97,6 +98,16 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
 
   // 2026-06-07：hover tooltip 共享 state
   const [hoveredItem, setHoveredItem] = useState<ItemTooltipData | null>(null);
+  // 2026-06-08 修：mounted ref 防止"已卸载组件 setState"警告
+  // 原因：用户在 panel 上快速移动鼠标时，DOM 元素可能在 mouse 事件
+  // 还在队列中时被卸载，handler 仍调用 setHoveredItem → 内存泄漏警告
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   /**
    * 给一个物品生成 hover 事件处理器集合（onMouseEnter/Move/Leave）
    * 共享 panel 的 hoveredItem state，保证同一时间只显示一个 tooltip
@@ -106,14 +117,20 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
     instance?: InventoryItem,
     charForReq?: Pick<ScavengeCharacter, 'str' | 'agi' | 'end' | 'int'>,
   ) => ({
-    onMouseEnter: (e: React.MouseEvent) =>
-      setHoveredItem({ itemId, instance, x: e.clientX, y: e.clientY, charForReq }),
-    onMouseMove: (e: React.MouseEvent) =>
+    onMouseEnter: (e: React.MouseEvent) => {
+      if (!isMountedRef.current) return;
+      setHoveredItem({ itemId, instance, x: e.clientX, y: e.clientY, charForReq });
+    },
+    onMouseMove: (e: React.MouseEvent) => {
+      if (!isMountedRef.current) return;
       setHoveredItem((prev) =>
         prev && prev.itemId === itemId ? { ...prev, x: e.clientX, y: e.clientY } : prev,
-      ),
-    onMouseLeave: () =>
-      setHoveredItem((prev) => (prev && prev.itemId === itemId ? null : prev)),
+      );
+    },
+    onMouseLeave: () => {
+      if (!isMountedRef.current) return;
+      setHoveredItem((prev) => (prev && prev.itemId === itemId ? null : prev));
+    },
   });
 
   // ==================== 数据读写 ====================
@@ -165,8 +182,7 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
         const newUnknown = removed.filter((id) => !_warnedUnknownWarehouseIds.has(id));
         newUnknown.forEach((id) => _warnedUnknownWarehouseIds.add(id));
         if (newUnknown.length > 0) {
-          // eslint-disable-next-line no-console
-          console.warn(
+          logger.warn(
             `[Scavenge] 仓库自动清理了 ${newUnknown.length} 件未注册物品：` +
             newUnknown.map((id) => `'${id}'`).join(', ') +
             `\n→ 如果这些物品应该保留，请在 items.ts 中补全对应 ID。`,

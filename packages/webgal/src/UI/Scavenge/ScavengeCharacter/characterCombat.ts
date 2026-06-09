@@ -35,7 +35,7 @@ import {
   getItemById, isWeapon, getWeaponSpeedModifier,
   SPEED_MODIFIER_MULTIPLIER, meetsEquipmentRequirements, ArmorSlot, rollWeaponDamage,
 } from '../ScavengeItems/items';
-import { InventoryItem, getItemDurability, getItemMaxDurability, isItemBroken } from '../ScavengeItems/inventory';
+import { InventoryItem, getItemDurability, getItemMaxDurability, isItemBroken, getItemCurrentStealth } from '../ScavengeItems/inventory';
 
 /** 拳头（无武器）伤害常量 */
 export const FIST_DAMAGE = 2;
@@ -265,8 +265,11 @@ export const computeWeaponExpectedDamage = (char: ScavengeCharacter): number => 
 
 /**
  * 计算角色战斗派生属性
+ *
+ * @param char 角色
+ * @param isNight 是否为黑夜（periodIndex=4）；黑夜时 stealth × 1.1（2026-06-08 加）
  */
-export const computeDerivedStats = (char: ScavengeCharacter): DerivedCombatStats => {
+export const computeDerivedStats = (char: ScavengeCharacter, isNight: boolean = false): DerivedCombatStats => {
   const weapon = getEquippedWeapon(char);
   const weaponSpeedMod = weapon ? getWeaponSpeedModifier(weapon.def.id ?? '') : 'normal';
   const speedMult = SPEED_MODIFIER_MULTIPLIER[weaponSpeedMod];
@@ -280,11 +283,39 @@ export const computeDerivedStats = (char: ScavengeCharacter): DerivedCombatStats
     if (piece) armorTotal += getItemDurability(piece.instance);
   }
 
+  // ============== 潜行公式（2026-06-08 第三次改：装备为主×敏捷乘数）==============
+  //
+  // 角色潜行值 = Σ(equipped.stealth) × (1 + agi / 10)
+  //              [× 1.1 if isNight]   (黑夜 ×1.1，向下取整)
+  //              clamp 上界 [100]      (阻止装备堆叠无敌)
+  //
+  // 关键约定（用户原话）："如果 装备提供的是 0, 最终潜行值一定是 0"
+  //   - 装备潜行值是 **基础（base）**，agi 是 **乘数**
+  //   - Σ equipped.stealth = 0 → 必然 stealth = 0（agi 再高也救不回来）
+  //   - 这是设计意图：装备是"潜行的物质条件"，agi 只是"放大器"
+  //
+  // 负值情况：Σ < 0（重甲等）→ stealth < 0 → 装备太暴露，强制被发现
+  //
+  // 用途：在 encounterCheck 与每个敌人 detection 整数对比
+  // 公式：success = 1 - min(char.stealth, enemy.detection) / max(char.stealth, enemy.detection)
+  //   char=50, enemy=25 → (50-25)/50 = 50%
+  //   char=50, enemy=75 → (75-50)/75 = 33.3%
+  //
+  // 实测（露西：Σ=12, agi 8, day）：
+  //   stealth = 12 × 1.8 = 21.6 ≈ 22
+  //   vs wanderer 25 → 1 - 22/25 = 12%  成功
+  //   vs chaser 50   → 1 - 22/50 = 56%  成功
+  const equippedStealthSum = getEquippedStealthSum(char);
+  let stealth = equippedStealthSum * (1 + char.agi / 10);
+  if (isNight) stealth = Math.floor(stealth * 1.1);
+  stealth = Math.round(stealth);  // 取整，让数字干净
+  stealth = Math.min(100, stealth);  // 上界 100；负值保留（装备太暴露）
+
   return {
     attackDamage: computeWeaponExpectedDamage(char),
     attackSpeed: char.agi * 6 * speedMult + weaponAgiBonus,
     armor: armorTotal,
-    stealth: clamp01(char.agi * 0.02),
+    stealth,
     accuracy: clamp01(0.5 + char.agi * 0.03),
     evasion: clamp01(char.agi * 0.02),
     critRate: clamp01(0.05 + char.agi * 0.01),
@@ -294,5 +325,31 @@ export const computeDerivedStats = (char: ScavengeCharacter): DerivedCombatStats
 // 工具类型导出（combat.ts 需要）
 export { getItemDurability, getItemMaxDurability, isItemBroken };
 export { rollWeaponDamage };
+
+/**
+ * 计算角色装备的"总潜行值" Σ(equipped.stealth)（2026-06-08 导出，2026-06-08 改耐久缩放）：
+ *
+ * - 只统计已装备的物品
+ * - 武器/护甲/工具的 stealth 字段都算上
+ * - 负数代表"会暴露"，正数代表"增强隐蔽"
+ * - 潜行值按当前耐久缩放（2026-06-08 加）：currentStealth = baseStealth × (dur / max)
+ *   例：吉利服(+15) 半耐久 → 当前 +7.5
+ * - 例：吉利服(+15) + 软底靴(+4) + 普通防具(-19) = 0（满耐久时）
+ *
+ * UI 显示这个值，让玩家直观看到装备搭配的总潜行倾向。
+ * 真正的"潜行成功率"不在 UI 上显示（每次遭遇由敌人 detection 与角色 stealth 整数对比）。
+ */
+export const getEquippedStealthSum = (char: ScavengeCharacter): number => {
+  let sum = 0;
+  for (const piece of Object.values(char.equipped ?? {})) {
+    if (!piece) continue;
+    // 2026-06-08 改：用 getItemCurrentStealth（按耐久缩放）
+    const currentStealth = getItemCurrentStealth(piece);
+    if (typeof currentStealth === 'number') {
+      sum += currentStealth;
+    }
+  }
+  return sum;
+};
 
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));

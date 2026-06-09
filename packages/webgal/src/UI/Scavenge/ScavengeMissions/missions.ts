@@ -13,12 +13,13 @@
 
 import { ScavengeCharacter } from '../ScavengeCharacter/character';
 import { gainExp } from '../ScavengeCharacter/characterExperience';
+import { computeDerivedStats } from '../ScavengeCharacter/characterCombat';
 import { InventoryItem, addToInventory, generateInstanceId } from '../ScavengeItems/inventory';
 import { ScavengeLocationItem, getLocationEnemyPool } from '../ScavengeMap/locations';
 import {
   EnemyInstance, spawnEnemiesFromPool, pickRandomEncounterEnemies,
 } from '../ScavengeEnemies/enemies';
-import { CombatLogEntry, runCombat, rollStealth } from '../ScavengeCombat/combat';
+import { CombatLogEntry, runCombat } from '../ScavengeCombat/combat';
 
 export const MISSIONS_GAMEVAR_KEY = 'scavenge_missions';
 
@@ -435,24 +436,58 @@ export const encounterCheck = (
   const allEnemies = spawnEnemiesFromPool(pool);
   const encounterEnemies = pickRandomEncounterEnemies(allEnemies);
 
-  // 4. 战略判定
-  if (mission.strategy === 'stealth') {
-    const evaded = rollStealth(character);
-    if (evaded) {
-      return {
-        encounter: {
-          id: encId,
-          triggerDay,
-          triggerPeriodIndex,
-          kind: 'evade_success',
-          enemiesEncountered: encounterEnemies.length,
-          message: `遭遇 ${encounterEnemies.length} 个敌人，隐蔽成功！悄悄溜过`,
-        },
-        updatedChar: character,
-        missionOver: false,
-      };
+  // 4. 警觉判定（2026-06-08 第四次改：Luce choice 非对称公式）：
+  // 角色 stealth = Σ(equipped.stealth) × (1 + agi/10)  （integer，computeDerivedStats 算好）
+  // 敌人 detection = integer 25/50/75/90
+  //
+  // 单敌人成功潜行率 = char / (char + enemy)        ← 非对称！
+  //   char 主导（大于 enemy）→ success 偏高
+  //   enemy 主导（大于 char）→ success 偏低
+  //   char == enemy           → 50% 掷硬币
+  //
+  // 与上一版区别：上一版用 1 - min/max 是对称的，char=22 vs enemy=90 给 76% 成功（反直觉）
+  // 新版：char=22 vs enemy=90 → 22/112 = 19.6%（enemy 主导，潜行难）
+  //
+  // 例：char=50, enemy=25 → 50/75 = 66.7%   (char 主导，合理的高)
+  //   char=50, enemy=75 → 50/125 = 40%    (enemy 主导，合理的低)
+  //   char=22, enemy=25 → 22/47 = 46.8%   (略低于敌人，掷硬币)
+  //   char=22, enemy=90 → 22/112 = 19.6%  (差很多，难)
+  //   char=53, enemy=90 → 53/143 = 37.1%  (好装备也勉强)
+  //
+  // 全部敌人都没发现 → evade_success
+  // 至少一个发现 → combat，发现的敌人 ATB 起始 50（首轮先手）
+  // char ≤ 0（装备总暴露或无潜行装备） → 强制被发现（success = 0）
+  // enemy ≤ 0（特殊敌人不警觉） → 100% 潜行成功
+  const isNight = triggerPeriodIndex === 4; // 黑夜
+  const stats = computeDerivedStats(character, isNight);
+  const charStealth = stats.stealth;  // integer
+  const isTooExposed = charStealth <= 0;  // 装备总潜行值 ≤ 0 = 必被发现
+  const detectedFlags: boolean[] = encounterEnemies.map((e) => {
+    if (isTooExposed) return true;  // 装备总暴露或无潜行装备
+    if (e.detection <= 0) return false;  // 敌人永远不察觉
+    const success = charStealth / (charStealth + e.detection);
+    return Math.random() >= success;  // 不成功 = 被发现
+  });
+  if (encounterEnemies.length > 0 && !detectedFlags.some((d) => d)) {
+    // 全部没察觉 → 潜行成功
+    return {
+      encounter: {
+        id: encId,
+        triggerDay,
+        triggerPeriodIndex,
+        kind: 'evade_success',
+        enemiesEncountered: encounterEnemies.length,
+        message: `遭遇 ${encounterEnemies.length} 个敌人，隐蔽成功！悄悄溜过`,
+      },
+      updatedChar: character,
+      missionOver: false,
+    };
+  }
+  // 设置被发现敌人的 startAtb = 50（首轮先手）
+  for (let i = 0; i < encounterEnemies.length; i++) {
+    if (detectedFlags[i]) {
+      encounterEnemies[i].startAtb = 50;
     }
-    // 隐蔽失败 → 进入战斗
   }
 
   // 战斗

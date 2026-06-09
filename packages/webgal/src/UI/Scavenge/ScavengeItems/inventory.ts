@@ -185,6 +185,37 @@ export const findUnknownItemIds = (
   return Array.from(unknown);
 };
 
+// ============== 潜行值按耐久缩放（2026-06-08 加）==============
+
+/**
+ * 算出物品的"当前潜行值"（按当前耐久缩放，2026-06-08 加）：
+ *
+ *   currentStealth = baseStealth × (current / max)
+ *
+ * 例子：
+ *   吉利服 满耐久（67/67）baseStealth=15 → 当前 +15
+ *   吉利服 半耐久（33/67）baseStealth=15 → 当前 +7.5
+ *   吉利服 0 耐久（0/67）baseStealth=15  → 当前 0
+ *
+ * 设计意图（用户原话）："随着护甲装备耐久降低,提供潜行属性也越来越低"
+ *
+ * 返回：
+ *   - 装备无 stealth 字段 → undefined（不是潜行型装备）
+ *   - 有 stealth 字段但无 maxDurability → 直接返回 baseStealth（理论上不会发生）
+ *   - 正常情况 → 按比例缩放
+ */
+export const getItemCurrentStealth = (item: InventoryItem): number | undefined => {
+  const def = getItemById(item.itemId);
+  if (!def || def.type !== 'equipment' || typeof def.stealth !== 'number') {
+    return undefined;
+  }
+  const baseStealth = def.stealth;
+  const max = def.maxDurability ?? 0;
+  if (max <= 0) return baseStealth;
+  const current = item.durability ?? 0;
+  return baseStealth * (current / max);
+};
+
 /**
  * 过滤掉未注册的物品（保留 null 槽位）
  * @returns valid: 合法物品（含 null 槽位），removed: 被移除的物品 ID 列表
