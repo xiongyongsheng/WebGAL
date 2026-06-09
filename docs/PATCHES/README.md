@@ -21,6 +21,8 @@
 | 04 | [潜行 / 警觉系统](./04-stealth.md) | L | [enemies.ts](../../packages/webgal/src/UI/Scavenge/ScavengeEnemies/enemies.ts) + [characterCombat.ts](../../packages/webgal/src/UI/Scavenge/ScavengeCharacter/characterCombat.ts) + [missions.ts](../../packages/webgal/src/UI/Scavenge/ScavengeMissions/missions.ts) | ✅ 2026-06-08 |
 | 05 | [地区敌人配置](./05-region-config.md) | M | [locations.ts](../../packages/webgal/src/UI/Scavenge/ScavengeMap/locations.ts) | ✅ 2026-06-08 |
 | 06 | [数据验证系统](./06-data-validation.md) | N | [characterValidate.ts](../../packages/webgal/src/UI/Scavenge/ScavengeCharacter/characterValidate.ts) | ✅ 2026-06-08 |
+| 12 | [地点刷新系统（per-location 浮动 + 权重）](./12-location-refresh.md) | — | [locations.ts](../../packages/webgal/src/UI/Scavenge/ScavengeMap/locations.ts) + [locationState.ts](../../packages/webgal/src/UI/Scavenge/ScavengeMap/locationState.ts) + [locationRefresh.ts](../../packages/webgal/src/UI/Scavenge/ScavengeMap/locationRefresh.ts) + [encounterCheck.ts](../../packages/webgal/src/UI/Scavenge/ScavengeMissions/encounterCheck.ts) | ✅ 2026-06-08 |
+| 13 | [战斗系统平衡](./13-combat-balance.md) | — | [items.ts](../../packages/webgal/src/UI/Scavenge/ScavengeItems/items.ts) + [characterCombat.ts](../../packages/webgal/src/UI/Scavenge/ScavengeCharacter/characterCombat.ts) + [combat.ts](../../packages/webgal/src/UI/Scavenge/ScavengeCombat/combat.ts) + [enemies.ts](../../packages/webgal/src/UI/Scavenge/ScavengeEnemies/enemies.ts) | ✅ 2026-06-09 |
 
 ### 2. 流程规则 / 项目约束（**任何修改前必查**）
 
@@ -41,7 +43,8 @@
 |------|---------|
 | 2026-06-05 | 战斗系统设计立项，敌人/派遣/遭遇/结算（A-F） |
 | 2026-06-07 | 武器伤害范围化、护甲分 6 部位 + 耐久、战斗日志、角色面板 |
-| 2026-06-08 | 潜行/警觉系统、地区敌人配置、数据验证、护甲潜行衰减 |
+| 2026-06-08 | 潜行/警觉系统、地区敌人配置、数据验证、护甲潜行衰减、地点刷新系统（per-location 浮动 + 权重）、missions.ts 拆分 |
+| 2026-06-09 | 地点刷新系统：改为以 lastInteractedDay 为基准（"N 天没人拾荒"）、敌人/物资同步刷新（取 max refreshDays）、最后一期也遇敌、combat 策略 100% 遭遇、胜仗 30% 额外物资、**已清空 location 不自动刷新（修"杀光又遇敌"bug）**、战斗系统平衡（修护甲减伤 bug + 调高敌人数值 + 降玩家 attackSpeed） |
 
 ---
 
@@ -59,6 +62,8 @@ docs/PATCHES/
 ├── 06-data-validation.md ← N 数据验证
 ├── 10-item-registry.md   ← item-id-must-be-registered
 ├── 11-setVar-strict.md   ← setVar-true-false-strict
+├── 12-location-refresh.md← 地点刷新系统（per-location 浮动 + 权重）
+├── 13-combat-balance.md  ← 战斗系统平衡（2026-06-09 重平衡）
 └── 99-patch-guide.md     ← 应用补丁指南
 ```
 

@@ -97,9 +97,26 @@ const rollCrit = (critRate: number): boolean => {
   return Math.random() < critRate;
 };
 
-/** 敌人攻击伤害（保持旧公式：base * critMult - flatArmor，floor） */
+/** 敌人攻击伤害（2026-06-09 改：百分比减伤公式，cap 80%）
+ *
+ * 旧公式：attackDamage * critMult - flatArmor → 永远 1 滴血（armorTotal=610 远大于 dmg）
+ * 新公式：armor 改为"减伤点数"（armor_vest 满耐久 = 6），用百分比减伤：
+ *   reduction = armor / (armor + 50)  （cap 0.8，避免堆甲无敌）
+ *   final_dmg = attackDamage * critMult * (1 - reduction)
+ *
+ * 例：armor=22（满耐久 6 件），wanderer 12 dmg：
+ *   reduction = 22 / 72 = 30.5%
+ *   12 * 0.695 = 8.3 → 8 伤害（合理）
+ * 例：armor=50（顶级套），wanderer 12 dmg：
+ *   reduction = 50/100 = 50%
+ *   12 * 0.5 = 6 伤害
+ * 例：armor=0（裸体），wanderer 12 dmg：
+ *   reduction = 0
+ *   12 * 1 = 12 伤害
+ */
 const calcEnemyDamage = (attackDamage: number, critMult: number, armor: number): number => {
-  return Math.max(1, Math.floor(attackDamage * critMult - armor));
+  const reduction = Math.min(0.8, armor / (armor + 50));
+  return Math.max(1, Math.floor(attackDamage * critMult * (1 - reduction)));
 };
 
 /** 角色攻击伤害：weapon.damage * (1 + str/100) * critMult，floor */
@@ -138,7 +155,7 @@ const applyDamageToCharacter = (
   damage: number,
   log: CombatLogEntry[],
   tick: number,
-): void => {
+): { excess: number; absorbed: number } => {
   // 找所有有耐久的 slot
   // 2026-06-07 修复：必须用 ARMOR_SLOT_KINDS（ArmorSlot 值），不能用 ARMOR_SLOT_IDS（字段名）
   // 否则 `armorPieces[helmetId]` 是 undefined，命中检测全空，走"无护甲"分支
@@ -153,7 +170,7 @@ const applyDamageToCharacter = (
   if (availableSlots.length === 0) {
     // 没护甲：全吃
     combatant.currentHp = Math.max(0, combatant.currentHp - damage);
-    return;
+    return { excess: damage, absorbed: 0 };
   }
 
   // 随机选一个 slot
@@ -184,6 +201,7 @@ const applyDamageToCharacter = (
   if (excess > 0) {
     combatant.currentHp = Math.max(0, combatant.currentHp - excess);
   }
+  return { excess, absorbed };
 };
 
 // ============== 武器可用性检查 ==============
@@ -444,22 +462,32 @@ export const runCombat = (
     }
 
     // 8. 应用伤害
+    let actualHpDamage = damage;  // 实际扣 HP（护甲吸收后剩余）
     if (target.isCharacter) {
-      // 走护甲吸收
-      applyDamageToCharacter(target, damage, log, tick);
+      // 走护甲吸收（2026-06-09 改：返回 excess，用于决定是否推冗余 hit 日志）
+      const { excess, absorbed } = applyDamageToCharacter(target, damage, log, tick);
+      actualHpDamage = excess;
+      // 2026-06-09 改：护甲全吸时（excess===0），不推冗余的 hit 日志
+      // （armor_absorb 日志已经说"抵消 X 伤害"，再发 hit 反而误导玩家）
+      if (excess === 0) {
+        // 完全吸收 → 跳过 hit 日志
+        if (charCombatant.currentHp <= 0) break;
+        if (aliveEnemies().length === 0) break;
+        continue;
+      }
     } else {
       // 敌人：直接扣 HP
       target.currentHp = Math.max(0, target.currentHp - damage);
     }
 
-    // 9. 攻击日志
+    // 9. 攻击日志（2026-06-09 改：damage 改用 actualHpDamage，部分吸时显示真实 HP 损失）
     log.push({
       id: nextLogId(),
       tick,
       kind: crit ? 'crit' : 'hit',
       attackerName: actor.name,
       defenderName: target.name,
-      damage,
+      damage: actualHpDamage,
       defenderHp: target.currentHp,
       defenderMaxHp: target.maxHp,
       flavor: crit ? '暴击！' : undefined,

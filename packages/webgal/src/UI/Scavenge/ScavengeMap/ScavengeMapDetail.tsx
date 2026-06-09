@@ -5,7 +5,15 @@ import { Icon } from '@iconify/react';
 import close from '@iconify-icons/material-symbols/close';
 import locationOn from '@iconify-icons/material-symbols/location-on';
 import inventory from '@iconify-icons/material-symbols/inventory';
-import { ScavengeLocationItem, getRegionDisplayName, getDangerStars } from './locations';
+import { ScavengeLocationItem, getRegionDisplayName, getDangerStars } from "./locations";
+import { getItemName } from "../ScavengeItems/items";
+import { ENEMY_TEMPLATES } from "../ScavengeEnemies/enemies";
+import {
+  getLocationState,
+  getDaysUntilRefresh,
+  getTotalEnemyCount,
+  getTotalLootCount,
+} from "./locationRefresh";
 import { ScavengeCharacter, normalizeCharacter, getCharacterStatusText } from '../ScavengeCharacter/character';
 import { startMission, readMissions, writeMissions } from '../ScavengeMissions/missions';
 import styles from './ScavengeMapDetail.module.scss';
@@ -108,7 +116,6 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
     setShowCharPicker(false);
     onClose();
   };
-
   return (
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -178,27 +185,94 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
           <p className={styles.description}>{location.description}</p>
         </div>
 
-        {/* 产出物资 */}
-        {location.lootTypes.length > 0 && (
-          <div className={styles.section}>
-            <div className={styles.sectionTitle}>
-              <Icon icon={inventory} className={styles.sectionIcon} />
-              预期产出
+        {/* 2026-06-08 加：当前敌人（按种类 + 数量） */}
+        {(() => {
+          const ls = getLocationState(location.id);
+          const total = getTotalEnemyCount(ls);
+          const entries = ls ? Object.entries(ls.enemyCount).filter(([_, n]) => n > 0) : [];
+          if (total === 0) {
+            return (
+              <div className={styles.section}>
+                <div className={styles.sectionTitle}>当前敌人</div>
+                <p className={styles.emptyHint}>暂无敌人（被刷光 / 危险等级 0）</p>
+              </div>
+            );
+          }
+          return (
+            <div className={styles.section}>
+              <div className={styles.sectionTitle}>
+                当前敌人（共 {total} 个）
+              </div>
+              <div className={styles.countGrid}>
+                {entries.map(([type, n]) => {
+                  const tpl = ENEMY_TEMPLATES[type as keyof typeof ENEMY_TEMPLATES];
+                  return (
+                    <div key={type} className={styles.countItem}>
+                      <span className={styles.countLabel}>{tpl?.name ?? type}</span>
+                      <span className={styles.countValue}>×{n}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <div className={styles.lootTypes}>
-              {location.lootTypes.map((loot) => (
-                <span key={loot} className={styles.lootTag}>
-                  {lootTypeNames[loot] ?? loot}
-                </span>
-              ))}
+          );
+        })()}
+
+        {/* 2026-06-08 加：当前物资（按 itemId + 数量 + 总计） */}
+        {(() => {
+          const ls = getLocationState(location.id);
+          const total = getTotalLootCount(ls);
+          const entries = ls ? Object.entries(ls.lootCount).filter(([_, n]) => n > 0) : [];
+          if (total === 0) {
+            return (
+              <div className={styles.section}>
+                <div className={styles.sectionTitle}>当前物资</div>
+                <p className={styles.emptyHint}>暂无物资（被搜光）</p>
+              </div>
+            );
+          }
+          return (
+            <div className={styles.section}>
+              <div className={styles.sectionTitle}>
+                当前物资（共 {total} 个）
+              </div>
+              <div className={styles.countGrid}>
+                {entries.map(([itemId, n]) => (
+                  <div key={itemId} className={styles.countItem}>
+                    <span className={styles.countLabel}>{getItemName(itemId)}</span>
+                    <span className={styles.countValue}>×{n}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
+
+        {/* 2026-06-09 改：下次刷新时间（同步刷新） */}
+        {(() => {
+          const ls = getLocationState(location.id);
+          if (!ls) {
+            return (
+              <div className={styles.section}>
+                <div className={styles.refreshHint}>首次访问，下次派遣时立即刷新</div>
+              </div>
+            );
+          }
+          const days = getDaysUntilRefresh(location, currentDay);
+          return (
+            <div className={styles.section}>
+              <div className={styles.sectionTitle}>下次刷新</div>
+              <div className={styles.refreshInfo}>
+                {days === 0
+                  ? '🔄 现在刷新（已到时间 / dirty）'
+                  : `还剩 ${days} 天`}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* 错误提示 */}
-        {error && (
-          <div className={styles.errorMsg}>{error}</div>
-        )}
+        {error && <div className={styles.errorMsg}>{error}</div>}
 
         {/* 操作按钮 */}
         <div className={styles.actions}>
@@ -234,14 +308,8 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
 
         {/* 选角色浮层 */}
         {showCharPicker && (
-          <div
-            className={styles.overlay}
-            onClick={() => setShowCharPicker(false)}
-          >
-            <div
-              className={styles.modal}
-              onClick={(e) => e.stopPropagation()}
-            >
+          <div className={styles.overlay} onClick={() => setShowCharPicker(false)}>
+            <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
               <div className={styles.header}>
                 <div className={styles.titleGroup}>
                   <h2 className={styles.title}>选择派遣角色</h2>
@@ -254,11 +322,7 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
                 {dispatchable.map(c => {
                   const statusText = getCharacterStatusText(c);
                   return (
-                    <div
-                      key={c.id}
-                      className={styles.charCard}
-                      onClick={() => handleDispatch(c.id)}
-                    >
+                    <div key={c.id} className={styles.charCard} onClick={() => handleDispatch(c.id)}>
                       <div className={styles.charInfo}>
                         <div className={styles.charName}>{c.name}</div>
                         <div className={styles.charStats}>

@@ -72,12 +72,12 @@ export const ENEMY_TEMPLATES: Record<EnemyType, EnemyTemplate> = {
     type: 'wanderer',
     name: '游荡者',
     description: '普通的丧尸，行动迟缓但数量众多',
-    hp: 30,
-    attackDamage: 8,
-    attackSpeed: 20,
-    armor: 2,
-    accuracy: 0.6,
-    evasion: 0.1,
+    hp: 55,
+    attackDamage: 12,
+    attackSpeed: 22,
+    armor: 3,
+    accuracy: 0.65,
+    evasion: 0.15,
     critRate: 0.05,
     critMultiplier: 1.5,
     detection: 25,
@@ -86,12 +86,12 @@ export const ENEMY_TEMPLATES: Record<EnemyType, EnemyTemplate> = {
     type: 'chaser',
     name: '追逐者',
     description: '强化型丧尸，速度快、暴击率高',
-    hp: 50,
-    attackDamage: 14,
-    attackSpeed: 30,
-    armor: 4,
-    accuracy: 0.7,
-    evasion: 0.15,
+    hp: 85,
+    attackDamage: 18,
+    attackSpeed: 32,
+    armor: 5,
+    accuracy: 0.72,
+    evasion: 0.22,
     critRate: 0.10,
     critMultiplier: 1.8,
     detection: 50,
@@ -100,12 +100,12 @@ export const ENEMY_TEMPLATES: Record<EnemyType, EnemyTemplate> = {
     type: 'rioter',
     name: '防暴者',
     description: '身着护甲的强化型丧尸，HP 高、减伤多',
-    hp: 80,
-    attackDamage: 18,
-    attackSpeed: 15,
-    armor: 10,
-    accuracy: 0.65,
-    evasion: 0.05,
+    hp: 140,
+    attackDamage: 26,
+    attackSpeed: 18,
+    armor: 14,
+    accuracy: 0.68,
+    evasion: 0.10,
     critRate: 0.08,
     critMultiplier: 1.6,
     detection: 75,
@@ -114,12 +114,12 @@ export const ENEMY_TEMPLATES: Record<EnemyType, EnemyTemplate> = {
     type: 'sentinel',
     name: '哨兵',
     description: '远距侦测型，警觉极高，但血薄',
-    hp: 30,
-    attackDamage: 6,
-    attackSpeed: 25,
-    armor: 0,
+    hp: 65,
+    attackDamage: 14,
+    attackSpeed: 26,
+    armor: 2,
     accuracy: 0.8,
-    evasion: 0.2,
+    evasion: 0.25,
     critRate: 0.10,
     critMultiplier: 1.4,
     detection: 90,
@@ -233,11 +233,20 @@ export const spawnEnemiesFromPool = (pool: EnemyPoolEntry[]): EnemyInstance[] =>
   return enemies;
 };
 
-/** 遭遇时随机挑 1~N 个敌人（不全上） */
+/** 遭遇时随机挑 N 个敌人（2026-06-09 改：2-5 个，更具挑战性）
+ *
+ * 旧：1-3 个 → 玩家 1v 1 都能轻松过
+ * 新：2-5 个 → 配合 combat 100% 遭遇 + 敌人数值调高，1v 3-5 才是常态
+ *
+ * 期望节奏：
+ * - 1 击 7 伤的玩家，对 3 个 wanderer（共 165 HP）→ ~8 回合
+ * - 12 dmg/回合 × 1 命中的玩家，对 3 个 wanderer（共 165 HP，每回合 ~36 dmg）→ ~5 回合
+ *   但敌人每回合打玩家 12 伤（cap 8 due to armor）→ 10-20 回合结束
+ */
 export const pickRandomEncounterEnemies = (all: EnemyInstance[]): EnemyInstance[] => {
   if (all.length === 0) return [];
-  // 1~min(3, all.length) 个
-  const count = randInt(1, Math.min(3, all.length));
+  // 2026-06-09 改：2~min(5, all.length) 个
+  const count = randInt(2, Math.min(5, all.length));
   // 随机抽
   const pool = [...all];
   const chosen: EnemyInstance[] = [];

@@ -13,7 +13,7 @@ import { ScavengeMapDetail } from './ScavengeMap/ScavengeMapDetail';
 import { ScavengeLocationItem } from './ScavengeMap/locations';
 import { ScavengeCharacterPanel } from './ScavengeCharacter/ScavengeCharacterPanel/ScavengeCharacterPanel';
 import { ScavengeMenuButton } from './ScavengeMenuButton/ScavengeMenuButton';
-import { readMissions, EncounterLog } from './ScavengeMissions/missions';
+import { readMissions } from './ScavengeMissions/missions';
 import { ScavengeMissionOutcomeModal } from './ScavengeMissionOutcomeModal/ScavengeMissionOutcomeModal';
 import { ScavengeCombatLogModal } from './ScavengeCombatLogModal/ScavengeCombatLogModal';
 import styles from './ScavengeMain.module.scss';
@@ -70,10 +70,12 @@ export const ScavengeMain = () => {
 
   // 监听 missions 列表：找 status='completed' && !outcomeShown 的最新一个，弹结果窗
   // 派遣结算结果弹窗（监听 missions 变化，弹出未展示的）
+  // 2026-06-09 改：失败 mission 不弹 outcome modal（由 encounter modal 单独处理"战斗失败"）
+  // 取消的 mission 也不弹（玩家主动撤回，应该不打扰）
   const pendingOutcomeMission = useMemo(() => {
     const missions = readMissions();
     return missions.find(m =>
-      (m.status === 'completed' || m.status === 'failed' || m.status === 'cancelled') &&
+      m.status === 'completed' &&
       m.outcome &&
       !m.outcomeShown,
     );

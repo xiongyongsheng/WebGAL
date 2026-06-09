@@ -226,3 +226,74 @@
     background: linear-gradient(135deg, #5a9ff2 0%, #4080cc 100%);
   }
 }
+
+// ============== 2026-06-09 加：战斗记录 ==============
+
+.combatLog {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-family: monospace;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.logLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 0;
+  color: #d0d0d0;
+}
+
+.logEncounterTag {
+  display: inline-block;
+  min-width: 32px;
+  padding: 0 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  font-size: 10px;
+  color: #888;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.logHit {
+  color: #e0e0e0;
+}
+
+.logCrit {
+  color: #ff5252;
+  font-weight: 700;
+}
+
+.logMiss {
+  color: #888;
+  font-style: italic;
+}
+
+.logAbsorb {
+  color: #82b1ff;
+}
+
+.logDeath {
+  color: #ff5252;
+  font-weight: 700;
+}
+
+.logSystem {
+  color: #ffc107;
+  font-style: italic;
+}
+
+.sectionMeta {
+  margin-left: 8px;
+  font-size: 11px;
+  color: #888;
+  font-weight: normal;
+}

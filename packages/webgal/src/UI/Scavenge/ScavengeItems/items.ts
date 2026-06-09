@@ -121,6 +121,15 @@ export interface EquipmentItem extends BaseItem {
   // ----- 护甲专属 -----
   /** 护甲部位（helmet/chest/arms/gloves/legs/boots） */
   armorSlot?: ArmorSlot;
+  /**
+   * 减伤值（2026-06-09 加）：
+   * - 满耐久时的"减伤点数"
+   * - 战斗公式：damage_taken = enemy_dmg * (1 - armor/(armor+50))，cap 80%
+   * - 实际生效 = defense * (currentDurability / maxDurability)（按耐久比例缩放）
+   * - 例如 defense=6 满耐久 → 6 减伤点
+   * - 武器/工具不设 = 0
+   */
+  defense?: number;
 }
 
 /** 任务物品 */
@@ -491,6 +500,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     slot: 'armor',
     attributes: {},
     maxDurability: 150,
+    defense: 6,
     armorSlot: 'chest',
     requirements: { str: 4 },
     stealth: -5,
@@ -508,6 +518,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     slot: 'armor',
     attributes: {},
     maxDurability: 180,
+    defense: 5,
     armorSlot: 'helmet',
     requirements: { str: 3 },
     stealth: -2,
@@ -525,6 +536,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     slot: 'armor',
     attributes: {},
     maxDurability: 200,
+    defense: 9,
     armorSlot: 'chest',
     requirements: { str: 5 },
     stealth: -8,
@@ -543,6 +555,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     slot: 'armor',
     attributes: {},
     maxDurability: 80,
+    defense: 3,
     armorSlot: 'arms',
     stealth: -2,
   },
@@ -559,6 +572,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     slot: 'armor',
     attributes: {},
     maxDurability: 130,
+    defense: 5,
     armorSlot: 'arms',
     requirements: { str: 3 },
     stealth: -4,
@@ -576,6 +590,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     slot: 'armor',
     attributes: {},
     maxDurability: 70,
+    defense: 2,
     armorSlot: 'gloves',
     stealth: -1,
   },
@@ -592,6 +607,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     slot: 'armor',
     attributes: {},
     maxDurability: 110,
+    defense: 3,
     armorSlot: 'gloves',
     requirements: { agi: 4 },
     stealth: -2,
@@ -609,6 +625,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     slot: 'armor',
     attributes: {},
     maxDurability: 100,
+    defense: 4,
     armorSlot: 'legs',
     stealth: -3,
   },
@@ -625,6 +642,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     slot: 'armor',
     attributes: {},
     maxDurability: 150,
+    defense: 6,
     armorSlot: 'legs',
     requirements: { str: 4 },
     stealth: -5,
@@ -642,6 +660,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     slot: 'armor',
     attributes: {},
     maxDurability: 90,
+    defense: 3,
     armorSlot: 'boots',
     stealth: -2,
   },

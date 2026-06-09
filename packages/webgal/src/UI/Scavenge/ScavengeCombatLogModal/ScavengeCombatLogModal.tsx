@@ -124,92 +124,94 @@ export const ScavengeCombatLogModal = ({ missionId, encounter, onClose }: Scaven
         </div>
 
         {/* 摘要 */}
-        <div className={styles.summary}>
-          <div className={styles.summaryRow}>
-            <span className={styles.summaryLabel}>地点</span>
-            <span className={styles.summaryValue}>
-              {location?.name ?? mission?.locationId ?? '?'}
-            </span>
-          </div>
-          {mission && (
+        <div className={styles.body}>
+          <div className={styles.summary}>
             <div className={styles.summaryRow}>
-              <span className={styles.summaryLabel}>执行人</span>
+              <span className={styles.summaryLabel}>地点</span>
               <span className={styles.summaryValue}>
-                {character?.name ?? mission.characterId}
+                {location?.name ?? mission?.locationId ?? '?'}
+              </span>
+            </div>
+            {mission && (
+              <div className={styles.summaryRow}>
+                <span className={styles.summaryLabel}>执行人</span>
+                <span className={styles.summaryValue}>
+                  {character?.name ?? mission.characterId}
+                </span>
+              </div>
+            )}
+            {encounter.enemiesEncountered !== undefined && (
+              <div className={styles.summaryRow}>
+                <span className={styles.summaryLabel}>遭遇敌人</span>
+                <span className={styles.summaryValue}>
+                  <Icon icon={swords} className={styles.summaryIcon} />
+                  {encounter.enemiesEncountered} 个
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* 战斗日志 */}
+          {isCombat && encounter.combatLog && encounter.combatLog.length > 0 && (
+            <div className={styles.section}>
+              <div className={styles.sectionTitle}>
+                <Icon icon={swords} className={styles.sectionIcon} />
+                战斗日志（{encounter.combatLog.length} 条）
+              </div>
+              <div className={styles.combatLog}>
+                {encounter.combatLog.map(entry => (
+                  <CombatLogRow key={entry.id} entry={entry} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 战斗小结 */}
+          {(isCombat && encounter.hpDelta !== undefined && encounter.hpDelta !== 0) && (
+            <div className={styles.summaryRow} style={{ padding: '0 20px 12px' }}>
+              <span className={styles.summaryLabel}>生命值</span>
+              <span
+                className={styles.summaryValue}
+                style={{ color: encounter.hpDelta < 0 ? '#ff8a80' : '#a0a0a0' }}
+              >
+                <Icon icon={favorite} className={styles.summaryIcon} />
+                {encounter.hpDelta > 0 ? `+${encounter.hpDelta}` : encounter.hpDelta} HP
               </span>
             </div>
           )}
-          {encounter.enemiesEncountered !== undefined && (
-            <div className={styles.summaryRow}>
-              <span className={styles.summaryLabel}>遭遇敌人</span>
-              <span className={styles.summaryValue}>
-                <Icon icon={swords} className={styles.summaryIcon} />
-                {encounter.enemiesEncountered} 个
-              </span>
-            </div>
-          )}
-        </div>
 
-        {/* 战斗日志 */}
-        {isCombat && encounter.combatLog && encounter.combatLog.length > 0 && (
-          <div className={styles.section}>
-            <div className={styles.sectionTitle}>
-              <Icon icon={swords} className={styles.sectionIcon} />
-              战斗日志（{encounter.combatLog.length} 条）
-            </div>
-            <div className={styles.combatLog}>
-              {encounter.combatLog.map(entry => (
-                <CombatLogRow key={entry.id} entry={entry} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 战斗小结 */}
-        {(isCombat && encounter.hpDelta !== undefined && encounter.hpDelta !== 0) && (
-          <div className={styles.summaryRow} style={{ padding: '0 20px 12px' }}>
-            <span className={styles.summaryLabel}>生命值</span>
-            <span
-              className={styles.summaryValue}
-              style={{ color: encounter.hpDelta < 0 ? '#ff8a80' : '#a0a0a0' }}
-            >
-              <Icon icon={favorite} className={styles.summaryIcon} />
-              {encounter.hpDelta > 0 ? `+${encounter.hpDelta}` : encounter.hpDelta} HP
-            </span>
-          </div>
-        )}
-
-        {/* 战斗胜/资源点：物品列表 */}
-        {(isVictory || encounter.kind === 'resource') && encounter.itemsGained && encounter.itemsGained.length > 0 && (
-          <div className={styles.section}>
-            <div className={styles.sectionTitle}>
-              <Icon icon={inventory} className={styles.sectionIcon} />
-              获得物品
-            </div>
-            <div className={styles.itemList}>
-              {encounter.itemsGained.map((item, idx) => (
-                <div key={`${item.instanceId}-${idx}`} className={styles.itemRow}>
-                  <div className={styles.itemIcon} style={{ color: getItemRarityColor(item.itemId) }}>
-                    <Icon icon={getItemIcon(item.itemId)} />
+          {/* 战斗胜/资源点：物品列表 */}
+          {(isVictory || encounter.kind === 'resource') && encounter.itemsGained && encounter.itemsGained.length > 0 && (
+            <div className={styles.section}>
+              <div className={styles.sectionTitle}>
+                <Icon icon={inventory} className={styles.sectionIcon} />
+                获得物品
+              </div>
+              <div className={styles.itemList}>
+                {encounter.itemsGained.map((item, idx) => (
+                  <div key={`${item.instanceId}-${idx}`} className={styles.itemRow}>
+                    <div className={styles.itemIcon} style={{ color: getItemRarityColor(item.itemId) }}>
+                      <Icon icon={getItemIcon(item.itemId)} />
+                    </div>
+                    <span className={styles.itemName}>{getItemName(item.itemId)}</span>
+                    <span className={styles.itemQty}>x{item.quantity}</span>
                   </div>
-                  <span className={styles.itemName}>{getItemName(item.itemId)}</span>
-                  <span className={styles.itemQty}>x{item.quantity}</span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* 战斗败提示 */}
-        {isDefeat && (
-          <div className={styles.defeatHint}>
-            <Icon icon={shield} className={styles.defeatIcon} />
-            <span>角色受伤严重，任务已强制结束</span>
-          </div>
-        )}
+          {/* 战斗败提示 */}
+          {isDefeat && (
+            <div className={styles.defeatHint}>
+              <Icon icon={shield} className={styles.defeatIcon} />
+              <span>角色受伤严重，任务已强制结束</span>
+            </div>
+          )}
 
-        {/* 消息 */}
-        <div className={styles.message}>{encounter.message}</div>
+          {/* 消息 */}
+          <div className={styles.message}>{encounter.message}</div>
+        </div>
 
         {/* 底部按钮 */}
         <div className={styles.actions}>

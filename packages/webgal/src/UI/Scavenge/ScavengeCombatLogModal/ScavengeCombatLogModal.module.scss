@@ -299,3 +299,12 @@
     background: linear-gradient(135deg, #5a9ff2 0%, #4080cc 100%);
   }
 }
+
+// 2026-06-09 加：body 容器（flex 布局，让战斗日志可滚动）
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}

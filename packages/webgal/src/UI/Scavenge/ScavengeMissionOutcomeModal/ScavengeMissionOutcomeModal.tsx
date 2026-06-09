@@ -11,9 +11,10 @@ import cancel from '@iconify-icons/material-symbols/cancel';
 import inventory from '@iconify-icons/material-symbols/inventory';
 import experience from '@iconify-icons/material-symbols/stars';
 import heart from '@iconify-icons/material-symbols/favorite';
-import { Mission, MissionOutcome, markMissionOutcomeShown } from '../ScavengeMissions/missions';
+import { Mission, markMissionOutcomeShown } from '../ScavengeMissions/missions';
 import { ScavengeLocationItem, SCAVENGE_LOCATIONS } from '../ScavengeMap/locations';
 import { ScavengeCharacter } from '../ScavengeCharacter/character';
+import { CombatLogEntry } from '../ScavengeCombat/combat';
 import { getItemName, getItemIcon, getItemRarityColor } from '../ScavengeItems/items';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { normalizeCharacter } from '../ScavengeCharacter/character';
@@ -44,12 +45,28 @@ export const ScavengeMissionOutcomeModal = ({ mission, onClose }: ScavengeMissio
       }
     } catch { /* ignore */ }
   } else if (Array.isArray(rawChars)) {
-    character = (rawChars as ScavengeCharacter[])
+    character = (rawChars as unknown as ScavengeCharacter[])
       .map(c => normalizeCharacter(c))
       .find(c => c.id === mission.characterId);
   }
 
   const isSuccess = outcome.success;
+
+  // 2026-06-09 加：聚合所有 encounter 的战斗记录（玩家被击倒时看过程）
+  // 失败时通常只 1 个 encounter 有 combatLog（致命的）
+  // 成功时多个 encounter 都有
+  const allCombatLogs: { encounterIdx: number; kind: string; entry: CombatLogEntry }[] = [];
+  (mission.encounters ?? []).forEach((enc, idx) => {
+    if (enc.combatLog) {
+      enc.combatLog.forEach((entry) => {
+        allCombatLogs.push({ encounterIdx: idx + 1, kind: enc.kind, entry });
+      });
+    }
+  });
+  // 限制最多显示 30 条（避免太长）
+  const MAX_LOG_LINES = 30;
+  const visibleLogs = allCombatLogs.slice(0, MAX_LOG_LINES);
+  const hiddenCount = allCombatLogs.length - visibleLogs.length;
   const accentColor = isSuccess ? '#4CAF50' : '#F44336';
   const statusIcon = isSuccess ? checkCircle : cancel;
   const statusLabel = isSuccess ? '任务完成' : '任务失败';
@@ -153,6 +170,58 @@ export const ScavengeMissionOutcomeModal = ({ mission, onClose }: ScavengeMissio
         {/* 失败原因详情 */}
         {!isSuccess && (
           <div className={styles.failureMsg}>{outcome.message}</div>
+        )}
+
+        {/* 战斗记录（2026-06-09 加：被击倒时让玩家看到战斗过程） */}
+        {visibleLogs.length > 0 && (
+          <div className={styles.section}>
+            <div className={styles.sectionTitle}>
+              战斗记录
+              <span className={styles.sectionMeta}>
+                （共 {allCombatLogs.length} 条{hiddenCount > 0 ? `，显示前 ${MAX_LOG_LINES} 条` : ''}）
+              </span>
+            </div>
+            <div className={styles.combatLog}>
+              {visibleLogs.map(({ encounterIdx, entry }, idx) => {
+                // 简化显示：armor_absorb 简写，hit 显示 -X HP，crit 高亮
+                const isHit = entry.kind === 'hit';
+                const isCrit = entry.kind === 'crit';
+                const isMiss = entry.kind === 'miss';
+                const isAbsorb = entry.kind === 'armor_absorb';
+                const isDeath = entry.kind === 'death';
+                const isSystem = entry.kind === 'system' || entry.kind === 'weapon_break' || entry.kind === 'weapon_switch' || entry.kind === 'fist_fallback' || entry.kind === 'weapon_durability_loss';
+                let lineText = '';
+                let lineClass = '';
+                if (isHit) {
+                  lineText = `T${entry.tick} ${entry.attackerName} → ${entry.defenderName} -${entry.damage} (${entry.defenderHp}/${entry.defenderMaxHp})`;
+                  lineClass = styles.logHit;
+                } else if (isCrit) {
+                  lineText = `T${entry.tick} 暴击！${entry.attackerName} → ${entry.defenderName} -${entry.damage} (${entry.defenderHp}/${entry.defenderMaxHp})`;
+                  lineClass = styles.logCrit;
+                } else if (isMiss) {
+                  lineText = `T${entry.tick} ${entry.attackerName} → ${entry.defenderName} 未命中`;
+                  lineClass = styles.logMiss;
+                } else if (isAbsorb) {
+                  lineText = `T${entry.tick} 护甲 [${entry.defenderName}] 抵消 ${entry.damage} 伤害 (${entry.flavor ?? ''})`;
+                  lineClass = styles.logAbsorb;
+                } else if (isDeath) {
+                  lineText = `T${entry.tick} ${entry.defenderName} 被击倒`;
+                  lineClass = styles.logDeath;
+                } else if (isSystem) {
+                  lineText = `T${entry.tick} ${entry.attackerName} ${entry.defenderName} ${entry.flavor ?? entry.kind}`;
+                  lineClass = styles.logSystem;
+                } else {
+                  lineText = `T${entry.tick} [${entry.kind}] ${entry.attackerName} ${entry.defenderName}`;
+                }
+                return (
+                  <div key={entry.id ?? idx} className={`${styles.logLine} ${lineClass}`}>
+                    <span className={styles.logEncounterTag}>#{encounterIdx}</span>
+                    {lineText}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
 
         {/* 底部按钮 */}

@@ -276,11 +276,17 @@ export const computeDerivedStats = (char: ScavengeCharacter, isNight: boolean = 
   // 武器 attributes.agi 也加成 attackSpeed（叠加）
   const weaponAgiBonus = weapon && weapon.def.attributes?.agi ? weapon.def.attributes.agi * 0.5 : 0;
 
-  // 护甲总耐久
+  // 2026-06-09 改：护甲总减伤 = Σ(piece.def.defense * currentDur / maxDur)
+  // （旧公式是"6 slot 耐久总和"，被 combat.ts 当作减伤用导致永远只扣 1 滴血）
   const armors = getEquippedArmorPieces(char);
   let armorTotal = 0;
   for (const piece of Object.values(armors)) {
-    if (piece) armorTotal += getItemDurability(piece.instance);
+    if (!piece) continue;
+    const maxDur = getItemMaxDurability(piece.instance);
+    const curDur = getItemDurability(piece.instance);
+    if (maxDur <= 0) continue;
+    const def = piece.def.defense ?? 0;
+    armorTotal += def * (curDur / maxDur);
   }
 
   // ============== 潜行公式（2026-06-08 第三次改：装备为主×敏捷乘数）==============
@@ -313,7 +319,10 @@ export const computeDerivedStats = (char: ScavengeCharacter, isNight: boolean = 
 
   return {
     attackDamage: computeWeaponExpectedDamage(char),
-    attackSpeed: char.agi * 6 * speedMult + weaponAgiBonus,
+    // 2026-06-09 改：agi*6 → agi*4（降 33%），让敌人有机会先手
+    // 期望：agi 5 (主角) 5*4=20 攻击速度，慢于 wanderer(22) 和 chaser(32)，快于 rioter(18)
+    // agi 8 (露西) 8*4=32，与 chaser 持平但慢于 chaser 实际攻击
+    attackSpeed: char.agi * 4 * speedMult + weaponAgiBonus,
     armor: armorTotal,
     stealth,
     accuracy: clamp01(0.5 + char.agi * 0.03),

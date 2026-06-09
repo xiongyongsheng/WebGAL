@@ -107,10 +107,7 @@ export const ScavengeTimeControl = () => {
         // 后续每次推进往 encounters 插占位（kind='no_encounter'）让"准备期"标记持久化
         const hasAnyEncounter = (m.encounters ?? []).length > 0;
         const isPreparing = !hasAnyEncounter;
-        // 2. 活跃期判定：currentTime < returnTime
-        const totalReturn = m.returnDay * 5 + m.returnPeriodIndex;
-        const totalCurrent = newDay * 5 + newPeriodIndex;
-        const isActivePeriod = totalCurrent < totalReturn;
+        // （2026-06-09 改：删除 isActivePeriod 判断，最后一期也要跑 encounterCheck）
 
         // 3. 处理三种状态
         let encounter: EncounterLog | null = null;
@@ -130,8 +127,8 @@ export const ScavengeTimeControl = () => {
               message: '准备完成',
             }],
           };
-        } else if (isActivePeriod) {
-          // 活跃期：跑 encounterCheck
+        } else {
+          // 活跃期 + returnTime 当期（2026-06-09 改：最后一个阶段也要遇敌判定）
           const result = encounterCheck(m, char, loc, newDay, newPeriodIndex);
           encounter = result.encounter;
           updatedChar = result.updatedChar;
@@ -140,8 +137,8 @@ export const ScavengeTimeControl = () => {
           allEncounters.push(encounter);
           mWithEncounters = { ...m, encounters: [...m.encounters, encounter] };
         }
-        // 准备 + 活跃都结束（isPreparing=false && !isActivePeriod）：returnTime 当期，不跑 encounterCheck
-        // 直接走到下面的 reached 判定
+        // 准备期：插 no_encounter 占位；活跃期 + returnTime 当期：都跑 encounterCheck
+        // （2026-06-09 改：原代码最后阶段不跑 encounterCheck，现在改为也跑）
 
         // 3. 判定是否到 returnTime
         const reached = isTimeReached(newDay, newPeriodIndex, m.returnDay, m.returnPeriodIndex);
