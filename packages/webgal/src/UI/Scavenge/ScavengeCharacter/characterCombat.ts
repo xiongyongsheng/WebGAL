@@ -4,16 +4,19 @@
  * 派生属性从"基础属性 (str/agi/end) + 装备"线性公式算出。
  * 这些是**战斗时的实时派生值**，**不存 GameVar**。
  *
- * ===== 战斗伤害公式（2026-06-07 与产品确认）=====
+ * ===== 攻击伤害公式（2026-06-09 改：平方根递增）=====
  * - 武器伤害 = weapon.rollDamage()（每次命中在 weapon.damageRange 内随机）
- * - 力量加成：weapon.damage * (1 + str/100)
+ * - 力量加成：weapon.damage * (1 + sqrt(str)/10)
+ *   旧版是 1 + str/100（每点 +1%），新版平方根递增（低 str 提升快、高 str 弱化）
+ *   str 5  → 1.22x | str 10 → 1.32x | str 20 → 1.45x | str 30 → 1.55x
  * - 暴击：× critMultiplier（1.5x）
  * - 最终伤害 = 上面这些相乘后向下取整
  *
- * ===== 攻击速度公式（2026-06-07 与产品确认）=====
- * - 基础：agi * 6（基础 5 时 = 30，约 3.3 tick 触发一次）
+ * ===== 攻击速度公式（2026-06-09 改：平方根递增）=====
+ * - 基础：sqrt(agi) * 6（agi 5 时 ≈ 13.4，agi 8 时 ≈ 17.0）
  * - 武器 speedModifier：fast × 1.3 / normal × 1.0 / slow × 0.7
  * - 武器 attributes.agi 也会加成
+ * - 平方根递增：agi 5 → 13.4 | agi 8 → 17.0 | agi 15 → 23.2 | agi 30 → 32.9
  *
  * ===== 护甲值（2026-06-07 与产品确认）=====
  * - 不再是减伤值，改为"总耐久"显示
@@ -250,17 +253,19 @@ export interface DerivedCombatStats {
 }
 
 /**
- * 武器伤害期望值（用于 UI 显示）
- * = floor(damageRange[1] * (1 + str/100))
+ * 武器伤害期望值（用于 UI 显示，2026-06-09 改：平方根递增）
+ * = floor(damageRange[1] * (1 + sqrt(str)/10))
+ * - 用 max 不用 min/avg：UI 显示"理论上限"，方便对比装备强度
+ * - 实际战斗伤害 = rollWeaponDamage() * (1 + sqrt(str)/10) * critMult，由 combat.ts 实时算
  */
 export const computeWeaponExpectedDamage = (char: ScavengeCharacter): number => {
   const weapon = getEquippedWeapon(char);
   if (!weapon || !weapon.def.damageRange) {
     // 无武器 → 拳头
-    return Math.floor(FIST_DAMAGE * (1 + char.str / 100));
+    return Math.floor(FIST_DAMAGE * (1 + Math.sqrt(char.str) / 10));
   }
   const [, maxDmg] = weapon.def.damageRange;
-  return Math.floor(maxDmg * (1 + char.str / 100));
+  return Math.floor(maxDmg * (1 + Math.sqrt(char.str) / 10));
 };
 
 /**
@@ -319,10 +324,11 @@ export const computeDerivedStats = (char: ScavengeCharacter, isNight: boolean = 
 
   return {
     attackDamage: computeWeaponExpectedDamage(char),
-    // 2026-06-09 改：agi*6 → agi*4（降 33%），让敌人有机会先手
-    // 期望：agi 5 (主角) 5*4=20 攻击速度，慢于 wanderer(22) 和 chaser(32)，快于 rioter(18)
-    // agi 8 (露西) 8*4=32，与 chaser 持平但慢于 chaser 实际攻击
-    attackSpeed: char.agi * 4 * speedMult + weaponAgiBonus,
+    // 2026-06-09 改：agi*4 → sqrt(agi)*6（平方根递增）
+    // - 取代旧的"agi*4 * speedMult + weaponAgiBonus"
+    // - 平方根递增：低 agi 提升快、高 agi 提升慢
+    // - 武器 speedMult / weaponAgiBonus 保留叠加
+    attackSpeed: Math.sqrt(char.agi) * 6 * speedMult + weaponAgiBonus,
     armor: armorTotal,
     stealth,
     accuracy: clamp01(0.5 + char.agi * 0.03),

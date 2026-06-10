@@ -10,6 +10,7 @@ import { Icon } from '@iconify/react';
 import swords from '@iconify-icons/material-symbols/swords';
 import shield from '@iconify-icons/material-symbols/shield';
 import build from '@iconify-icons/material-symbols/build';
+import closeIcon from '@iconify-icons/material-symbols/close';
 import { ScavengeCharacter, EquipSlotKey } from '../character';
 import {
   getItemName, getItemById, meetsEquipmentRequirements,
@@ -47,9 +48,7 @@ const durabilityColor = (ratio: number): string => {
   return '#F44336';
 };
 
-interface EquipRowProps {
-  /** 显示用名字（"头盔" / "武器" 等） */
-  displayName: string;
+interface EquipCellProps {
   /** 装备图标 */
   icon: typeof swords;
   /** 装备的 itemId（undefined = 未装备） */
@@ -58,14 +57,10 @@ interface EquipRowProps {
   durability?: number;
   /** 装备的最大耐久 */
   maxDurability?: number;
-  /** 是否满足使用门槛（不满足时显示警告） */
+  /** 是否满足使用门槛（不满足时边框黄色） */
   meetsRequirements: boolean;
   /** 卸下回调 */
   onUnequip: () => void;
-  /** 装备基础潜行值（2026-06-08 加，undefined = 未装备） */
-  stealth?: number;
-  /** 装备当前潜行值（2026-06-08 加，按耐久缩放，undefined = 未装备） */
-  currentStealth?: number;
   /** 鼠标事件集（用于弹 tooltip） */
   hoverProps?: {
     onMouseEnter: (e: React.MouseEvent) => void;
@@ -74,89 +69,51 @@ interface EquipRowProps {
   };
 }
 
-const EquipRow = ({
-  displayName, icon, equipId, durability, maxDurability,
-  meetsRequirements, onUnequip, hoverProps, stealth, currentStealth,
-}: EquipRowProps) => {
-  const durRatio = (durability !== undefined && maxDurability && maxDurability > 0)
-    ? Math.max(0, Math.min(1, durability / maxDurability))
+// 2026-06-09 改：水平条 EquipRow → 方形 EquipCell
+// 和背包格子保持一致：aspect-ratio 1 + 1fr，hover 时右下角圆形 X 卸下按钮
+// 状态（损坏/不满足需求/低耐久）用耐久条颜色 + 角标表示，不污染边框
+const EquipCell = ({
+  icon, equipId, durability, maxDurability,
+  meetsRequirements, onUnequip, hoverProps,
+}: EquipCellProps) => {
+  const isEquipped = !!equipId;
+  const durRatio = isEquipped && maxDurability !== undefined && maxDurability > 0
+    ? Math.max(0, Math.min(1, (durability ?? 0) / maxDurability))
     : 0;
-  const isBroken = durability !== undefined && durability <= 0;
-  // 显示用潜行值：优先 current（按耐久缩放），否则 base
-  const displayStealth = currentStealth !== undefined ? currentStealth : stealth ?? 0;
-  // 潜行值颜色：正绿 / 轻微橙（-1~-7）/ 重度红（≤-8）
-  const stealthColor = displayStealth === 0
-    ? null
-    : displayStealth > 0
-      ? '#4CAF50'
-      : displayStealth <= -8
-        ? '#F44336'
-        : '#FFC107';
-  // 是否显示"基础 vs 当前"差异（提示耐久已衰减）
-  const showDurDegraded = stealth !== undefined && currentStealth !== undefined
-    && Math.abs(stealth - currentStealth) >= 0.5;
-  // 格式化小数（去尾零）
-  const fmtStealthVal = (s: number) => {
-    const r = Math.round(s * 10) / 10;
-    return r.toFixed(1).replace(/\.0$/, '');
-  };
+  const isBroken = isEquipped && (durability ?? 0) <= 0;
+  // 角标：损坏 或 需求不满足 时显示感叹号
+  const showWarn = isEquipped && (isBroken || !meetsRequirements);
 
   return (
     <div
-      className={styles.equipItem}
+      className={styles.equipCell}
+      title={isEquipped ? getItemName(equipId!) : '空槽'}
       {...(hoverProps ?? {})}
     >
-      <div className={styles.equipIcon}>
-        <Icon icon={icon} className={styles.iconSvg} />
-      </div>
-      <div className={styles.equipInfo}>
-        <div className={styles.equipHeader}>
-          <span className={styles.equipType}>{displayName}</span>
-          {equipId ? (
-            <span className={styles.equipName}>{getItemName(equipId)}</span>
-          ) : (
-            <span className={styles.equipEmpty}>未装备</span>
-          )}
-          {/* 潜行值标签（2026-06-08 加，2026-06-08 改显示当前缩放值） */}
-          {displayStealth !== 0 && (
-            <span
-              className={styles.stealthTag}
-              style={{ color: stealthColor, borderColor: stealthColor }}
-              title={showDurDegraded
-                ? `基础 ${stealth} → 当前 ${displayStealth >= 0 ? '+' : ''}${fmtStealthVal(displayStealth)}（耐久 ${durability}/${maxDurability}）`
-                : undefined}
-            >
-              潜行 {displayStealth > 0 ? `+${fmtStealthVal(displayStealth)}` : fmtStealthVal(displayStealth)}
-              {showDurDegraded && <span className={styles.stealthTagHint}>↓</span>}
-            </span>
-          )}
+      {isEquipped ? (
+        <Icon icon={icon} className={styles.cellIcon} />
+      ) : (
+        <div className={styles.cellEmpty}>空</div>
+      )}
+      {isEquipped && maxDurability !== undefined && maxDurability > 0 && (
+        <div className={styles.cellDurabilityTrack}>
+          <div
+            className={styles.cellDurabilityFill}
+            style={{
+              width: `${durRatio * 100}%`,
+              backgroundColor: durabilityColor(durRatio),
+            }}
+          />
         </div>
-        {equipId && durability !== undefined && maxDurability !== undefined && (
-          <div className={styles.durabilityRow}>
-            <div className={styles.durabilityTrack}>
-              <div
-                className={styles.durabilityFill}
-                style={{
-                  width: `${durRatio * 100}%`,
-                  backgroundColor: durabilityColor(durRatio),
-                }}
-              />
-            </div>
-            <span className={styles.durabilityText} style={{ color: durabilityColor(durRatio) }}>
-              {durability}/{maxDurability}
-            </span>
-          </div>
-        )}
-        {equipId && !meetsRequirements && (
-          <div className={styles.reqWarning}>属性不满足，无法使用</div>
-        )}
-        {equipId && isBroken && meetsRequirements && (
-          <div className={styles.brokenWarning}>已损坏</div>
-        )}
-      </div>
-      {equipId && (
-        <button className={styles.unequipButton} onClick={onUnequip}>
-          卸下
+      )}
+      {showWarn && <div className={styles.cellWarnBadge}>!</div>}
+      {isEquipped && (
+        <button
+          className={styles.cellUnequipBtn}
+          onClick={onUnequip}
+          title="卸下"
+        >
+          <Icon icon={closeIcon} className={styles.cellUnequipIcon} />
         </button>
       )}
     </div>
@@ -203,70 +160,61 @@ export const ScavengeCharacterEquip = ({
     <div className={styles.equipPanel}>
       <div className={styles.sectionTitle}>装备</div>
 
-      {/* 武器 */}
-      <div className={styles.equipGroup}>
-        <div className={styles.groupTitle}>武器</div>
-        <EquipRow
-          displayName="武器"
-          icon={swords}
-          equipId={charData.weaponId}
-          durability={weaponDur}
-          maxDurability={weaponMaxDur}
-          meetsRequirements={weaponMeetsReq}
-          onUnequip={() => onUnequip('weapon')}
-          hoverProps={charData.weaponId ? makeItemHoverProps(charData.weaponId, weaponInstance, charData) : undefined}
-          stealth={weaponStealth}
-          currentStealth={weaponCurrentStealth}
-        />
-      </div>
-
-      {/* 护甲 6 部位 */}
-      <div className={styles.equipGroup}>
-        <div className={styles.groupTitle}>护甲</div>
-        <div className={styles.armorGrid}>
-          {armorSlots.map(({ field, kind, icon }) => {
-            const itemId = charData[field] as string | undefined;
-            const instance = charData.equipped?.[kind];
-            const def = instance ? getItemById(instance.itemId) : undefined;
-            const meetsReq = def
-              ? meetsEquipmentRequirements(charData, def.type === 'equipment' ? def.requirements ?? null : null)
-              : true;
-            const dur = instance ? getItemDurability(instance) : undefined;
-            const maxDur = instance ? getItemMaxDurability(instance) : undefined;
-            return (
-              <EquipRow
-                key={field}
-                displayName={ARMOR_SLOT_NAMES[kind]}
-                icon={icon}
-                equipId={itemId}
-                durability={dur}
-                maxDurability={maxDur}
-                meetsRequirements={meetsReq}
-                onUnequip={() => onUnequip(kind)}
-                hoverProps={itemId ? makeItemHoverProps(itemId, instance, charData) : undefined}
-                stealth={def?.stealth}
-                currentStealth={instance ? getItemCurrentStealth(instance) : undefined}
-              />
-            );
-          })}
+      {/* 2026-06-09 改：左右两组（左边 2*3 护甲 + 右边 1*2 武器/工具），中间留空 */}
+      <div className={styles.equipLayout}>
+        {/* 左边：6 护甲 2*3 网格 */}
+        <div className={styles.equipGroup}>
+          <div className={styles.groupTitle}>护甲</div>
+          <div className={styles.armorGrid}>
+            {armorSlots.map(({ field, kind, icon }) => {
+              const itemId = charData[field] as string | undefined;
+              const instance = charData.equipped?.[kind];
+              const def = instance ? getItemById(instance.itemId) : undefined;
+              const meetsReq = def
+                ? meetsEquipmentRequirements(charData, def.type === 'equipment' ? def.requirements ?? null : null)
+                : true;
+              const dur = instance ? getItemDurability(instance) : undefined;
+              const maxDur = instance ? getItemMaxDurability(instance) : undefined;
+              return (
+                <EquipCell
+                  key={field}
+                  icon={icon}
+                  equipId={itemId}
+                  durability={dur}
+                  maxDurability={maxDur}
+                  meetsRequirements={meetsReq}
+                  onUnequip={() => onUnequip(kind)}
+                  hoverProps={itemId ? makeItemHoverProps(itemId, instance, charData) : undefined}
+                />
+              );
+            })}
+          </div>
         </div>
-      </div>
 
-      {/* 工具 */}
-      <div className={styles.equipGroup}>
-        <div className={styles.groupTitle}>工具</div>
-        <EquipRow
-          displayName="工具"
-          icon={build}
-          equipId={charData.toolId}
-          durability={toolDur}
-          maxDurability={toolMaxDur}
-          meetsRequirements={toolMeetsReq}
-          onUnequip={() => onUnequip('tool')}
-          hoverProps={charData.toolId ? makeItemHoverProps(charData.toolId, toolInstance, charData) : undefined}
-          stealth={toolStealth}
-          currentStealth={toolCurrentStealth}
-        />
+        {/* 右边：武器 + 工具 1*2 网格，中间留空 */}
+        <div className={styles.equipGroup}>
+          <div className={styles.groupTitle}>武器 / 工具</div>
+          <div className={styles.weaponToolGrid}>
+            <EquipCell
+              icon={swords}
+              equipId={charData.weaponId}
+              durability={weaponDur}
+              maxDurability={weaponMaxDur}
+              meetsRequirements={weaponMeetsReq}
+              onUnequip={() => onUnequip('weapon')}
+              hoverProps={charData.weaponId ? makeItemHoverProps(charData.weaponId, weaponInstance, charData) : undefined}
+            />
+            <EquipCell
+              icon={build}
+              equipId={charData.toolId}
+              durability={toolDur}
+              maxDurability={toolMaxDur}
+              meetsRequirements={toolMeetsReq}
+              onUnequip={() => onUnequip('tool')}
+              hoverProps={charData.toolId ? makeItemHoverProps(charData.toolId, toolInstance, charData) : undefined}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

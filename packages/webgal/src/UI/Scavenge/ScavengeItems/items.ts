@@ -805,6 +805,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     maxDurability: 50,
     armorSlot: 'chest',
     requirements: { str: 3 },
+    defense: 2,  // 2026-06-09 改：低防御换高潜行（标准 chest 6）
     stealth: 5,
   },
   {
@@ -822,6 +823,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     // 同稀有度 epic chest 200 → 1/3 ≈ 67
     maxDurability: 67,
     armorSlot: 'chest',
+    defense: 3,  // 2026-06-09 改：低防御（标准 epic chest 9）
     stealth: 15,
   },
   {
@@ -839,6 +841,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     // 同稀有度 epic chest 200 → 1/3 ≈ 67
     maxDurability: 67,
     armorSlot: 'chest',
+    defense: 3,  // 2026-06-09 改：低防御（标准 epic chest 9）
     stealth: 8,
   },
   {
@@ -856,6 +859,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     // 同稀有度 rare boots 90 → 1/3 = 30
     maxDurability: 30,
     armorSlot: 'boots',
+    defense: 1,  // 2026-06-09 改：低防御（标准 rare boots 3）
     stealth: 4,
   },
   {
@@ -873,6 +877,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     // 同稀有度 rare gloves 70 → 1/3 ≈ 23
     maxDurability: 23,
     armorSlot: 'gloves',
+    defense: 1,  // 2026-06-09 改：低防御（标准 rare gloves 2）
     stealth: 3,
   },
 

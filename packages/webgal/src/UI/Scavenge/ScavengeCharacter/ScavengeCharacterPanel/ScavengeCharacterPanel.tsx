@@ -703,17 +703,35 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
 
   // ==================== 工具函数 ====================
 
-  const calcWeight = (items: (InventoryItem | null)[]): number => {
-    return items.reduce((total, invItem) => {
-      if (!invItem) return total;
-      const item = getItemById(invItem.itemId);
-      if (item) return total + item.weight * invItem.quantity;
-      return total;
-    }, 0);
+  // 2026-06-09 改：calcWeight 接受 charData，同时累加 inventory + equipped 的负重
+  // 装备 instance 在 char.equipped 里（不在 inventory），所以要单独累加
+  // 8 个装备槽（weapon + 6 护甲 + tool）
+  const EQUIP_SLOT_KEYS = ['weapon', 'helmet', 'chest', 'arms', 'gloves', 'legs', 'boots', 'tool'] as const;
+
+  const calcWeight = (charData: ScavengeCharacter): number => {
+    let total = 0;
+    // 1. 背包里的物品
+    for (const invItem of charData.inventory ?? []) {
+      if (!invItem) continue;
+      const def = getItemById(invItem.itemId);
+      if (def) total += def.weight * invItem.quantity;
+    }
+    // 2. 装备栏的装备（2026-06-09 改：也算负重）
+    // 装备 instance 是单件（quantity=1），直接用 def.weight
+    for (const slotKey of EQUIP_SLOT_KEYS) {
+      const instance = charData.equipped?.[slotKey];
+      if (!instance) continue;
+      const def = getItemById(instance.itemId);
+      if (def) total += def.weight;
+    }
+    return total;
   };
 
   const characters = getCharacters();
-  const safeCharacters = characters.map(c => ({ ...c, inventory: c.inventory ?? [] }));
+  // 2026-06-09 改：跑 normalizeCharacter（装备迁移：inventory → equipped + 数据验证）
+  // 之前用 `({ ...c, inventory: c.inventory ?? [] })` 跳过了 normalizeCharacter
+  // 导致 equipped 字段始终是空 → armorTotal = 0（bug，露西 3 件护甲却显示 0）
+  const safeCharacters = characters.map(c => normalizeCharacter(c));
   const warehouseItems = getWarehouse();
 
   return (
@@ -735,7 +753,8 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
             safeCharacters.map(char => {
               const charData = char;
               const inventory = charData.inventory;
-              const totalWeight = calcWeight(inventory);
+              // 2026-06-09 改：传 charData（含 equipped）
+              const totalWeight = calcWeight(charData);
               const maxWeight = getMaxCarryWeight(charData);
               const isOver = dragOverTarget === charData.id;
               return (

@@ -171,3 +171,72 @@
   min-width: 32px;
   text-align: right;
 }
+// ============== 2026-06-09 加：状态圆环（替代水平进度条） ==============
+
+.ringRow {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 4px 2px;
+}
+
+.ringItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 56px;
+  flex: 1;
+}
+
+.ringSvgWrap {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  flex-shrink: 0;
+}
+
+.ringSvg {
+  display: block;
+}
+
+.ringFg {
+  // 注：stroke 颜色由 inline style 控制（按状态色）
+  transition: stroke-dashoffset 0.4s ease;
+}
+
+.ringIcon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.ringIconInner {
+  font-size: 22px;
+  // 颜色由 inline style 控制
+}
+
+.ringLabel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.ringName {
+  color: #a0a0a0;
+  font-size: 10px;
+}
+
+.ringValue {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}

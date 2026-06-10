@@ -119,7 +119,14 @@ const calcEnemyDamage = (attackDamage: number, critMult: number, armor: number):
   return Math.max(1, Math.floor(attackDamage * critMult * (1 - reduction)));
 };
 
-/** 角色攻击伤害：weapon.damage * (1 + str/100) * critMult，floor */
+/** 角色攻击伤害（2026-06-09 改：平方根递增）
+ *
+ * 公式：floor( base × (1 + sqrt(str)/10) × critMult )
+ * - base = rollWeaponDamage(武器)
+ * - str 倍率 = 1 + sqrt(str)/10（取代旧的 1 + str/100）
+ * - 平方根递增：低 str 增长快、高 str 增长慢（避免堆 str 一边倒）
+ *   str 5  → 1.22x  | str 10 → 1.32x  | str 20 → 1.45x  | str 30 → 1.55x
+ */
 const calcCharacterDamage = (char: ScavengeCharacter, combatant: Combatant, critMult: number): number => {
   let base: number;
   if (combatant.isFists || !combatant.weaponDef) {
@@ -127,20 +134,28 @@ const calcCharacterDamage = (char: ScavengeCharacter, combatant: Combatant, crit
   } else {
     base = rollWeaponDamage(combatant.weaponDef.id);
   }
-  return Math.max(1, Math.floor(base * (1 + char.str / 100) * critMult));
+  const strMult = 1 + Math.sqrt(char.str) / 10;
+  return Math.max(1, Math.floor(base * strMult * critMult));
 };
 
 /** 角色 attackSpeed（按当前武器/fist 状态计算） */
 const computeCharacterAttackSpeed = (char: ScavengeCharacter, combatant: Combatant): number => {
+  // 2026-06-09 改：平方根递增（取代旧的 agi*6 * speedMult 线性公式）
+  // - agi 5  → sqrt(5) * 6 ≈ 13.4
+  // - agi 8  → sqrt(8) * 6 ≈ 17.0
+  // - agi 15 → sqrt(15) * 6 ≈ 23.2
+  // - agi 30 → sqrt(30) * 6 ≈ 32.9
+  // 平方根递增：低 agi 提升快，高 agi 提升慢（避免堆 agi 一边倒）
+  const baseSpeed = Math.sqrt(char.agi) * 6;
   if (combatant.isFists || !combatant.weaponDef) {
-    return char.agi * 6;
+    return baseSpeed;
   }
   const speedMod = getWeaponSpeedModifier(combatant.weaponDef.id);
   const speedMult = SPEED_MODIFIER_MULTIPLIER[speedMod];
   const weaponAgiBonus = combatant.weaponDef.attributes?.agi
     ? combatant.weaponDef.attributes.agi * 0.5
     : 0;
-  return char.agi * 6 * speedMult + weaponAgiBonus;
+  return baseSpeed * speedMult + weaponAgiBonus;
 };
 
 // ============== 护甲吸收伤害 ==============

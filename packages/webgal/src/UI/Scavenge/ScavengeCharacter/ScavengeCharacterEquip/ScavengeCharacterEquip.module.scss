@@ -1,3 +1,5 @@
+// ============== 装备面板 ==============
+
 .equipPanel {
   padding: 16px 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
@@ -11,10 +13,17 @@
   margin-bottom: 12px;
 }
 
-// ============== 装备分组 ==============
+// ============== 整体 3 列网格布局（2026-06-09 改：3 列等分，护甲跨前 2 列）==============
+
+.equipLayout {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: start;
+}
 
 .equipGroup {
-  margin-bottom: 14px;
+  // 子 group 自身无外边距
 }
 
 .groupTitle {
@@ -24,168 +33,125 @@
   letter-spacing: 0.5px;
 }
 
-// ============== 护甲 6 部位网格 ==============
+// ============== 护甲 6 部位 2*3 网格（占前 2 列）==============
 
 .armorGrid {
+  grid-column: 1 / 3;  // 跨前 2 列
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px 8px;
-}
-
-// ============== 单个装备行 ==============
-
-.equipItem {
-  display: flex;
-  align-items: center;
+  grid-template-columns: 60px 60px;
   gap: 8px;
-  padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 6px;
-  transition: background 0.2s ease;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.07);
-  }
 }
 
-.equipIcon {
-  width: 32px;
-  height: 32px;
+// ============== 武器 / 工具 1*2 网格（占第 3 列）==============
+
+.weaponToolGrid {
+  grid-column: 3;  // 单列
+  display: grid;
+  grid-template-columns: 60px;
+  gap: 8px;
+}
+
+// ============== 装备格（2026-06-09 改：和背包 .gridItem 一致，aspect-ratio 1）==============
+
+.equipCell {
+  position: relative;
+  aspect-ratio: 1;  // 1:1 正方形，大小由 grid 1fr 决定（同背包）
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 255, 255, 0.1);  // 统一边框，不用颜色区分
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 6px;
-  flex-shrink: 0;
-  color: #b0b0b0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
+  }
 }
 
-.iconSvg {
-  font-size: 18px;
+.cellIcon {
+  font-size: 28px;  // 2026-06-09 改：和背包 .itemIcon 一致
+  color: #c0c0c0;
+  pointer-events: none;
 }
 
-.equipInfo {
-  flex: 1;
-  min-width: 0;
-}
-
-.equipHeader {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 2px;
-}
-
-.equipType {
-  font-size: 10px;
-  color: #808080;
-  padding: 1px 5px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 3px;
-  flex-shrink: 0;
-  letter-spacing: 0.3px;
-}
-
-.equipName {
-  font-size: 13px;
-  color: #e0e0e0;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.equipEmpty {
+.cellEmpty {
   font-size: 12px;
-  color: #606060;
-  font-style: italic;
+  color: #555;
+  letter-spacing: 1px;
 }
 
-// ============== 耐久条 ==============
-
-.durabilityRow {
+// 状态角标：损坏 / 需求不满足时显示
+.cellWarnBadge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #F44336;
+  color: #fff;
+  font-size: 10px;
+  font-weight: bold;
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 4px;
+  justify-content: center;
+  pointer-events: none;
 }
 
-.durabilityTrack {
-  flex: 1;
+// 耐久条（2026-06-09 改：和背包 .itemDurability 一致——贴满底部、底部圆角）
+.cellDurabilityTrack {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
   height: 4px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 0 0 6px 6px;
   overflow: hidden;
 }
 
-.durabilityFill {
+.cellDurabilityFill {
   height: 100%;
-  border-radius: 2px;
+  border-radius: 0;
   transition: width 0.3s ease, background-color 0.3s ease;
 }
 
-.durabilityText {
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  flex-shrink: 0;
-  min-width: 50px;
-  text-align: right;
-}
-
-// ============== 警告文字 ==============
-
-.reqWarning {
-  font-size: 10px;
-  color: #ff6b6b;
-  margin-top: 2px;
-  font-weight: 500;
-}
-
-.brokenWarning {
-  font-size: 10px;
-  color: #ff5252;
-  margin-top: 2px;
-  font-weight: 500;
-}
-
-// ============== 潜行值标签（2026-06-08 加，2026-06-08 改↓ 提示）==============
-
-.stealthTag {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 5px;
-  border: 1px solid;
-  border-radius: 3px;
-  margin-left: 4px;
-  letter-spacing: 0.3px;
-  flex-shrink: 0;
-}
-
-.stealthTagHint {
-  margin-left: 3px;
-  color: #FFC107;
-  font-weight: 700;
-  font-size: 11px;
-}
-
-// ============== 卸下按钮 ==============
-
-.unequipButton {
-  padding: 3px 8px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-  color: #a0a0a0;
+// 卸下按钮（hover 显示，右下角圆形 X）
+.cellUnequipBtn {
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ff8a80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  font-size: 11px;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
+  padding: 0;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
 
   &:hover {
-    background: rgba(255, 100, 100, 0.2);
-    color: #ff6b6b;
-    border-color: rgba(255, 100, 100, 0.4);
+    background: rgba(244, 67, 54, 0.8);
+    color: #fff;
   }
+}
+
+.equipCell:hover .cellUnequipBtn {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.cellUnequipIcon {
+  font-size: 14px;
 }
