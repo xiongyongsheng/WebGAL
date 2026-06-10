@@ -4,30 +4,38 @@
  * 派生属性从"基础属性 (str/agi/end) + 装备"线性公式算出。
  * 这些是**战斗时的实时派生值**，**不存 GameVar**。
  *
- * ===== 攻击伤害公式（2026-06-09 改：平方根递增）=====
+ * ===== 攻击伤害公式（2026-06-09 改：平方根递增，系数 /10 → /6）=====
  * - 武器伤害 = weapon.rollDamage()（每次命中在 weapon.damageRange 内随机）
- * - 力量加成：weapon.damage * (1 + sqrt(str)/10)
- *   旧版是 1 + str/100（每点 +1%），新版平方根递增（低 str 提升快、高 str 弱化）
- *   str 5  → 1.22x | str 10 → 1.32x | str 20 → 1.45x | str 30 → 1.55x
+ * - 力量加成：weapon.damage * (1 + sqrt(str)/6)
+ *   str 5  → 1.37x | str 9  → 1.50x | str 30 → 1.91x | str 67 → 2.36x | str 100 → 2.67x
+ *   配合 30 级封顶 + 升级 +2 main +2 free，单属性可堆到 67+，伤害显著提升
  * - 暴击：× critMultiplier（1.5x）
  * - 最终伤害 = 上面这些相乘后向下取整
  *
- * ===== 攻击速度公式（2026-06-09 改：平方根递增）=====
- * - 基础：sqrt(agi) * 6（agi 5 时 ≈ 13.4，agi 8 时 ≈ 17.0）
+ * ===== 攻击速度公式（2026-06-09 改：平方根递增，系数 ×6 → ×8）=====
+ * - 基础：sqrt(agi) * 8（agi 5 时 ≈ 17.9，agi 8 时 ≈ 22.6）
  * - 武器 speedModifier：fast × 1.3 / normal × 1.0 / slow × 0.7
  * - 武器 attributes.agi 也会加成
- * - 平方根递增：agi 5 → 13.4 | agi 8 → 17.0 | agi 15 → 23.2 | agi 30 → 32.9
+ * - agi 5 → 17.9 | agi 8 → 22.6 | agi 15 → 31.0 | agi 30 → 43.8 | agi 64 → 64.0
  *
- * ===== 护甲值（2026-06-07 与产品确认）=====
- * - 不再是减伤值，改为"总耐久"显示
- * - 公式 = sum(6 个护甲 slot 当前耐久)
+ * ===== HP / 负重（2026-06-09 改：系数加强 ×5→×8 HP / ×3→×5 负重）=====
+ * - maxHp = 100 + (end - 5) * 8
+ *   end 5 → 100 | end 6 → 108 | end 30 → 300 | end 64 → 572
+ * - maxCarry = MAX_CARRY_WEIGHT + (end - 5) * 5
+ *   end 5 → 25 | end 6 → 30 | end 30 → 125 | end 64 → 320
+ *
+ * ===== 命中 / 暴击 / 闪避 / 隐蔽（2026-06-09 改：平方根递增，加强上限）=====
+ * - 命中率 = 0.5 + sqrt(agi) * 0.04  (50% / 50% / 0.83% / 0.97%)
+ * - 闪避率 = sqrt(agi) * 0.04      (0 / 9% / 12% / 15%)
+ * - 暴击率 = 0.05 + sqrt(agi) * 0.015 (5% / 8.7% / 10% / 15%)
+ * - 隐蔽率 = sqrt(agi) * 0.04      (0 / 9% / 12% / 15%)
+ * - 旧版线性公式太弱，30 级 agi 64 时只能涨 30%
+ * - 新版平方根让 agi 5 即可见明显加成（+50% 命中），高 agi 上限更广
+ *
+ * ===== 护甲值（2026-06-07 与产品确认，2026-06-09 公式不变）=====
+ * - 不再是减伤值，改为"装备 defense 总和 × 当前耐久比例"
+ * - 公式 = Σ(piece.def.defense * currentDur / maxDur)
  * - 战斗时：被击中 → 随机选一个有耐久的 slot → 扣耐久，超出归 HP
- *
- * ===== 命中 / 暴击 / 闪避 / 隐蔽（保持原公式）=====
- * - 隐蔽率 = agi * 2%（0~10%）
- * - 命中率 = 50% + agi * 3%（50%~65%）
- * - 闪避率 = agi * 2%（0~10%）
- * - 暴击率 = 5% + agi * 1%（5%~10%）
  *
  * ===== 拳头（无武器）=====
  * - FIST_DAMAGE = 2（伤害很低）
@@ -253,19 +261,19 @@ export interface DerivedCombatStats {
 }
 
 /**
- * 武器伤害期望值（用于 UI 显示，2026-06-09 改：平方根递增）
- * = floor(damageRange[1] * (1 + sqrt(str)/10))
+ * 武器伤害期望值（用于 UI 显示，2026-06-09 改：平方根递增，系数 /10 → /6）
+ * = floor(damageRange[1] * (1 + sqrt(str)/6))
  * - 用 max 不用 min/avg：UI 显示"理论上限"，方便对比装备强度
- * - 实际战斗伤害 = rollWeaponDamage() * (1 + sqrt(str)/10) * critMult，由 combat.ts 实时算
+ * - 实际战斗伤害 = rollWeaponDamage() * (1 + sqrt(str)/6) * critMult，由 combat.ts 实时算
  */
 export const computeWeaponExpectedDamage = (char: ScavengeCharacter): number => {
   const weapon = getEquippedWeapon(char);
   if (!weapon || !weapon.def.damageRange) {
     // 无武器 → 拳头
-    return Math.floor(FIST_DAMAGE * (1 + Math.sqrt(char.str) / 10));
+    return Math.floor(FIST_DAMAGE * (1 + Math.sqrt(char.str) / 6));
   }
   const [, maxDmg] = weapon.def.damageRange;
-  return Math.floor(maxDmg * (1 + Math.sqrt(char.str) / 10));
+  return Math.floor(maxDmg * (1 + Math.sqrt(char.str) / 6));
 };
 
 /**
@@ -324,16 +332,19 @@ export const computeDerivedStats = (char: ScavengeCharacter, isNight: boolean = 
 
   return {
     attackDamage: computeWeaponExpectedDamage(char),
-    // 2026-06-09 改：agi*4 → sqrt(agi)*6（平方根递增）
+    // 2026-06-09 改：agi*4 → sqrt(agi)*8（平方根递增，系数 ×6 → ×8）
     // - 取代旧的"agi*4 * speedMult + weaponAgiBonus"
     // - 平方根递增：低 agi 提升快、高 agi 提升慢
     // - 武器 speedMult / weaponAgiBonus 保留叠加
-    attackSpeed: Math.sqrt(char.agi) * 6 * speedMult + weaponAgiBonus,
+    // - 30 级 agi 64 主角 → sqrt(64)*8 = 64 attackSpeed
+    // - 30 级 agi 66 露西 → sqrt(66)*8*1.3(fast) ≈ 67 attackSpeed
+    attackSpeed: Math.sqrt(char.agi) * 8 * speedMult + weaponAgiBonus,
     armor: armorTotal,
     stealth,
-    accuracy: clamp01(0.5 + char.agi * 0.03),
-    evasion: clamp01(char.agi * 0.02),
-    critRate: clamp01(0.05 + char.agi * 0.01),
+    // 2026-06-09 改：命中/闪避/暴击 全部改平方根公式（加强上限，30 级 agi 64 时能涨到 80-90%）
+    accuracy: clamp01(0.5 + Math.sqrt(char.agi) * 0.04),       // agi 5 → 0.59 | agi 64 → 0.82
+    evasion: clamp01(Math.sqrt(char.agi) * 0.04),                // agi 5 → 0.09 | agi 64 → 0.32
+    critRate: clamp01(0.05 + Math.sqrt(char.agi) * 0.015),     // agi 5 → 0.08 | agi 64 → 0.17
   };
 };
 

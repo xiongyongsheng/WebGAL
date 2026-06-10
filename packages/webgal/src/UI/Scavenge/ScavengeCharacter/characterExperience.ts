@@ -3,10 +3,11 @@
  *
  * 集中"经验获得 → 升级 → 属性点"的纯函数逻辑。
  *
- * 设计（2026-06-05 与产品确认）：
+ * 设计（2026-06-05 与产品确认，2026-06-09 改：30 级封顶 +2/+2）：
  * - 经验来源：时间推进（characterTimeEffects 里调 gainExp）+ 战斗（接口预留）+ 事件（接口预留）
  * - 升级曲线：递增（1→2=100, 2→3=200, 3→4=300, ...）
- * - 升级奖励：主属性 +2 + 未分配 statPoints +1（半自动）
+ * - 升级奖励：主属性 +2 + 未分配 statPoints +2（半自动）
+ * - 30 级封顶 → 共 29 次升级 → 主角 L30 单属性最多 25+58=83
  * - 玩家手动分配 statPoints
  *
  * 2026-06-05 接口预留：
@@ -24,8 +25,10 @@ export const EXP_PER_LEVEL_INCREMENT = 100;
 /** 升级时主属性自动 +N */
 export const STAT_AUTO_PER_LEVEL = 2;
 
-/** 升级时未分配 statPoints +N（玩家手动分配） */
-export const STAT_MANUAL_PER_LEVEL = 1;
+/** 升级时未分配 statPoints +N（玩家手动分配）
+ * 2026-06-09 改：1 → 2（配合 30 级封顶，加强自由点回报）
+ */
+export const STAT_MANUAL_PER_LEVEL = 2;
 
 // ============== 经验获得 API ==============
 
@@ -76,7 +79,7 @@ export const gainExpFromEvent = (char: ScavengeCharacter, amount: number): Scave
 // ============== 升级 API ==============
 
 /**
- * 单次升级：+1 level, exp 扣减 expToNext, 主属性+2, statPoints+1, 下一级所需递增
+ * 单次升级：+1 level, exp 扣减 expToNext, 主属性+2, statPoints+2, 下一级所需递增
  */
 export const levelUp = (char: ScavengeCharacter): ScavengeCharacter => {
   return {

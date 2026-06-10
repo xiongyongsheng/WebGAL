@@ -105,14 +105,17 @@ export interface ScavengeCharacter {
 
 /**
  * 默认主角角色数据
+ * 2026-06-09 改：初始属性 25 点（主角专属）—— str=9 最强, agi=6=end=6 次之
+ * 总和 = str + agi + end + int = 9+6+6+4 = 25
+ * 注意：实际初始化从 scavenge_main.txt 读取，DEFAULT_CHARACTER 是兜底
  */
 export const DEFAULT_CHARACTER: ScavengeCharacter = {
   id: 'player_1',
   name: '主角',
-  str: 5,
-  agi: 5,
-  end: 5,
-  int: 5,
+  str: 9,
+  agi: 6,
+  end: 6,
+  int: 4,
   hp: 100,
   maxHp: 100,
   hunger: 100,

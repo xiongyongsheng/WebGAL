@@ -118,6 +118,13 @@ export interface EquipmentItem extends BaseItem {
   damageRange?: [number, number];
   /** 武器攻击速度标签 */
   speedModifier?: WeaponSpeedModifier;
+  /**
+   * 武器类型（2026-06-09 加）：
+   * - 'sharp' 锐利：伤害高 + 速度快 + 耐久低
+   * - 'blunt' 钝器：伤害中 + 速度慢 + 耐久高
+   * 决定武器的"性格"和适用角色
+   */
+  weaponType?: 'sharp' | 'blunt';
   // ----- 护甲专属 -----
   /** 护甲部位（helmet/chest/arms/gloves/legs/boots） */
   armorSlot?: ArmorSlot;
@@ -396,9 +403,10 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     icon: 'material-symbols:construction',
     slot: 'weapon',
     attributes: {},
-    maxDurability: 100,
-    damageRange: [6, 7],
+    maxDurability: 150,        // 2026-06-09 改：钝器耐久高（100 → 150）
+    damageRange: [5, 6],        // 2026-06-09 改：钝器伤害稍低（6-7 → 5-6）
     speedModifier: 'normal',
+    weaponType: 'blunt',         // 2026-06-09 加：钝器
     requirements: { str: 4 },
   },
   {
@@ -412,10 +420,11 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     weight: 1.2,
     icon: 'material-symbols:content-cut',
     slot: 'weapon',
-    attributes: {},
-    maxDurability: 100,
+    attributes: {},              // 2026-06-09 改：移除 agi+2（取消装备 attributes 加成）
+    maxDurability: 60,          // 2026-06-09 改：锐利耐久低（100 → 60）
     damageRange: [7, 8],
     speedModifier: 'fast',
+    weaponType: 'sharp',         // 2026-06-09 加：锐利
     requirements: { str: 4, agi: 4 },
   },
   {
@@ -430,9 +439,10 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     icon: 'material-symbols:forest-outline',
     slot: 'weapon',
     attributes: {},
-    maxDurability: 120,
-    damageRange: [10, 12],
-    speedModifier: 'slow',
+    maxDurability: 80,         // 2026-06-09 改：锐利耐久低（120 → 80）
+    damageRange: [9, 11],       // 2026-06-09 改：锐利伤害（10-12 → 9-11，避免过高）
+    speedModifier: 'fast',      // 2026-06-09 改：锐利快（slow → fast）
+    weaponType: 'sharp',         // 2026-06-09 加：锐利
     requirements: { str: 6 },
   },
   {
@@ -446,10 +456,11 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     weight: 1.8,
     icon: 'material-symbols:hardware',
     slot: 'weapon',
-    attributes: {},
-    maxDurability: 90,
-    damageRange: [8, 10],
+    attributes: {},              // 2026-06-09 改：移除 str+2（取消装备 attributes 加成）
+    maxDurability: 180,         // 2026-06-09 改：钝器耐久极高（90 → 180）
+    damageRange: [6, 8],         // 2026-06-09 改：钝器伤害（8-10 → 6-8）
     speedModifier: 'slow',
+    weaponType: 'blunt',          // 2026-06-09 加：钝器
     requirements: { str: 5 },
   },
   {
@@ -463,11 +474,67 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
     weight: 0.5,
     icon: 'material-symbols:gavel',
     slot: 'weapon',
-    attributes: {},
-    maxDurability: 150,
+    attributes: {},              // 2026-06-09 改：移除 agi+1（取消装备 attributes 加成）
+    maxDurability: 80,          // 2026-06-09 改：锐利耐久低（150 → 80）
     damageRange: [6, 8],
     speedModifier: 'fast',
+    weaponType: 'sharp',          // 2026-06-09 加：锐利
     requirements: { agi: 5 },
+  },
+  // ----- 2026-06-09 加：3 把新武器（强化锐利/钝器分化）-----
+  {
+    id: 'weapon_sword',
+    name: '开山刀',
+    type: 'equipment',
+    rarity: 'rare',
+    description: '重型单刃刀，劈砍威力惊人。',
+    stackable: false,
+    maxStack: 1,
+    weight: 1.6,
+    icon: 'material-symbols:swords',
+    slot: 'weapon',
+    attributes: {},                  // 2026-06-09 改：移除 str+1 agi+1（取消装备 attributes 加成）
+    maxDurability: 100,
+    damageRange: [8, 10],
+    speedModifier: 'normal',
+    weaponType: 'sharp',
+    requirements: { str: 5, agi: 3 },
+  },
+  {
+    id: 'weapon_mace',
+    name: '钉头锤',
+    type: 'equipment',
+    rarity: 'rare',
+    description: '钉头密布的破甲锤，对重甲有奇效。',
+    stackable: false,
+    maxStack: 1,
+    weight: 2.2,
+    icon: 'material-symbols:hardware',
+    slot: 'weapon',
+    attributes: {},                  // 2026-06-09 改：移除 str+1（取消装备 attributes 加成）
+    maxDurability: 160,         // 钝器耐久高
+    damageRange: [7, 9],         // 钝器伤害中
+    speedModifier: 'slow',
+    weaponType: 'blunt',
+    requirements: { str: 6 },
+  },
+  {
+    id: 'weapon_club',
+    name: '木棒',
+    type: 'equipment',
+    rarity: 'common',
+    description: '简陋木棒，胜在耐用。',
+    stackable: false,
+    maxStack: 1,
+    weight: 1.0,
+    icon: 'material-symbols:sports-kabaddi',
+    slot: 'weapon',
+    attributes: {},
+    maxDurability: 200,         // 钝器：最耐打
+    damageRange: [4, 5],         // 钝器：最弱
+    speedModifier: 'slow',
+    weaponType: 'blunt',
+    requirements: { str: 2 },
   },
 
   // 护甲

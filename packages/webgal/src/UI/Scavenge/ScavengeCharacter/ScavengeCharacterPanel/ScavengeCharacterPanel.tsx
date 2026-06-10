@@ -246,14 +246,16 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
     return charData[attr] + calculateEquipBonus(charData, attr);
   };
 
+  // 2026-06-09 改：HP 系数 ×5 → ×8（配合 30 级封顶 + 升级 +2/+2）
   const getMaxHp = (charData: ScavengeCharacter): number => {
     const endBonus = getFinalAttr(charData, 'end');
-    return charData.maxHp + (endBonus - 5) * 5;
+    return charData.maxHp + (endBonus - 5) * 8;
   };
 
+  // 2026-06-09 改：负重系数 ×3 → ×5（配合 30 级封顶 + 升级 +2/+2）
   const getMaxCarryWeight = (charData: ScavengeCharacter): number => {
     const totalEnd = charData.end + calculateEquipBonus(charData, 'end');
-    return MAX_CARRY_WEIGHT + (totalEnd - 5) * 3;
+    return MAX_CARRY_WEIGHT + (totalEnd - 5) * 5;
   };
 
   // 饥/渴上限固定 100（生理上限，不随 end / 装备变化）
