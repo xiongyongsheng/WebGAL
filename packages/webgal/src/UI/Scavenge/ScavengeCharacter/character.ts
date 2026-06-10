@@ -50,7 +50,7 @@ export interface ScavengeCharacter {
   maxSanity: number;
   /** 体力值（剩余体力，0 = 精疲力竭） */
   stamina: number;
-  /** 最大体力值（受 end 影响：100 + (end-5)*5） */
+  /** 最大体力值（受 end 影响：100 + end*8，2026-06-09 改：去掉 -5 基准） */
   maxStamina: number;
   /** 装备的武器ID（itemId，inventory 中对应实例提供 durability） */
   weaponId?: string;
@@ -85,6 +85,12 @@ export interface ScavengeCharacter {
   returnDay?: number;
   /** 派遣/探索结束时间：哪个 period（0=清晨, 1=上午, 2=下午, 3=半晚, 4=黑夜） */
   returnPeriodIndex?: number;
+  /**
+   * 角色持有的特性 ID 列表（2026-06-09 加，引用 traits.ts 里定义）
+   * 效果在 computeDerivedStats 实时累加到基础属性/战斗公式上
+   * 支持正面/负面/条件触发（如饥=0 时减益）
+   */
+  traitIds?: string[];
   // ============== 经验/升级系统 ==============
   /** 当前经验值 */
   exp: number;
@@ -195,7 +201,10 @@ export const normalizeCharacter = (char: ScavengeCharacter): ScavengeCharacter =
   const legacyFatigue = (char as unknown as { fatigue?: number; maxFatigue?: number }).fatigue;
   const legacyMaxFatigue = (char as unknown as { maxFatigue?: number }).maxFatigue ?? 100;
   const migratedStamina = char.stamina ?? Math.max(0, legacyMaxFatigue - (legacyFatigue ?? 0));
-  const migratedMaxStamina = char.maxStamina ?? 100;
+  // 2026-06-09 改：maxStamina 不再用字段值，每次加载都按 end 公式重算
+  // 公式：100 + end * 8（与 characterTimeEffects.ts 保持一致）
+  // 原因：scavenge_main.txt 里字段写死 100，UI 读字段直接显示成 100，没体现 end 的加成
+  const migratedMaxStamina = 100 + (char.end ?? 5) * 8;
 
   // 派遣字段兜底：旧数据 isExploring=true 但缺 returnDay/PeriodIndex 时
   // 视为"立即返回"（返回时间=当前 0/0），下次推进会被 checkMissionsProgress 结算/清空
@@ -313,6 +322,7 @@ export const normalizeCharacter = (char: ScavengeCharacter): ScavengeCharacter =
     expToNext: char.expToNext ?? 100,
     statPoints: char.statPoints ?? 0,
     mainStat: char.mainStat ?? 'str',
+    traitIds: Array.isArray(char.traitIds) ? char.traitIds : [],
     strategy: (char.strategy === 'stealth' || char.strategy === 'combat') ? char.strategy : 'combat',
     inventory: workingInventory,
     equipped: workingEquipped,

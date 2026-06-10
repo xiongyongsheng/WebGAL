@@ -52,18 +52,22 @@ const clamp = (v: number, min: number, max: number): number =>
  * 简化版 max 计算：
  * - 饥/渴上限固定 100（生理上限，不随属性变化）
  * - sanity 上限用字段（init 时 100）
- * - 体力上限受 end 影响：100 + (end-5)*5（end 仅影响上限，不影响消耗/恢复）
- * - HP 上限受 end 影响
+ * - 体力上限受 end 影响：100 + end * 8（2026-06-09 改：去掉 -5 基准）
+ * - HP 上限受 end 影响：hpBase + end * 8（2026-06-09 改：去掉 -5 基准）
  *
  * 2026-06-05 与产品确认：
  * - max 饥/渴固定 100
  * - 体力上限受 end 影响
+ *
+ * 2026-06-09 改：去掉 -5 基准，直接 end * 8
+ * 重要：必须与 ScavengeCharacterPanel.getMaxHp 保持一致
+ * 否则每 period 推进都会把 HP/stamina clamp 到旧值，玩家会看到属性突然下降
  */
 const maxHungerFor = (c: ScavengeCharacter): number => c.maxHunger;
 const maxThirstFor = (c: ScavengeCharacter): number => c.maxThirst;
 const maxSanityFor = (sanityBase: number): number => sanityBase;
-const maxStaminaFor = (c: ScavengeCharacter): number => 100 + (c.end - 5) * 5;
-const maxHpFor = (hpBase: number, end: number): number => hpBase + (end - 5) * 5;
+const maxStaminaFor = (c: ScavengeCharacter): number => 100 + c.end * 8;
+const maxHpFor = (hpBase: number, end: number): number => hpBase + end * 8;
 
 // ============== 公开 API ==============
 

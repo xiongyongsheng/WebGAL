@@ -30,6 +30,7 @@ interface ScavengeCharacterStatusProps {
   maxHp: number;
   maxHunger: number;
   maxThirst: number;
+  maxStamina: number;  // 2026-06-09 加：体力上限（带特性加成）
   // 注：属性加点 UI 已迁出到 ScavengeCharacterAttributes（暂存+保存模式）
 }
 
@@ -88,6 +89,7 @@ export const ScavengeCharacterStatus = ({
   maxHp,
   maxHunger,
   maxThirst,
+  maxStamina,  // 2026-06-09 加：体力上限（带特性加成）
 }: ScavengeCharacterStatusProps) => {
   const expPercent = getExpProgress(charData) * 100;
   const hasPoints = charData.statPoints > 0;
@@ -157,7 +159,7 @@ export const ScavengeCharacterStatus = ({
           icon={localFireDepartment}
           label="体力值"
           value={charData.stamina}
-          maxValue={charData.maxStamina}
+          maxValue={maxStamina}
           color={getStatusBarColor(charData.stamina, charData.maxStamina)}
         />
       </div>

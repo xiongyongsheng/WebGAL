@@ -47,6 +47,7 @@ import {
   SPEED_MODIFIER_MULTIPLIER, meetsEquipmentRequirements, ArmorSlot, rollWeaponDamage,
 } from '../ScavengeItems/items';
 import { InventoryItem, getItemDurability, getItemMaxDurability, isItemBroken, getItemCurrentStealth } from '../ScavengeItems/inventory';
+import { sumActiveTraitEffects } from './traits';
 
 /** 拳头（无武器）伤害常量 */
 export const FIST_DAMAGE = 2;
@@ -268,12 +269,15 @@ export interface DerivedCombatStats {
  */
 export const computeWeaponExpectedDamage = (char: ScavengeCharacter): number => {
   const weapon = getEquippedWeapon(char);
+  // 2026-06-09 加：特性系统（str 加成由基础 + 装备 + 特性三者求和）
+  const traitBonus = sumActiveTraitEffects(char);
+  const effectiveStr = char.str + (traitBonus.str ?? 0);
   if (!weapon || !weapon.def.damageRange) {
     // 无武器 → 拳头
-    return Math.floor(FIST_DAMAGE * (1 + Math.sqrt(char.str) / 6));
+    return Math.floor(FIST_DAMAGE * (1 + Math.sqrt(effectiveStr) / 6));
   }
   const [, maxDmg] = weapon.def.damageRange;
-  return Math.floor(maxDmg * (1 + Math.sqrt(char.str) / 6));
+  return Math.floor(maxDmg * (1 + Math.sqrt(effectiveStr) / 6));
 };
 
 /**
@@ -330,6 +334,13 @@ export const computeDerivedStats = (char: ScavengeCharacter, isNight: boolean = 
   stealth = Math.round(stealth);  // 取整，让数字干净
   stealth = Math.min(100, stealth);  // 上界 100；负值保留（装备太暴露）
 
+  // 2026-06-09 加：特性系统 —— 在公式结果上叠加 trait bonus
+  // 基础属性 str/agi/end 是"基础 + 装备 + 特性"，统一用 effectiveXxx
+  // 战斗概率/数值是"公式结果 + trait bonus"，在末尾叠加
+  const traitBonus = sumActiveTraitEffects(char);
+  const effectiveAgi = char.agi + (traitBonus.agi ?? 0);
+  const effectiveStr = char.str + (traitBonus.str ?? 0);
+
   return {
     attackDamage: computeWeaponExpectedDamage(char),
     // 2026-06-09 改：agi*4 → sqrt(agi)*8（平方根递增，系数 ×6 → ×8）
@@ -338,13 +349,23 @@ export const computeDerivedStats = (char: ScavengeCharacter, isNight: boolean = 
     // - 武器 speedMult / weaponAgiBonus 保留叠加
     // - 30 级 agi 64 主角 → sqrt(64)*8 = 64 attackSpeed
     // - 30 级 agi 66 露西 → sqrt(66)*8*1.3(fast) ≈ 67 attackSpeed
-    attackSpeed: Math.sqrt(char.agi) * 8 * speedMult + weaponAgiBonus,
+    // 2026-06-09 加：特性系统 → 基础 agi 已含 trait bonus，attackSpeedBonus 额外叠加
+    attackSpeed: Math.sqrt(effectiveAgi) * 8 * speedMult + weaponAgiBonus + (traitBonus.attackSpeedBonus ?? 0),
     armor: armorTotal,
     stealth,
     // 2026-06-09 改：命中/闪避/暴击 全部改平方根公式（加强上限，30 级 agi 64 时能涨到 80-90%）
-    accuracy: clamp01(0.5 + Math.sqrt(char.agi) * 0.04),       // agi 5 → 0.59 | agi 64 → 0.82
-    evasion: clamp01(Math.sqrt(char.agi) * 0.04),                // agi 5 → 0.09 | agi 64 → 0.32
-    critRate: clamp01(0.05 + Math.sqrt(char.agi) * 0.015),     // agi 5 → 0.08 | agi 64 → 0.17
+    // 2026-06-09 加：特性系统 → 公式用 effectiveAgi，末尾叠加 accuracyBonus/evasionBonus/critRateBonus
+    accuracy: clamp01(0.5 + Math.sqrt(effectiveAgi) * 0.04 + (traitBonus.accuracyBonus ?? 0)),
+    evasion:  clamp01(Math.sqrt(effectiveAgi) * 0.04 + (traitBonus.evasionBonus ?? 0)),
+    critRate: clamp01(0.05 + Math.sqrt(effectiveAgi) * 0.015 + (traitBonus.critRateBonus ?? 0)),
+    // 2026-06-09 加：返回有效 str/agi/end（被面板 / 战斗共用，str/agi 已含 trait bonus）
+    _effectiveStr: effectiveStr,
+    _effectiveAgi: effectiveAgi,
+    _traitBonus: traitBonus,
+  } as DerivedStats & {
+    _effectiveStr: number;
+    _effectiveAgi: number;
+    _traitBonus: ReturnType<typeof sumActiveTraitEffects>;
   };
 };
 
