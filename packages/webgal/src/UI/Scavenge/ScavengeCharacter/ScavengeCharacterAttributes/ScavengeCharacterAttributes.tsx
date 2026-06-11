@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ScavengeCharacter, MainStat, MAIN_STAT_NAMES } from '../character';
 import { getItemById, isEquipment, EquipmentItem } from '../../ScavengeItems/items';
+import { sumActiveTraitEffects } from '../traits';
 import styles from './ScavengeCharacterAttributes.module.scss';
 
 interface ScavengeCharacterAttributesProps {
@@ -37,6 +38,16 @@ export const ScavengeCharacterAttributes = ({
     int: intBonus,
   };
 
+  // 2026-06-09 改：累加特性 bonus（基础 + 装备 + 特性 + 暂存）
+  // 之前只算 base + pend，bonus（装备 + 特性）没加进去
+  const traitBonus = sumActiveTraitEffects(charData);
+  const traitBonusMap: Record<MainStat, number> = {
+    str: traitBonus.str ?? 0,
+    agi: traitBonus.agi ?? 0,
+    end: traitBonus.end ?? 0,
+    int: traitBonus.int ?? 0,
+  };
+
   const totalPending = pending.str + pending.agi + pending.end + pending.int;
   const remainingPoints = charData.statPoints - totalPending;
   const canEdit = charData.statPoints > 0;
@@ -69,9 +80,11 @@ export const ScavengeCharacterAttributes = ({
         {STAT_KEYS.map(stat => {
           const base = charData[stat];
           const bonus = bonusMap[stat];
+          const trait = traitBonusMap[stat];
           const pend = pending[stat];
-          // 暂存时显示：原值 + 暂存 +N
-          const displayValue = base + pend;
+          // 2026-06-09 改：显示 = 基础 + 装备 + 特性 + 暂存
+          // 之前 base + pend 漏掉了装备和特性 bonus
+          const displayValue = base + bonus + trait + pend;
           return (
             <div
               key={stat}
