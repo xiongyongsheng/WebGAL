@@ -1,0 +1,57 @@
+; ====================================================================
+; 主线剧情 - Intro 场景
+;
+; 玩家第一次到 slums（安全屋）后，StoryManager 自动跳到这里
+; 场景结束 → 露西加入 + 跳回 scavenge_main
+;
+; 2026-06-09 改：不再跳到 safehouse_main
+;   - safehouse 是日常反复使用的场景（休息/整理/派遣）
+;   - intro 是剧情专属场景，结束后应该让玩家进入游戏
+;   - 跳回 scavenge_main，让玩家在地图上自由行动
+;
+; 2026-06-09 加：剧情中触发"获得露西"
+;   - 通过 setVar:scavenge_character_ids=[player_1, lucy]
+;   - CharacterRosterManager 监听到后自动从 characterRoster.ts 拉数据
+;   - 玩家从这一刻起就有露西作为同伴
+; ====================================================================
+
+; 关闭拾荒 UI（让玩家专注剧情）
+setVar:show_scavenge_map=false;
+setVar:show_scavenge_time_control=false;
+setVar:scavenge_show_warehouse=false;
+setVar:scavenge_show_character_list=false;
+setVar:scavenge_show_menu=true;
+
+; 主角视角的内心独白（无角色立绘，用普通 say）
+你缓缓睁开眼睛。周围是破败的天花板，锈迹斑斑的水管发出滴水声。;
+空气中弥漫着霉味和消毒水混合的气息。;
+你不知道自己是怎么来到这里的。;
+
+窗外是灰蒙蒙的天空。远处的城市轮廓残破不堪。街道上几乎看不到行人。;
+
+; 门被推开的声音
+咔哒——门被推开了。;
+
+; 露西出场
+露西:你醒了。;
+露西:我叫露西，就住在隔壁。前几天看到你被扔在这里……就顺手照看了下。;
+露西:外面已经没多少活着的人了，物资也越来越难找。;
+露西:……你愿意和我一起吗？两个人总比一个人好。;
+
+; 主角内心
+你看着眼前这个瘦削但眼神坚定的女孩，点了点头。;
+
+; 把露西加入队伍（触发 characterRoster manager）
+setVar:scavenge_character_ids=[player_1,lucy];
+
+; 打开拾荒 UI
+setVar:show_scavenge_map=true;
+setVar:show_scavenge_time_control=true;
+setVar:scavenge_show_menu=true;
+
+; 跳回拾荒地图（玩家可以自由行动了）
+; 2026-06-09 改：从 safehouse_main 改为 scavenge_main
+;   原因：safehouse 是日常场景，intro 是剧情专属场景，不应该混用
+; 2026-06-09 修：路径不带 ./game/scene/ 前缀（assetSetter 会自动加）
+;   否则会变成 ./game/scene/./game/scene/scavenge/scavenge_main.txt（404）
+changeScene:scavenge/scavenge_main.txt;

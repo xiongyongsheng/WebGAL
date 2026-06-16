@@ -117,10 +117,9 @@ const RAW_LOCATIONS: ScavengeLocationItem[] = [
     position: { x: 30, y: 70 },
     isUnlocked: true,
     regionColor: '#4CAF50',
-    // 2026-06-09 加：点击直接跳转到安全屋场景
-    // 2026-06-09 修：URL 必须是 ./game/scene/... 格式（assetSetter 约定）
-    // 否则 axios.get('safehouse/...') 会走当前页根目录 → 404 → 返回 index.html
-    // → HTML 被当场景文本 → 显示 <!DOCTYPE html>
+    // 2026-06-09 加：点击跳转到安全屋场景
+    // 但首次点击时，剧情系统会优先触发 intro（handleLocationSelect 检测红点）
+    // 剧情完成后，再点 slums 才会真正跳到 safehouse
     jumpScene: './game/scene/safehouse/safehouse_main.txt',
   },
   {

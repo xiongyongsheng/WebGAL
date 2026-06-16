@@ -19,27 +19,31 @@ setVar:scavenge_warehouse=[{"itemId":"food_apple","quantity":10},{"itemId":"drin
 ; 初始化菜单系统
 setVar:scavenge_show_menu=true;
 
-
-; 初始化所有角色数据（背包作为角色属性，统一存档）
-; 注意：fatigue/maxFatigue 字段已废弃，由 stamina/maxStamina 替代（normalizeCharacter 兼容旧数据）
-; 初始护甲套装（2026-06-07）：6 个部位各 1 件（chest 已有 armor_vest，补 5 件 common 部位）
-; 全部无门槛/低门槛，str 5 都能穿
+; ====================================================================
+; 角色系统（2026-06-09 重构）
 ;
-; 2026-06-09 加：主角 8 个装备槽位全装备（weapon + 6 armor + tool）
-; - weaponId=weapon_crowbar（铁撬棍，85/100 耐久，str 0 门槛，7-8 伤害）
-; - helmetId=armor_helmet / chestId=armor_vest / armsId=armor_arms_guard
-;   / glovesId=armor_gloves_work / legsId=armor_legs_pants / bootsId=armor_boots_combat
-;   → 首次 normalizeCharacter 自动装备（实例从 inventory 移到 equipped）
-; - toolId=tool_flashlight（手电筒，触发潜行公式：夜间 detection -50%）
-; - 总护甲 6 部位：ac=armor（轻甲，无潜行减值）
+; 之前：所有角色数据硬编码在 setVar:scavenge_characters=[...] 里
+;   → 角色多 → 存档大
+;   → 加新角色要改场景脚本
+;   → 露西放在初始存档里（不符合剧情逻辑）
 ;
-; 2026-06-08 加：露西（同伴，agi 偏重）
-; - 4 件潜行装备已在 weaponId/chestId/glovesId/bootsId 上声明 → 首次 normalizeCharacter 自动装备
-; - 总潜行值 = +5 +3 +4 = +12；stealth 公式 = 0.05 + 0.12 + 8×0.005 = 21%
-; - strategy=stealth + mainStat=agi，升级自动 +2 agi
-; 注：setVar 必须单行（WebGAL 解析器不识别多行 JSON 数组）
-setVar:scavenge_characters=[{"id":"player_1","name":"主角","str":9,"agi":6,"end":6,"int":4,"hp":100,"maxHp":100,"hunger":100,"maxHunger":100,"thirst":100,"maxThirst":100,"sanity":100,"maxSanity":100,"stamina":100,"maxStamina":100,"isExploring":false,"exp":0,"level":1,"expToNext":100,"statPoints":0,"mainStat":"str","strategy":"combat","traitIds":["trained_warrior","lucky"],"weaponId":"weapon_crowbar","helmetId":"armor_helmet","chestId":"armor_vest","armsId":"armor_arms_guard","glovesId":"armor_gloves_work","legsId":"armor_legs_pants","bootsId":"armor_boots_combat","toolId":"tool_flashlight","inventory":[{"itemId":"food_apple","quantity":5},{"itemId":"drink_water","quantity":3},{"itemId":"medicine_bandage","quantity":2},{"itemId":"weapon_crowbar","quantity":1,"durability":85},{"itemId":"weapon_knife","quantity":1,"durability":60},{"itemId":"weapon_hammer","quantity":1,"durability":70},{"itemId":"armor_vest","quantity":1,"durability":90},{"itemId":"armor_helmet","quantity":1,"durability":180},{"itemId":"armor_arms_guard","quantity":1,"durability":80},{"itemId":"armor_gloves_work","quantity":1,"durability":70},{"itemId":"armor_legs_pants","quantity":1,"durability":100},{"itemId":"armor_boots_combat","quantity":1,"durability":90},{"itemId":"tool_flashlight","quantity":1,"durability":100}]},{"id":"lucy","name":"露西","str":4,"agi":8,"end":4,"int":4,"hp":100,"maxHp":100,"hunger":100,"maxHunger":100,"thirst":100,"maxThirst":100,"sanity":100,"maxSanity":100,"stamina":100,"maxStamina":100,"isExploring":false,"exp":0,"level":1,"expToNext":100,"statPoints":0,"mainStat":"agi","strategy":"stealth","traitIds":["agile_body","lightweight"],"weaponId":"weapon_knife","chestId":"armor_chest_soft","glovesId":"armor_gloves_thin","bootsId":"armor_boots_soft","inventory":[{"itemId":"food_apple","quantity":3},{"itemId":"drink_water","quantity":3},{"itemId":"medicine_bandage","quantity":2},{"itemId":"weapon_knife","quantity":1,"durability":60},{"itemId":"armor_chest_soft","quantity":1,"durability":50},{"itemId":"armor_gloves_thin","quantity":1,"durability":23},{"itemId":"armor_boots_soft","quantity":1,"durability":30}]}];
+; 现在：
+; - 角色基础数据存到 characterRoster.ts（代码侧，单一真相源）
+; - 存档只存"已获得的角色 ID 列表"：scavenge_character_ids
+; - CharacterRosterManager 监听这个 ID 列表 → 从 templates 构建完整角色
+;   → 自动写入 scavenge_characters（运行时缓存，给 UI 读）
+;
+; 2026-06-09 改：scavenge_main.txt 不再硬编码 character_ids
+;   → 避免从剧情回到 scavenge_main 时把"剧情获得的新角色"覆盖回 [player_1]
+;   → CharacterRosterManager 兜底逻辑处理：
+;     - 首次 mount：character_ids 为空 → 写入 [player_1]（默认值）
+;     - 剧情已获得角色：character_ids 是 [player_1, lucy] → 跳过兜底，保留剧情结果
+; ====================================================================
+;（不在这里 setVar:scavenge_character_ids，由 CharacterRosterManager 兜底）
 
 ; 2026-06-09 改：场景末尾不再用 choose（语法容易写错）
 ; 拾荒 UI 由 React 根据 show_scavenge_map=true 自动显示
 ; 玩家点 📍 贫民窟 → changeScene: 进入安全屋
+; 2026-06-09 改：贫民窟的 jumpScene 行为受剧情红点影响（见 ScavengeMain.handleLocationSelect）
+;   - 有红点 → 剧情优先，不跳 safehouse
+;   - 没红点 → 走 jumpScene 进 safehouse

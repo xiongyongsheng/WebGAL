@@ -326,3 +326,26 @@
   pointer-events: none;
   user-select: none;
 }
+
+// 2026-06-09 加：剧情点红点提示（用户要求）
+// 标记 .storyHint 类的 marker 右上角显示红点（带脉冲动画）
+.storyHint::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  background: #ff3b30;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 8px rgba(255, 59, 48, 0.6);
+  animation: storyHintPulse 1.6s ease-in-out infinite;
+  z-index: 2;
+  pointer-events: none;
+}
+
+@keyframes storyHintPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.25); opacity: 0.85; }
+}

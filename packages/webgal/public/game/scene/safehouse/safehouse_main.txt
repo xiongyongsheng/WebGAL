@@ -7,7 +7,7 @@
 ; 用途：
 ; - 玩家每次回到"安全屋"，可做以下事：
 ;   1. 休息 → 恢复 HP / stamina / sanity
-;   2. 整理仓库 → 打开仓库面板
+;   2. 整理仓库 → 打开仓库面板（用 GameVar 触发 CSS 显示）
 ;   3. 角色管理 → 打开角色列表
 ;   4. 派遣 → 打开地图
 ;   5. 物品图鉴 / 敌人图鉴
@@ -28,4 +28,33 @@ setVar:scavenge_show_menu=true;
 ; 注：bg_safehouse.png 暂时不存在（待 SafehouseMain 组件完成后再加），先用 -next 占位
 ; changeBg:bg_safehouse.png -next;
 
-choose:休息:scavenge/scavenge_main.txt|整理仓库:scavenge/scavenge_main.txt|派遣探索:scavenge/scavenge_main.txt|离开安全屋:scavenge/scavenge_main.txt;
+; ====================================================================
+; 选项设计（2026-06-09 修）：
+; 之前所有选项都跳到 scavenge_main → 选项没意义
+; 现在按语义分开：
+;   休息 → 直接跳回地图（之后由 React 根据"is_in_safehouse"等标识处理）
+;   整理仓库 → setVar scavenge_show_warehouse=true 后跳回地图（UI 用 CSS 显示）
+;   派遣探索 → 跳回 scavenge 地图（玩家点地点开始派遣）
+;   离开安全屋 → 跳回 scavenge 地图（同上）
+; 注：每个 label 都加 ; 注释，WebGAL parser 不解析 ; 开头的行
+; ====================================================================
+
+:label_rest
+; 休息（暂不实现具体逻辑，只跳回地图；后续可在安全屋组件里加 HP 恢复动画）
+; 2026-06-09 修：路径不带 ./game/scene/ 前缀（assetSetter 会自动加）
+changeScene:scavenge/scavenge_main.txt;
+
+:label_organize
+; 整理仓库：先打开仓库面板，跳回地图后 UI 仍然显示（CSS 不卸载）
+setVar:scavenge_show_warehouse=true;
+changeScene:scavenge/scavenge_main.txt;
+
+:label_dispatch
+; 派遣探索：直接回地图
+changeScene:scavenge/scavenge_main.txt;
+
+:label_leave
+; 离开安全屋：直接回地图
+changeScene:scavenge/scavenge_main.txt;
+
+choose:休息:label_rest|整理仓库:label_organize|派遣探索:label_dispatch|离开安全屋:label_leave;

@@ -2,6 +2,8 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useStageState } from '@/hooks/useStageState';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { SCREEN_CONSTANTS } from '@/Core/util/constants';
+import { LocationHint } from '../Story/storyTypes';
+import { getLocationHintFromState } from '../Story/storyHint';
 import {
   SCAVENGE_LOCATIONS,
   ScavengeLocationItem,
@@ -122,10 +124,20 @@ export const ScavengeMap = ({ onLocationSelect, focusLocationId }: ScavengeMapPr
 
   const handleLocationClick = (location: ScavengeLocationItem) => {
     if (!location.isUnlocked) return;
+    // 2026-06-09 加：记下当前点击的地点（StoryManager 监听这个 var 触发剧情）
+    stageStateManager.setStageVarAndCommit({
+      key: 'current_location_id',
+      value: location.id,
+    });
     // 2026-06-09 改：jumpScene 由 ScavengeMain 处理（onLocationSelect 回调）
     // 不在 ScavengeMap 直接调 changeScene（避免 lockSceneWrite 阻塞）
     onLocationSelect(location);
   };
+
+  // 2026-06-09 加：地点 hint 检查（红点提示）
+  // 2026-06-09 改：抽到 ../Story/storyHint.ts 共享
+  const getLocationHint = (locationId: string): LocationHint =>
+    getLocationHintFromState(stageState.GameVar, locationId);
 
   return (
     <div
@@ -171,10 +183,13 @@ export const ScavengeMap = ({ onLocationSelect, focusLocationId }: ScavengeMapPr
           const screenX = (location.position.x / 100) * SVG_WIDTH * transform.scale + transform.x;
           const screenY = (location.position.y / 100) * SVG_HEIGHT * transform.scale + transform.y;
 
+          // 2026-06-09 加：检查这个地点是否有 pending 故事（红点提示）
+          const hint = getLocationHint(location.id);
+
           return (
             <div
               key={location.id}
-              className={`${styles.locationMarker} ${!isUnlocked ? styles.locked : ''} ${isActive ? styles.active : ''}`}
+              className={`${styles.locationMarker} ${!isUnlocked ? styles.locked : ''} ${isActive ? styles.active : ''} ${hint === 'story' ? styles.storyHint : ''}`}
               style={{
                 left: `${screenX}px`,
                 top: `${screenY}px`,

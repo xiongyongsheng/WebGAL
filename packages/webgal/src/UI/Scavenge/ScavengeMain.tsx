@@ -19,9 +19,27 @@ import { ScavengeItemCodex } from './ScavengeItems/ScavengeItemCodex/ScavengeIte
 import { readMissions } from './ScavengeMissions/missions';
 import { ScavengeMissionOutcomeModal } from './ScavengeMissionOutcomeModal/ScavengeMissionOutcomeModal';
 import { ScavengeCombatLogModal } from './ScavengeCombatLogModal/ScavengeCombatLogModal';
+import { StoryManager } from './Story/StoryManager';
+import { getLocationHintFromState } from './Story/storyHint';
+import { CharacterRosterManager } from './ScavengeCharacter/CharacterRosterManager';
 import styles from './ScavengeMain.module.scss';
 
 export const ScavengeMain = () => {
+  // 2026-06-09 加：剧情进度管理（事件驱动，不渲染 UI）
+  // 监听 location / time / items 变化 → 检查 wait_trigger → 推进状态机 → 跳场景
+  // 2026-06-09 加：角色花名册管理
+  // 监听 scavenge_character_ids 变化 → 从 templates 构建完整角色 → 写回 scavenge_characters
+  return (
+    <>
+      <StoryManager />
+      <CharacterRosterManager />
+      <ScavengeContent />
+    </>
+  );
+};
+
+// 内容组件（拆出来是为了让 StoryManager 不被 conditional 返回阻塞）
+const ScavengeContent = () => {
   const stageState = useStageState();
 
   // 2026-06-09 加：当前场景 URL（用于判断是否在拾荒场景）
@@ -81,8 +99,18 @@ export const ScavengeMain = () => {
   // 2026-06-09 改：jumpScene 优先（不走详情面板，直接切换场景）
   // 用 stage var + 轮询：changeScene 在 lockSceneWrite=true 时会被吞，
   // 通过 stage var 触发可让 changeScene 在 lock 释放后被处理
+  // 2026-06-09 加：剧情优先（如果有红点，先触发剧情，让剧情系统接管跳转）
   const handleLocationSelect = (location: ScavengeLocationItem) => {
     if (location.jumpScene) {
+      // 检查此地点是否有 pending story（红点）
+      // 有红点 → 不发 jumpScene，让 StoryManager 通过 current_location_id 触发剧情场景
+      // 没有红点 → 发 jumpScene 跳到目标场景
+      const hint = getLocationHintFromState(stageState.GameVar, location.id);
+      if (hint === 'story') {
+        // 红点状态：剧情优先，不发 jumpScene
+        // ScavengeMap 已经 setStageVar current_location_id，StoryManager 会接住
+        return;
+      }
       stageStateManager.setStageVarAndCommit({
         key: 'pending_scene_jump',
         value: location.jumpScene,
