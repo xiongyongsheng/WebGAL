@@ -90,7 +90,7 @@ export const ScavengeCombatLogModal = ({ missionId, encounter, onClose }: Scaven
       }
     } catch { /* ignore */ }
   } else if (Array.isArray(charRaw) && mission) {
-    character = (charRaw as ScavengeCharacter[])
+    character = (charRaw as unknown as ScavengeCharacter[])
       .map(c => normalizeCharacter(c))
       .find(c => c.id === mission.characterId);
   }

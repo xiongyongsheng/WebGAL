@@ -7,12 +7,15 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useStageState } from '@/hooks/useStageState';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
+import { changeScene } from '@/Core/controller/scene/changeScene';
 import { ScavengeTimeControl } from './ScavengeTimeControl/ScavengeTimeControl';
 import { ScavengeMap } from './ScavengeMap/ScavengeMap';
 import { ScavengeMapDetail } from './ScavengeMap/ScavengeMapDetail';
 import { ScavengeLocationItem } from './ScavengeMap/locations';
 import { ScavengeCharacterPanel } from './ScavengeCharacter/ScavengeCharacterPanel/ScavengeCharacterPanel';
 import { ScavengeMenuButton } from './ScavengeMenuButton/ScavengeMenuButton';
+import { ScavengeEnemyCodex } from './ScavengeEnemies/ScavengeEnemyCodex/ScavengeEnemyCodex';
+import { ScavengeItemCodex } from './ScavengeItems/ScavengeItemCodex/ScavengeItemCodex';
 import { readMissions } from './ScavengeMissions/missions';
 import { ScavengeMissionOutcomeModal } from './ScavengeMissionOutcomeModal/ScavengeMissionOutcomeModal';
 import { ScavengeCombatLogModal } from './ScavengeCombatLogModal/ScavengeCombatLogModal';
@@ -20,6 +23,12 @@ import styles from './ScavengeMain.module.scss';
 
 export const ScavengeMain = () => {
   const stageState = useStageState();
+
+  // 2026-06-09 加：当前场景 URL（用于判断是否在拾荒场景）
+  // 注：组件**不卸载**，仅用 CSS 控制显示隐藏（保留 state：缩放级别、滚轮位置等）
+  // 切到安全屋/其他场景时，主 UI 用 .hidden class 隐藏，但仍在 DOM 中
+  const currentSceneUrl = (stageState.GameVar['current_scene_url'] as string) ?? '';
+  const isInScavengeScene = currentSceneUrl.includes('scavenge') || currentSceneUrl === '';
 
   // 检查是否应该显示（场景存档控制）
   const isMapVisible = (stageState.GameVar['show_scavenge_map'] as boolean) ?? false;
@@ -47,6 +56,11 @@ export const ScavengeMain = () => {
   // 地图相关状态
   const [selectedLocation, setSelectedLocation] = useState<ScavengeLocationItem | null>(null);
 
+  // 2026-06-09 加：敌人图鉴（独立于角色面板）
+  const [showCodex, setShowCodex] = useState(false);
+  // 2026-06-09 加：物品图鉴
+  const [showItemCodex, setShowItemCodex] = useState(false);
+
   // 角色面板显示状态
   const handleOpenCharacterList = () => {
     stageStateManager.setStageVarAndCommit({ key: 'scavenge_show_character_list', value: true });
@@ -56,8 +70,25 @@ export const ScavengeMain = () => {
     stageStateManager.setStageVarAndCommit({ key: 'scavenge_show_character_list', value: false });
   };
 
+  // 2026-06-09 加：敌人图鉴 toggle
+  const handleOpenCodex = () => setShowCodex(true);
+  const handleCloseCodex = () => setShowCodex(false);
+  // 2026-06-09 加：物品图鉴 toggle
+  const handleOpenItemCodex = () => setShowItemCodex(true);
+  const handleCloseItemCodex = () => setShowItemCodex(false);
+
   // 地图操作
+  // 2026-06-09 改：jumpScene 优先（不走详情面板，直接切换场景）
+  // 用 stage var + 轮询：changeScene 在 lockSceneWrite=true 时会被吞，
+  // 通过 stage var 触发可让 changeScene 在 lock 释放后被处理
   const handleLocationSelect = (location: ScavengeLocationItem) => {
+    if (location.jumpScene) {
+      stageStateManager.setStageVarAndCommit({
+        key: 'pending_scene_jump',
+        value: location.jumpScene,
+      });
+      return;
+    }
     setSelectedLocation(location);
   };
 
@@ -82,6 +113,32 @@ export const ScavengeMain = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stageState]);
 
+  // 2026-06-09 重写：合并 pending_scene_jump 监听 + current_scene_url 同步
+  // 原因：之前只在自己触发 changeScene 时写 current_scene_url
+  //  → 但 choose / changeScene: 命令 / 其他来源 跳转时，current_scene_url 不更新
+  //  → 切回 scavenge 场景时，ScavengeMap 还显示 .hidden（因为 current_scene_url 还在 safehouse 的）
+  // 修复：主动从 WebGAL 同步 current_scene_url（不依赖点击源头）
+  useEffect(() => {
+    const interval = setInterval(() => {
+      import('@/Core/WebGAL').then(({ WebGAL }) => {
+        // 1. 主动同步当前场景 URL（任何来源：choose / changeScene: 命令 / pending_scene_jump）
+        const currentUrl = WebGAL.sceneManager.sceneData?.currentScene?.sceneUrl ?? '';
+        if (currentUrl && currentUrl !== stageState.GameVar['current_scene_url']) {
+          stageStateManager.setStageVarAndCommit({ key: 'current_scene_url', value: currentUrl });
+        }
+
+        // 2. 处理 pending_scene_jump（marker 点击 → 跳场景）
+        const pending = stageState.GameVar['pending_scene_jump'] as string | undefined;
+        if (pending && !WebGAL.sceneManager.lockSceneWrite) {
+          stageStateManager.setStageVarAndCommit({ key: 'pending_scene_jump', value: '' });
+          // 不在这里写 current_scene_url（上面的同步会自动处理）
+          changeScene(pending, pending);
+        }
+      });
+    }, 200);
+    return () => clearInterval(interval);
+  }, [stageState]);
+
   // 遭遇结果弹窗（监听 missions 变化，弹最新"未展示的真实遭遇"）
   // 排除 no_encounter（准备期占位 / 安静路过）和 失败 mission（失败结果由 outcome modal 处理）
   const pendingEncounter = useMemo(() => {
@@ -102,26 +159,56 @@ export const ScavengeMain = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stageState]);
 
-  if (!isMapVisible && !isTimeControlVisible && !isMenuVisible) return null;
+  // 2026-06-09 改：每个 UI 单独控制显示/隐藏（CSS class）
+  // 设计：永远渲染（不卸载），保留组件内部 state
+  // - 地图：仅在拾荒场景显示（进了安全屋要藏起来）
+  // - 시간条 / 菜单：一直显示（通用 UI）
+  // 弹窗（detail/character/codex）由用户主动关闭，仍用条件渲染
+  const showMap = isInScavengeScene && isMapVisible;
+  const showTime = isTimeControlVisible;
+  const showMenu = isMenuVisible;
 
   return (
     <>
-      {/* 地图组件 */}
-      {isMapVisible && <ScavengeMap onLocationSelect={handleLocationSelect} />}
+      {/* 地图组件（仅拾荒场景显示，进了安全屋用 .hidden 藏） */}
+      <div
+        className={showMap ? undefined : styles.hidden}
+        style={{ pointerEvents: showMap ? 'auto' : 'none' }}
+      >
+        <ScavengeMap onLocationSelect={handleLocationSelect} />
+      </div>
 
-      {/* 右上角菜单 */}
-      {isMenuVisible && (
-        <div className={styles.menuGroup}>
-          <ScavengeMenuButton
-            icon="material-symbols:person"
-            label="角色列表"
-            onClick={handleOpenCharacterList}
-          />
-        </div>
-      )}
+      {/* 右上角菜单（一直显示：角色列表/敌人图鉴/物品图鉴 是通用功能） */}
+      <div
+        className={`${styles.menuGroup} ${showMenu ? '' : styles.hidden}`}
+        style={{ pointerEvents: showMenu ? 'auto' : 'none' }}
+      >
+        <ScavengeMenuButton
+          icon="material-symbols:person"
+          label="角色列表"
+          onClick={handleOpenCharacterList}
+        />
+        {/* 2026-06-09 加：敌人图鉴按钮（在角色列表下方） */}
+        <ScavengeMenuButton
+          icon="material-symbols:swords"
+          label="敌人图鉴"
+          onClick={handleOpenCodex}
+        />
+        {/* 2026-06-09 加：物品图鉴按钮（在敌人图鉴下方） */}
+        <ScavengeMenuButton
+          icon="material-symbols:inventory-2"
+          label="物品图鉴"
+          onClick={handleOpenItemCodex}
+        />
+      </div>
 
-      {/* 时间控制 */}
-      {isTimeControlVisible && <ScavengeTimeControl />}
+      {/* 시간控制（一直显示：通用时间条） */}
+      <div
+        className={showTime ? undefined : styles.hidden}
+        style={{ pointerEvents: showTime ? 'auto' : 'none' }}
+      >
+        <ScavengeTimeControl />
+      </div>
 
       {/* 地图详情弹框 */}
       {selectedLocation && (
@@ -146,6 +233,12 @@ export const ScavengeMain = () => {
           }}
         />
       )}
+
+      {/* 敌人图鉴（2026-06-09 加，浮层覆盖整个屏幕） */}
+      {showCodex && <ScavengeEnemyCodex onClose={handleCloseCodex} />}
+
+      {/* 物品图鉴（2026-06-09 加，浮层覆盖整个屏幕） */}
+      {showItemCodex && <ScavengeItemCodex onClose={handleCloseItemCodex} />}
 
       {/* 遭遇结果弹窗（每个派遣期遭遇的资源点/战斗都弹一次） */}
       {pendingEncounter && (

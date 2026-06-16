@@ -362,7 +362,7 @@ export const computeDerivedStats = (char: ScavengeCharacter, isNight: boolean = 
     _effectiveStr: effectiveStr,
     _effectiveAgi: effectiveAgi,
     _traitBonus: traitBonus,
-  } as DerivedStats & {
+  } as DerivedCombatStats & {
     _effectiveStr: number;
     _effectiveAgi: number;
     _traitBonus: ReturnType<typeof sumActiveTraitEffects>;

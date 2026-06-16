@@ -29,25 +29,24 @@ import { ScavengeWarehouse } from '../../ScavengeWarehouse/ScavengeWarehouse';
 // 拆分模块导入
 import {
   getCharacters, getWarehouse,
-  updateCharacter,
 } from './ScavengeCharacterPanel.stage';
 import {
   calculateEquipBonus, getMaxHp, getMaxStamina, getMaxHungerThirst, getMaxCarryWeight,
   migrateOnStartup,
 } from './ScavengeCharacterPanel.stats';
 import {
-  handleUseItem, handleUnequipItem, handleEquipItem, handleApplyPending,
+  handleUnequipItem, handleApplyPending,
   handleChangeStrategy, handleAddTrait, handleRemoveTrait, executeItemAction,
 } from './ScavengeCharacterPanel.actions';
 import {
   executeTransfer, handleTransferRequest, handleWarehouseItemClick,
   handleSubmenuTargetClick, getTransferTargetOptions, handleInventoryItemDragStart,
-  handleWarehouseItemDragStart, handleItemDragEnd, handleDrop, handleCardDrop,
+  handleWarehouseItemDragStart, handleItemDragEnd, handleCardDrop,
   handleCardDragOver, handleCardDragLeave, handleWarehouseDrop, handleWarehouseDragOver,
   confirmDragQuantity, cancelDragQuantity, calcWeight,
 } from './ScavengeCharacterPanel.transfer';
 import {
-  TransferSource, TransferTarget, TransferSubmenuState, DragQuantityDialogState,
+  TransferSubmenuState, DragQuantityDialogState,
   ItemMenuState, DraggedItemState,
 } from './ScavengeCharacterPanel.types';
 import { InventoryItem } from '../../ScavengeItems/inventory';
@@ -58,7 +57,6 @@ interface ScavengeCharacterPanelProps {
 }
 
 type ItemFilter = 'all' | 'consumable' | 'equipment' | 'material' | 'quest';
-type Strategy = 'stealth' | 'combat';
 
 export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps) => {
   // ============== UI state ==============
@@ -150,40 +148,11 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
   const safeCharacters: ScavengeCharacter[] = characters.map(c => ({ ...c, inventory: c.inventory ?? [] }));
   const warehouseItems = getWarehouse();
 
-  // ============== 简化包装（给子组件用的 handler） ==============
-  const onUseItem = (charId: string, invItem: InventoryItem) => handleUseItem(charId, invItem, refresh);
-  const onUnequipItem = (charId: string, slot: 'weapon' | 'tool' | any) => handleUnequipItem(charId, slot, refresh);
-  const onEquipItem = (charId: string, invItem: InventoryItem) => handleEquipItem(charId, invItem, refresh);
-  const onApplyPending = (charId: string, pending: { str: number; agi: number; end: number; int: number }) =>
-    handleApplyPending(charId, pending, refresh);
-  const onChangeStrategy = (charId: string, s: Strategy) => handleChangeStrategy(charId, s, refresh);
-  const onAddTrait = (charId: string, traitId: string) => handleAddTrait(charId, traitId, refresh);
-  const onRemoveTrait = (charId: string, traitId: string) => handleRemoveTrait(charId, traitId, refresh);
-  const onExecuteAction = (action: string) => executeItemAction(action, selectedItem, actionQuantity, refresh, closeItemMenu);
-  const onTransferRequest = (item: InventoryItem) =>
-    handleTransferRequest(item, selectedItem, actionQuantity, menuPosition, setTransferSubmenu);
-  const onWarehouseItemClick = (item: InventoryItem, e: React.MouseEvent) =>
-    handleWarehouseItemClick(item, e, closeItemMenu, setTransferSubmenu);
-  const onInventoryItemDragStart = (item: InventoryItem, e: React.DragEvent) =>
-    handleInventoryItemDragStart(item, e, setDraggedItem);
-  const onWarehouseItemDragStart = (item: InventoryItem, e: React.DragEvent) =>
-    handleWarehouseItemDragStart(item, e, setDraggedItem);
-  const onItemDragEnd = () => handleItemDragEnd(setDraggedItem, setDragOverTarget);
-  const onSubmenuTargetClick = (target: TransferTarget) =>
-    handleSubmenuTargetClick(target, transferSubmenu, executeTransfer, setTransferSubmenu, refresh, showTransferError);
-  const onCardDrop = (targetCharId: string) => (e: React.DragEvent) =>
-    handleCardDrop(targetCharId, e, draggedItem, setDraggedItem, setDragOverTarget, setDragQuantityDialog, executeTransfer, refresh, showTransferError);
-  const onCardDragOver = (targetCharId: string) => (e: React.DragEvent) =>
-    handleCardDragOver(targetCharId, e, draggedItem, setDragOverTarget);
-  const onCardDragLeave = () => handleCardDragLeave(setDragOverTarget);
-  const onWarehouseDrop = (e: React.DragEvent) =>
-    handleWarehouseDrop(e, draggedItem, setDraggedItem, setDragOverTarget, setDragQuantityDialog, executeTransfer, refresh, showTransferError);
-  const onWarehouseDragOver = (e: React.DragEvent) =>
-    handleWarehouseDragOver(e, draggedItem, setDragOverTarget);
-  const onConfirmDragQuantity = () =>
-    confirmDragQuantity(dragQuantityDialog, setDragQuantityDialog, setActionQuantity, executeTransfer, refresh, showTransferError);
-  const onCancelDragQuantity = () => cancelDragQuantity(setDragQuantityDialog, setActionQuantity);
-  const closeTransferSubmenuFn = () => setTransferSubmenu(null);
+  // ============== 包装层（2026-06-09 改：直接用 handleXxx 闭包，避免 LSP 缓存冲突） ==============
+  // 之前用 onXxx = () => handleXxx(args, refresh) 包装，但 IDE LSP 缓存误判"局部声明与导入冲突"
+  // 改为：JSX 处直接 () => handleXxx(...) 闭包，无 wrapper 变量
+  // 也让 panel 主文件减少 35 行
+  // 注：以下函数被 JSX 直接调用，不在此处定义 wrapper
 
   // ============== Render ==============
   return (
@@ -208,9 +177,9 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
                 <div
                   key={charData.id}
                   className={`${styles.characterCard} ${isOver ? styles.cardDragOver : ''}`}
-                  onDragOver={onCardDragOver(charData.id)}
-                  onDragLeave={onCardDragLeave}
-                  onDrop={onCardDrop(charData.id)}
+                  onDragOver={(e) => handleCardDragOver(charData.id, e, draggedItem, setDragOverTarget)}
+                  onDragLeave={() => handleCardDragLeave(setDragOverTarget)}
+                  onDrop={(e) => handleCardDrop(charData.id, e, draggedItem, setDraggedItem, setDragOverTarget, setDragQuantityDialog, executeTransfer, refresh, showTransferError)}
                 >
                   <ScavengeCharacterHeader
                     name={charData.name}
@@ -232,12 +201,12 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
                       agiBonus={calculateEquipBonus(charData, 'agi')}
                       endBonus={calculateEquipBonus(charData, 'end')}
                       intBonus={calculateEquipBonus(charData, 'int')}
-                      onApplyPending={(pending) => onApplyPending(charData.id, pending)}
-                      onChangeStrategy={(s) => onChangeStrategy(charData.id, s)}
+                      onApplyPending={(pending) => handleApplyPending(charData.id, pending, refresh)}
+                      onChangeStrategy={(s) => handleChangeStrategy(charData.id, s, refresh)}
                     />
                     <ScavengeCharacterEquip
                       charData={charData}
-                      onUnequip={(slot) => onUnequipItem(charData.id, slot)}
+                      onUnequip={(slot) => handleUnequipItem(charData.id, slot, refresh)}
                       makeItemHoverProps={makeItemHoverProps}
                     />
                     <ScavengeCharacterInventory
@@ -253,18 +222,18 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
                       menuPosition={menuPosition}
                       actionQuantity={actionQuantity}
                       onQuantityChange={setActionQuantity}
-                      onExecuteAction={onExecuteAction}
+                      onExecuteAction={(action) => executeItemAction(action, selectedItem, actionQuantity, refresh, closeItemMenu)}
                       onCloseMenu={closeItemMenu}
-                      onTransferRequest={onTransferRequest}
-                      onItemDragStart={onInventoryItemDragStart}
-                      onItemDragEnd={onItemDragEnd}
+                      onTransferRequest={(item) => handleTransferRequest(item, selectedItem, actionQuantity, menuPosition, setTransferSubmenu)}
+                      onItemDragStart={(item, e) => handleInventoryItemDragStart(item, e, setDraggedItem)}
+                      onItemDragEnd={() => handleItemDragEnd(setDraggedItem, setDragOverTarget)}
                       makeItemHoverProps={makeItemHoverProps}
                       charForReq={charData}
                     />
                     <ScavengeCharacterTraits
                       charData={charData}
-                      onAdd={(traitId) => onAddTrait(charData.id, traitId)}
-                      onRemove={(traitId) => onRemoveTrait(charData.id, traitId)}
+                      onAdd={(traitId) => handleAddTrait(charData.id, traitId, refresh)}
+                      onRemove={(traitId) => handleRemoveTrait(charData.id, traitId, refresh)}
                     />
                   </div>
                 </div>
@@ -276,17 +245,17 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
         {/* 底部仓库 */}
         <div
           className={styles.warehouseSection}
-          onDragOver={onWarehouseDragOver}
-          onDragLeave={onCardDragLeave}
-          onDrop={onWarehouseDrop}
+          onDragOver={(e) => handleWarehouseDragOver(e, draggedItem, setDragOverTarget)}
+          onDragLeave={() => handleCardDragLeave(setDragOverTarget)}
+          onDrop={(e) => handleWarehouseDrop(e, draggedItem, setDraggedItem, setDragOverTarget, setDragQuantityDialog, executeTransfer, refresh, showTransferError)}
         >
           <ScavengeWarehouse
             onClose={() => {}}
             embedded
             items={warehouseItems}
-            onItemClick={onWarehouseItemClick}
-            onItemDragStart={onWarehouseItemDragStart}
-            onItemDragEnd={onItemDragEnd}
+            onItemClick={(item, e) => handleWarehouseItemClick(item, e, closeItemMenu, setTransferSubmenu)}
+            onItemDragStart={(item, e) => handleWarehouseItemDragStart(item, e, setDraggedItem)}
+            onItemDragEnd={() => handleItemDragEnd(setDraggedItem, setDragOverTarget)}
             isDragOver={dragOverTarget === 'warehouse'}
             makeItemHoverProps={makeItemHoverProps}
           />
@@ -325,7 +294,7 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
                       key={isChar ? (opt.target as any).characterId : 'warehouse'}
                       className={`${styles.submenuTargetBtn} ${!opt.available ? styles.submenuTargetDisabled : ''}`}
                       disabled={!opt.available}
-                      onClick={() => opt.available && onSubmenuTargetClick(opt.target)}
+                      onClick={() => opt.available && handleSubmenuTargetClick(opt.target, transferSubmenu, executeTransfer, setTransferSubmenu, refresh, showTransferError)}
                       title={opt.reason}
                     >
                       <Icon icon={icon} />
@@ -335,7 +304,7 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
                   );
                 })}
               </div>
-              <button className={styles.submenuCancelBtn} onClick={closeTransferSubmenuFn}>
+              <button className={styles.submenuCancelBtn} onClick={() => setTransferSubmenu(null)}>
                 取消
               </button>
             </div>
@@ -418,10 +387,10 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
                   重量：{(w * dragQuantityDialog.quantity).toFixed(1)}kg
                 </div>
                 <div className={styles.dragQuantityActions}>
-                  <button className={styles.dragQtyCancelBtn} onClick={onCancelDragQuantity}>
+                  <button className={styles.dragQtyCancelBtn} onClick={() => cancelDragQuantity(setDragQuantityDialog, setActionQuantity)}>
                     取消
                   </button>
-                  <button className={styles.dragQtyConfirmBtn} onClick={onConfirmDragQuantity}>
+                  <button className={styles.dragQtyConfirmBtn} onClick={() => confirmDragQuantity(dragQuantityDialog, setDragQuantityDialog, setActionQuantity, executeTransfer, refresh, showTransferError)}>
                     确认转移
                   </button>
                 </div>

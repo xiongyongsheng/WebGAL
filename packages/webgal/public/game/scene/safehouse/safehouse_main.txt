@@ -1,0 +1,31 @@
+; ====================================================================
+; 安全屋场景（2026-06-09 新建 / 修正）
+;
+; 2026-06-09 修：用合法 WebGAL 命令（say/choose/changeBg），
+;   不再用未注册的 scavengeStart/safehouseStart（被当文本，破坏场景）
+;
+; 用途：
+; - 玩家每次回到"安全屋"，可做以下事：
+;   1. 休息 → 恢复 HP / stamina / sanity
+;   2. 整理仓库 → 打开仓库面板
+;   3. 角色管理 → 打开角色列表
+;   4. 派遣 → 打开地图
+;   5. 物品图鉴 / 敌人图鉴
+;
+; 数据共享：通过 GameVar（scavenge_characters / scavenge_warehouse / 任务）
+; ====================================================================
+
+; 关闭所有拾荒时显示的 UI（地图 / 时间控制 / 仓库 / 角色面板）
+; 这些 UI 在安全屋里不显示
+setVar:show_scavenge_time_control=true;
+setVar:show_scavenge_map=false;
+setVar:scavenge_show_character_list=false;
+setVar:scavenge_show_warehouse=false;
+; 保留右上角菜单（角色列表/敌人图鉴/物品图鉴 仍可访问）
+setVar:scavenge_show_menu=true;
+
+; 设置安全屋背景（占位：纯色）
+; 注：bg_safehouse.png 暂时不存在（待 SafehouseMain 组件完成后再加），先用 -next 占位
+; changeBg:bg_safehouse.png -next;
+
+choose:休息:scavenge/scavenge_main.txt|整理仓库:scavenge/scavenge_main.txt|派遣探索:scavenge/scavenge_main.txt|离开安全屋:scavenge/scavenge_main.txt;

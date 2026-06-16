@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useStageState } from '@/hooks/useStageState';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
+import { SCREEN_CONSTANTS } from '@/Core/util/constants';
 import {
   SCAVENGE_LOCATIONS,
   ScavengeLocationItem,
@@ -13,19 +14,30 @@ import person from '@iconify-icons/material-symbols/person';
 import schedule from '@iconify-icons/material-symbols/schedule';
 import { readMissions } from '../ScavengeMissions/missions';
 import { ScavengeCharacter, normalizeCharacter } from '../ScavengeCharacter/character';
+import { usePanZoom } from './ScavengeMap.panZoom';
 import styles from './ScavengeMap.module.scss';
-import CityMap from '@/assets/images/map/city-map.png';
+import CityMap from '@/assets/images/map/city-map-2k.png';
 
 interface ScavengeMapProps {
   onLocationSelect: (location: ScavengeLocationItem) => void;
+  /** 可选：自动中心化到此 locationId（2026-06-09 加：支持外部触发） */
+  focusLocationId?: string;
 }
 
-export const ScavengeMap = ({ onLocationSelect }: ScavengeMapProps) => {
+// 2026-06-09 改：使用 SCREEN_CONSTANTS（2560×1440）作为世界坐标系
+// 原因：用户明确要求，且与 game viewport 一致，pan/zoom 数学更直观
+// 注：City-map-1.png 实际 viewBox 是 922×518，但会通过 object-fit: cover / contain 拉伸到 2560×1440
+const SVG_WIDTH = SCREEN_CONSTANTS.width;   // 2560
+const SVG_HEIGHT = SCREEN_CONSTANTS.height; // 1440
+
+export const ScavengeMap = ({ onLocationSelect, focusLocationId }: ScavengeMapProps) => {
   const stageState = useStageState();
   const [hoveredLocation, setHoveredLocation] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
+  // 2026-06-09 改：移到所有 hooks 之后（hooks 必须按相同顺序调用）
+  // 见文末 isVisible return null 注释
   const isVisible = (stageState.GameVar['show_scavenge_map'] as boolean) ?? true;
-  if (!isVisible) return null;
 
   const currentDay = (stageState.GameVar['current_day'] as number) ?? 1;
   const currentPeriodIndex = (stageState.GameVar['current_period_index'] as number) ?? 0;
@@ -77,40 +89,103 @@ export const ScavengeMap = ({ onLocationSelect }: ScavengeMapProps) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stageState, characters]);
 
+  // 2026-06-09 加：pan/zoom hook
+  // 注：UI 控件（缩放按钮 / 拖拽提示）已删除，但 hook 接口保留
+  //   - zoomIn / zoomOut / reset：暴露给将来的 UI（无 UI 时仅由滚轮触发）
+  //   - zoomPercent：UI 显示用（移除 UI 后备用）
+  //   - effectiveMinScale：动态最小缩放（用于 fit-to-screen 防黑底）
+  // 外部组件可继续通过 usePanZoom() 解构使用
+  const {
+    state: transform,
+    panHandlers,
+    centerOn,
+  } = usePanZoom({
+    containerRef,
+    worldWidth: SVG_WIDTH,
+    worldHeight: SVG_HEIGHT,
+    minScale: 0.3,
+    maxScale: 4,
+  });
+
+  // 2026-06-09 加：focusLocationId 变化时自动 centerOn
+  useEffect(() => {
+    if (!focusLocationId) return;
+    const loc = SCAVENGE_LOCATIONS.find(l => l.id === focusLocationId);
+    if (!loc) return;
+    // position 是 0-100 百分比 → SVG 像素坐标
+    const worldX = (loc.position.x / 100) * SVG_WIDTH;
+    const worldY = (loc.position.y / 100) * SVG_HEIGHT;
+    // 等待一帧让容器有 clientWidth/Height
+    const timer = setTimeout(() => centerOn(worldX, worldY, 1.6), 50);
+    return () => clearTimeout(timer);
+  }, [focusLocationId, centerOn]);
+
   const handleLocationClick = (location: ScavengeLocationItem) => {
     if (!location.isUnlocked) return;
+    // 2026-06-09 改：jumpScene 由 ScavengeMain 处理（onLocationSelect 回调）
+    // 不在 ScavengeMap 直接调 changeScene（避免 lockSceneWrite 阻塞）
     onLocationSelect(location);
   };
 
   return (
-    <div className={styles.mapContainer}>
-      <div className={styles.mapTitle}>大都市地图</div>
-
-      <div className={styles.mapWrapper}>
+    <div
+      className={styles.mapContainer}
+      ref={containerRef}
+      {...panHandlers}
+    >
+      {/* 内容层：transform 应用在这层 */}
+      <div
+        className={styles.mapWrapper}
+        style={{
+          transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
+          transformOrigin: '0 0',
+          width: `${SVG_WIDTH}px`,
+          height: `${SVG_HEIGHT}px`,
+        }}
+      >
         <div className={styles.mapBackground}>
-          <img src={CityMap} alt="城市地图" className={styles.mapImage} />
+          <img
+            src={CityMap}
+            alt="城市地图"
+            className={styles.mapImage}
+            // 2026-06-09 加：防选中 / 防拖拽 / 防右键保存
+            draggable={false}
+            onContextMenu={(e) => e.preventDefault()}
+            onDragStart={(e) => e.preventDefault()}
+          />
         </div>
+      </div>
 
-        <div className={styles.locationsLayer}>
-          {SCAVENGE_LOCATIONS.map((location) => {
-            const isUnlocked = location.isUnlocked;
-            const activeMissions = activeMissionsByLocation.get(location.id) ?? [];
-            const isActive = activeMissions.length > 0;
-            const isHovered = hoveredLocation === location.id;
+      {/* 2026-06-09 改：地点标记层移到 wrapper 外面（sibling），用 JS 计算屏幕坐标
+       * 这样标记 UI 不会随 SVG 缩放改变大小（dispatchingBar、tooltip 也是） */}
+      <div className={styles.locationsLayer}>
+        {SCAVENGE_LOCATIONS.map((location) => {
+          const isUnlocked = location.isUnlocked;
+          const activeMissions = activeMissionsByLocation.get(location.id) ?? [];
+          const isActive = activeMissions.length > 0;
+          const isHovered = hoveredLocation === location.id;
 
-            return (
-              <div
-                key={location.id}
-                className={`${styles.locationMarker} ${!isUnlocked ? styles.locked : ''} ${isActive ? styles.active : ''}`}
-                style={{
-                  left: `${location.position.x}%`,
-                  top: `${location.position.y}%`,
-                  '--region-color': location.regionColor,
-                } as React.CSSProperties}
-                onClick={() => handleLocationClick(location)}
-                onMouseEnter={() => setHoveredLocation(location.id)}
-                onMouseLeave={() => setHoveredLocation(null)}
-              >
+          // 世界坐标 (0-100% of SVG) → 屏幕坐标 (px in container)
+          // screenX = worldX * scale + panX
+          // screenY = worldY * scale + panY
+          const screenX = (location.position.x / 100) * SVG_WIDTH * transform.scale + transform.x;
+          const screenY = (location.position.y / 100) * SVG_HEIGHT * transform.scale + transform.y;
+
+          return (
+            <div
+              key={location.id}
+              className={`${styles.locationMarker} ${!isUnlocked ? styles.locked : ''} ${isActive ? styles.active : ''}`}
+              style={{
+                left: `${screenX}px`,
+                top: `${screenY}px`,
+                '--region-color': location.regionColor,
+              } as React.CSSProperties}
+              onClick={() => handleLocationClick(location)}
+              // 2026-06-09 加：阻止 marker 上的 pointerdown 冒泡到 container（避免拖动冲突）
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseEnter={() => setHoveredLocation(location.id)}
+              onMouseLeave={() => setHoveredLocation(null)}
+            >
                 {/* 标记主图标 */}
                 <div className={styles.markerCircle}>
                   {isUnlocked ? (
@@ -152,38 +227,6 @@ export const ScavengeMap = ({ onLocationSelect }: ScavengeMapProps) => {
             );
           })}
         </div>
-      </div>
-
-      {/* 图例 */}
-      <div className={styles.legend}>
-        <div className={styles.legendTitle}>区域图例</div>
-        <div className={styles.legendItems}>
-          <div className={styles.legendItem}>
-            <span className={styles.legendColor} style={{ backgroundColor: '#4CAF50' }}></span>
-            安全区
-          </div>
-          <div className={styles.legendItem}>
-            <span className={styles.legendColor} style={{ backgroundColor: '#03A9F4' }}></span>
-            居民区
-          </div>
-          <div className={styles.legendItem}>
-            <span className={styles.legendColor} style={{ backgroundColor: '#FF9800' }}></span>
-            商业区
-          </div>
-          <div className={styles.legendItem}>
-            <span className={styles.legendColor} style={{ backgroundColor: '#9C27B0' }}></span>
-            公共设施
-          </div>
-          <div className={styles.legendItem}>
-            <span className={styles.legendColor} style={{ backgroundColor: '#F44336' }}></span>
-            政府区域
-          </div>
-          <div className={styles.legendItem}>
-            <span className={styles.legendColor} style={{ backgroundColor: '#607D8B' }}></span>
-            工业区
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

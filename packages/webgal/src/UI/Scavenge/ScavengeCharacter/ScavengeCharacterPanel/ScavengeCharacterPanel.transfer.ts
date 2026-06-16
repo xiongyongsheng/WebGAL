@@ -148,10 +148,10 @@ export const getTransferTargetOptions = (
   source: TransferSource,
   item: InventoryItem,
   quantity: number,
-  safeCharacters: ScavengeCharacter[],
 ) => {
   const options: Array<{ target: TransferTarget; available: boolean; reason?: string }> = [];
-  for (const char of safeCharacters) {
+  const characters = getCharacters();
+  for (const char of characters) {
     if (source.kind === 'character' && char.id === source.characterId) continue;
     const target: TransferTarget = { kind: 'character', characterId: char.id };
     const nonNullInv = (char.inventory ?? []).filter((i): i is InventoryItem => i !== null);

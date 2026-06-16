@@ -82,6 +82,8 @@ export interface ScavengeLocationItem {
   isUnlocked: boolean;
   /** 区域颜色（用于地图显示） */
   regionColor: string;
+  /** 2026-06-09 加：点击跳转场景（如果有，就不打开详情面板，直接切换场景） */
+  jumpScene?: string;
 }
 
 /** 读 location 的 enemyPool（fallback 到 ENEMY_POOL_BY_DANGER） */
@@ -115,6 +117,11 @@ const RAW_LOCATIONS: ScavengeLocationItem[] = [
     position: { x: 30, y: 70 },
     isUnlocked: true,
     regionColor: '#4CAF50',
+    // 2026-06-09 加：点击直接跳转到安全屋场景
+    // 2026-06-09 修：URL 必须是 ./game/scene/... 格式（assetSetter 约定）
+    // 否则 axios.get('safehouse/...') 会走当前页根目录 → 404 → 返回 index.html
+    // → HTML 被当场景文本 → 显示 <!DOCTYPE html>
+    jumpScene: './game/scene/safehouse/safehouse_main.txt',
   },
   {
     id: 'park',

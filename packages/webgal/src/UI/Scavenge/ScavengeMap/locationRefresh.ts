@@ -102,6 +102,7 @@ const spawnEnemiesFromConfig = (config: LocationEnemyConfig): EnemyInstance[] =>
   return chosen.map((entry) => {
     const tpl = ENEMY_TEMPLATES[entry.type as EnemyType];
     return {
+      instanceId: generateInstanceId(),  // 2026-06-09 修：补 instanceId
       type: tpl.type,
       name: tpl.name,
       maxHp: tpl.hp,
@@ -136,8 +137,8 @@ export const countToEnemies = (counts: Record<string, number>): EnemyInstance[] 
     if (!tpl || cnt <= 0) continue;
     for (let i = 0; i < cnt; i++) {
       out.push({
+        instanceId: generateInstanceId(),  // 2026-06-09 修：补 instanceId
         type: tpl.type,
-        name: tpl.name,
         maxHp: tpl.hp,
         currentHp: tpl.hp,
         attackDamage: tpl.attackDamage,

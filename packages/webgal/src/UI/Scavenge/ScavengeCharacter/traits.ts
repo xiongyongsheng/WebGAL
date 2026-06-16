@@ -125,13 +125,10 @@ export const TRAITS: Record<string, Trait> = {
 
   berserker: {
     id: 'berserker',
-    name: '狂战士',
-    description: 'HP 越低，伤害越高。濒死时爆发出惊人潜力。',
+    name: '狂战士（占位）',
+    description: 'HP 越低，伤害越高。',
     category: 'combat',
-    effects: [
-      // HP >= 50%: 暴击率略升
-      { hp_below_pct_skip: undefined },  // 占位，实际条件见下
-    ],
+    effects: [],
   },
 
   // ===== 负面特性 / 条件效果 =====

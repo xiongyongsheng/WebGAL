@@ -1,0 +1,221 @@
+// 2026-06-09 新建 - 物品图鉴
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.codex {
+  width: 90%;
+  max-width: 1200px;
+  max-height: 90vh;
+  background: #1a1a1a;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+.codexHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.codexTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 20px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.titleIcon {
+  font-size: 24px;
+  color: #ffeb3b;
+}
+
+.codexHint {
+  flex: 1;
+  font-size: 12px;
+  color: #888;
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ccc;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: rgba(244, 67, 54, 0.3);
+    border-color: rgba(244, 67, 54, 0.5);
+    color: #fff;
+  }
+}
+
+// ===== 类型 tab =====
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  padding: 12px 20px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px 6px 0 0;
+  color: #888;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s ease;
+
+  &:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
+.tabActive {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  border-bottom-color: transparent;
+}
+
+.tabCount {
+  font-size: 10px;
+  color: #666;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+// ===== 物品卡片网格 =====
+
+.itemGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.itemCard {
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px solid;
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+    transform: translateY(-2px);
+  }
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.itemName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.itemIcon {
+  font-size: 18px;
+}
+
+.tagsRow {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.typeTag {
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ccc;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+.rarityTag {
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.itemDesc {
+  font-size: 11px;
+  color: #888;
+  line-height: 1.4;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+// ===== 关键属性 =====
+
+.detailsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 10px;
+}
+
+.statRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  padding: 2px 0;
+}
+
+.statLabel {
+  color: #a0a0a0;
+}
+
+.statValue {
+  color: #fff;
+  font-weight: 500;
+  font-family: 'Consolas', 'Monaco', monospace;
+}

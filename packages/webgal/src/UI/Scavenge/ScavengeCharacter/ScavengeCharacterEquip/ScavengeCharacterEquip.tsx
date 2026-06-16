@@ -13,7 +13,7 @@ import build from '@iconify-icons/material-symbols/build';
 import closeIcon from '@iconify-icons/material-symbols/close';
 import { ScavengeCharacter, EquipSlotKey } from '../character';
 import {
-  getItemName, getItemById, meetsEquipmentRequirements,
+  getItemName, getItemById, meetsEquipmentRequirements, isEquipment,
   ArmorSlot, ARMOR_SLOT_NAMES,
 } from '../../ScavengeItems/items';
 import { getItemDurability, getItemMaxDurability, getItemCurrentStealth, InventoryItem } from '../../ScavengeItems/inventory';
@@ -136,12 +136,13 @@ export const ScavengeCharacterEquip = ({
   // 武器栏
   const weaponInstance = charData.equipped?.weapon;
   const weaponDef = weaponInstance ? getItemById(weaponInstance.itemId) : undefined;
+  // 2026-06-09 修：stealth 只在 equipment 上定义，需类型收窄
+  const weaponStealth = weaponDef && isEquipment(weaponInstance?.itemId ?? '') && weaponDef.type === 'equipment' ? weaponDef.stealth : undefined;
   const weaponMeetsReq = weaponDef
     ? meetsEquipmentRequirements(charData, weaponDef.type === 'equipment' ? weaponDef.requirements ?? null : null)
     : true;
   const weaponDur = weaponInstance ? getItemDurability(weaponInstance) : undefined;
   const weaponMaxDur = weaponInstance ? getItemMaxDurability(weaponInstance) : undefined;
-  const weaponStealth = weaponDef?.stealth;
   // 2026-06-08 加：当前潜行值（按耐久缩放）
   const weaponCurrentStealth = weaponInstance ? getItemCurrentStealth(weaponInstance) : undefined;
 
@@ -153,7 +154,8 @@ export const ScavengeCharacterEquip = ({
     : true;
   const toolDur = toolInstance ? getItemDurability(toolInstance) : undefined;
   const toolMaxDur = toolInstance ? getItemMaxDurability(toolInstance) : undefined;
-  const toolStealth = toolDef?.stealth;
+  // 2026-06-09 修：stealth 收窄到 equipment
+  const toolStealth = toolDef && isEquipment(toolInstance?.itemId ?? '') && toolDef.type === 'equipment' ? toolDef.stealth : undefined;
   const toolCurrentStealth = toolInstance ? getItemCurrentStealth(toolInstance) : undefined;
 
   return (
