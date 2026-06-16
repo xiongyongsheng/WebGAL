@@ -107,6 +107,14 @@ export interface ScavengeCharacter {
   strategy: 'stealth' | 'combat';
   /** 背包物品列表（属于角色数据的一部分，null 表示空槽位） */
   inventory: (InventoryItem | null)[];
+  // ============== 好感度系统（2026-06-09 加）==============
+  /** 当前好感度数值（-100 ~ 100）*/
+  affinity: number;
+  /** 已完成的升阶剧情索引列表
+   *  例：[0, 1] 表示"陌生→熟悉"和"熟悉→亲密"的升阶剧情都已完成
+   *  门控：affinity 达到下一阈值时，对应索引必须在该列表中才能升级
+   */
+  completedAffinityStoryLevels: number[];
 }
 
 /**
@@ -140,6 +148,9 @@ export const DEFAULT_CHARACTER: ScavengeCharacter = {
   mainStat: 'str',
   strategy: 'combat',
   inventory: [],
+  // 好感度系统（2026-06-09 加）
+  affinity: 0,
+  completedAffinityStoryLevels: [],
 };
 
 /**

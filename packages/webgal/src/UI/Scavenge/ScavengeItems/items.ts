@@ -47,6 +47,15 @@ export interface EquipmentAttribute {
 
 // ============== 物品基础接口 ==============
 
+/** 物品赠送档次（2026-06-09 加）
+ *  对应 characterRoster.giftAccessMap 的 key
+ *  - cheap（廉价）: 任何好感度都能送
+ *  - normal（普通）: 熟悉以上
+ *  - precious（珍贵）: 亲密以上
+ *  - 未设置 = 不能赠送（如任务物品、装备可能不让送）
+ */
+export type AffinityValue = 'cheap' | 'normal' | 'precious';
+
 /** 物品基础属性（所有物品都有的属性） */
 export interface BaseItem {
   /** 物品唯一ID */
@@ -67,6 +76,8 @@ export interface BaseItem {
   weight: number;
   /** 物品图标 */
   icon: string;
+  /** 赠送档次（可选，未设置 = 不可赠送） */
+  affinityValue?: AffinityValue;
 }
 
 /** 消耗品物品 */
@@ -184,6 +195,7 @@ export const CONSUMABLE_ITEMS: ConsumableItem[] = [
     weight: 0.2,
     icon: 'material-symbols:nutrition-outline',
     effects: [{ type: 'hunger', value: 15 }],
+    affinityValue: 'cheap',
   },
   {
     id: 'food_canned',
@@ -196,6 +208,7 @@ export const CONSUMABLE_ITEMS: ConsumableItem[] = [
     weight: 0.5,
     icon: 'material-symbols:nutrition-outline',
     effects: [{ type: 'hunger', value: 35 }],
+    affinityValue: 'normal',
   },
   {
     id: 'food_chocolate',
@@ -211,6 +224,7 @@ export const CONSUMABLE_ITEMS: ConsumableItem[] = [
       { type: 'hunger', value: 20 },
       { type: 'sanity', value: 5 },
     ],
+    affinityValue: 'precious',
   },
 
   // 饮水类
@@ -225,6 +239,7 @@ export const CONSUMABLE_ITEMS: ConsumableItem[] = [
     weight: 0.3,
     icon: 'material-symbols:water-drop-outline',
     effects: [{ type: 'thirst', value: 40 }],
+    affinityValue: 'cheap',
   },
   {
     id: 'drink_soda',
@@ -237,6 +252,7 @@ export const CONSUMABLE_ITEMS: ConsumableItem[] = [
     weight: 0.3,
     icon: 'material-symbols:water-drop-outline',
     effects: [{ type: 'thirst', value: 25 }],
+    affinityValue: 'normal',
   },
   {
     id: 'drink_coffee',
@@ -252,6 +268,7 @@ export const CONSUMABLE_ITEMS: ConsumableItem[] = [
       { type: 'thirst', value: 20 },
       { type: 'sanity', value: 10 },
     ],
+    affinityValue: 'precious',
   },
 
   // 药品类
@@ -266,6 +283,7 @@ export const CONSUMABLE_ITEMS: ConsumableItem[] = [
     weight: 0.1,
     icon: 'material-symbols:healing-outline',
     effects: [{ type: 'hp', value: 20 }],
+    affinityValue: 'cheap',
   },
   {
     id: 'medicine_pills',
@@ -278,6 +296,7 @@ export const CONSUMABLE_ITEMS: ConsumableItem[] = [
     weight: 0.05,
     icon: 'material-symbols:medication-outline',
     effects: [{ type: 'hp', value: 50 }],
+    affinityValue: 'precious',
   },
   {
     id: 'medicine_firstaid',
@@ -290,6 +309,7 @@ export const CONSUMABLE_ITEMS: ConsumableItem[] = [
     weight: 0.5,
     icon: 'material-symbols:medical-services-outline',
     effects: [{ type: 'hp', value: 80 }],
+    affinityValue: 'precious',
   },
 
   // 恢复精神类
@@ -304,6 +324,7 @@ export const CONSUMABLE_ITEMS: ConsumableItem[] = [
     weight: 0.05,
     icon: 'material-symbols:psychology-outline',
     effects: [{ type: 'sanity', value: 25 }],
+    affinityValue: 'precious',
   },
 
   // 2026-06-09 加：epic / legendary 等级（覆盖空缺）

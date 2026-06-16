@@ -1,0 +1,36 @@
+; ====================================================================
+; 安全屋事件 - 露西升阶剧情（陌生→熟悉）
+;
+; 触发条件（2026-06-09）：
+; - 露西的 affinity >= 30（熟悉阈值）
+; - 但 completedAffinityStoryLevels 不含 0
+; - 玩家在 CharacterInteractionMenu 点"触发升阶剧情"
+;
+; 剧情完成后，剧情脚本写入：
+; - setVar:_last_built_character_ids=lucy.completedAffinityStoryLevels=[0]
+;
+; 此剧情内容是占位（Phase 6）
+; 后续由文案/剧情设计师补充
+;
+; 注：剧情文件路径不带 ./game/scene/ 前缀（assetSetter 会自动加）
+; 否则会变成 ./game/scene/./game/scene/safehouse/event_xxx.txt（404）
+; ====================================================================
+
+; 关闭地图 UI，让玩家专注剧情
+setVar:show_scavenge_map=false;
+setVar:show_scavenge_time_control=false;
+
+; 露西的视角
+露西:……你最近帮了我很多。;
+露西:其实我一直没告诉你，前几天刚认识你的时候，我挺防备你的。;
+露西:但是现在……我觉得你是可以信任的人。;
+露西:谢谢你一直陪着我。;
+
+; 标记"陌生→熟悉"升阶剧情完成
+; 2026-06-09：用 _lucy_completed_affinity_story_0 标记剧情 ID 0（陌生→熟悉）
+; 注：setVar 不能直接写嵌套对象，所以用 GameVar 跟踪
+; StoryManager 会监听这个 var，写回 character.completedAffinityStoryLevels
+setVar:_lucy_completed_affinity_story_0=true;
+
+; 回到安全屋主菜单
+changeScene:safehouse/safehouse_main.txt;

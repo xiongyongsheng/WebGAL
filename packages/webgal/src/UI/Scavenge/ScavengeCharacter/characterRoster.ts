@@ -69,6 +69,38 @@ export interface CharacterTemplate {
   toolId?: string;
   /** 初始背包 */
   inventory: Array<{ itemId: string; quantity: number; durability?: number }>;
+  // ============== 好感度系统（2026-06-09 加）==============
+  /** 好感度初始值（-100 ~ 100）*/
+  initialAffinity: number;
+  /** 好感度等级阈值（升阶所需分数）
+   *  例：[0, 30, 60, 90] → 4 级
+   *  - 默认 0 = 陌生（第一级）
+   *  - 30 = 熟悉
+   *  - 60 = 亲密
+   *  - 90 = 挚友
+   */
+  affinityThresholds: number[];
+  /** 好感度等级名称（与阈值一一对应，长度 = thresholds.length + 1）
+   *  例：['陌生', '熟悉', '亲密', '挚友']
+   */
+  affinityLevelNames: string[];
+  /** 物品档次 → 需要的最低好感等级
+   *  例：{ cheap: 0, normal: 1, precious: 2 }
+   *  物品档次在 items.ts 里定义（affinityValue 字段）
+   *  - cheap（廉价）: 任何好感度都能送
+   *  - normal（普通）: 熟悉以上
+   *  - precious（珍贵）: 亲密以上
+   */
+  giftAccessMap: Record<string, number>;
+  /** 话题级别 → 需要的最低好感等级
+   *  例：{ casual: 0, personal: 1, secret: 2 }
+   *  话题级别由场景脚本或 chatTopics.ts 定义
+   */
+  chatAccessMap: Record<string, number>;
+  /** 角色的"家"位置（安全屋哪个房间）
+   *  例：'living_room' / 'bedroom_main' / 'corridor'
+   */
+  homeRoom: string;
 }
 
 /**
@@ -122,6 +154,13 @@ export const CHARACTER_TEMPLATES: Record<string, CharacterTemplate> = {
       { itemId: 'armor_boots_combat', quantity: 1, durability: 90 },
       { itemId: 'tool_flashlight', quantity: 1, durability: 100 },
     ],
+    // 好感度系统（2026-06-09 加）
+    initialAffinity: 0,  // 主角默认无好感度（因为是主角自己）
+    affinityThresholds: [0, 30, 60, 90],
+    affinityLevelNames: ['陌生', '熟悉', '亲密', '挚友'],
+    giftAccessMap: {},  // 主角不接礼物
+    chatAccessMap: {},
+    homeRoom: 'living_room',
   },
 
   // ============== 露西（剧情获得）==============
@@ -155,6 +194,21 @@ export const CHARACTER_TEMPLATES: Record<string, CharacterTemplate> = {
       { itemId: 'armor_gloves_thin', quantity: 1, durability: 100 },
       { itemId: 'armor_boots_soft', quantity: 1, durability: 100 },
     ],
+    // 好感度系统（2026-06-09 加）
+    initialAffinity: 25,  // 露西对主角初始好感（剧情建立信任后）
+    affinityThresholds: [0, 30, 60, 90],
+    affinityLevelNames: ['陌生', '熟悉', '亲密', '挚友'],
+    // 露西的赠送门槛：
+    // - cheap（廉价）: 陌生（0）以上
+    // - normal（普通）: 熟悉（1）以上
+    // - precious（珍贵）: 亲密（2）以上
+    giftAccessMap: { cheap: 0, normal: 1, precious: 2 },
+    // 露西的聊天门槛：
+    // - casual（日常）: 陌生（0）以上
+    // - personal（私人）: 熟悉（1）以上
+    // - secret（秘密）: 亲密（2）以上
+    chatAccessMap: { casual: 0, personal: 1, secret: 2 },
+    homeRoom: 'living_room',  // 露西住在客厅
   },
 };
 
@@ -182,6 +236,9 @@ export function buildCharacterFromTemplate(
     id,  // 强制用 id（防止 runtimeState.id 写错）
     inventory: (runtimeState?.inventory as ScavengeCharacter['inventory']) ?? template.inventory as ScavengeCharacter['inventory'],
     isExploring: runtimeState?.isExploring ?? false,
+    // 好感度 runtime 字段：模板提供 initial, runtime 可以覆盖
+    affinity: runtimeState?.affinity ?? template.initialAffinity,
+    completedAffinityStoryLevels: runtimeState?.completedAffinityStoryLevels ?? [],
   };
   return normalizeCharacter(merged);
 }

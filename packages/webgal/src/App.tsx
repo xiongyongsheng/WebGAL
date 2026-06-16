@@ -15,6 +15,7 @@ import GlobalDialog from '@/UI/GlobalDialog/GlobalDialog';
 import PanicOverlay from '@/UI/PanicOverlay/PanicOverlay';
 import DevPanel from '@/UI/DevPanel/DevPanel';
 import { ScavengeMain } from '@/UI/Scavenge/ScavengeMain';
+import { SafehouseCharacterPanel } from '@/UI/Scavenge/Safehouse/SafehouseCharacterPanel';
 
 export default function App() {
   useEffect(() => {
@@ -25,6 +26,7 @@ export default function App() {
       <Translation />
       <Stage />
       <ScavengeMain />
+      <SafehouseCharacterPanel />
       <BottomControlPanel />
       <BottomControlPanelFilm />
       <Backlog />

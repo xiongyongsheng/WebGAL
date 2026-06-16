@@ -1,0 +1,162 @@
+/**
+ * 安全屋角色卡片面板（2026-06-09 加）
+ *
+ * 设计：
+ * - 右下角卡片容器
+ * - 根据 current_room GameVar 过滤显示当前房间的角色
+ * - 每个角色一张卡：头像 + 名字 + 好感等级
+ *
+ * 触发条件：
+ * - 当前场景是 safehouse_main（即 current_room 已设置）
+ * - 玩家加入场景的剧组成员有 homeRoom === current_room
+ */
+
+.safehousePanel {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 1000;
+  pointer-events: none;  // 容器不接事件，让卡片自己接
+}
+
+.roomIndicator {
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  align-self: flex-end;
+  pointer-events: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+
+  // 当前房间徽章
+  .roomBadge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 8px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    font-size: 12px;
+    color: #ffd700;
+  }
+}
+
+.characterCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 120px;
+  background: rgba(20, 20, 30, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 12px 8px 8px;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+
+  &:hover {
+    background: rgba(30, 30, 45, 0.95);
+    border-color: rgba(255, 215, 0, 0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4a5568, #2d3748);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: bold;
+  color: #fff;
+  margin-bottom: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+
+  // 占位：用角色首字
+  &.avatarPlaceholder {
+    background: linear-gradient(135deg, #6b7280, #4b5563);
+  }
+}
+
+.name {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 4px;
+  text-align: center;
+}
+
+.affinityRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #cbd5e0;
+
+  .affinityLevel {
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    font-weight: 500;
+  }
+}
+
+// 空房间提示
+.emptyRoom {
+  background: rgba(20, 20, 30, 0.75);
+  color: #94a3b8;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: center;
+  pointer-events: auto;
+  font-style: italic;
+}
+
+// 卡片 disabled 状态（后期用）
+.characterCardDisabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: auto;
+
+  &:hover {
+    transform: none;
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+}
+
+.disabledTooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.9);
+  color: #fff;
+  font-size: 12px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.characterCardDisabled:hover .disabledTooltip {
+  opacity: 1;
+}

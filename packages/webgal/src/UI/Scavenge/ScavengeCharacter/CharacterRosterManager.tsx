@@ -16,7 +16,7 @@
  * 2026-06-09 加
  */
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useStageState } from '@/hooks/useStageState';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { CHARACTER_TEMPLATES, buildCharacterFromTemplate, listAllCharacterIds } from './characterRoster';
@@ -148,6 +148,58 @@ export const CharacterRosterManager = () => {
       // 静默失败（不影响游戏）
     }
   }, [stageState.GameVar['scavenge_character_ids']]);
+
+  // ============== 升阶剧情完成监听（2026-06-09 加）==============
+  // 监听 _<charId>_completed_affinity_story_<N> GameVar
+  // 剧情文件 setVar 这个值后 → 这里写回 character.completedAffinityStoryLevels
+
+  // 提取所有 _completed_affinity_story_* vars 作为 useEffect 依赖
+  // （不能用单一字段做依赖，否则设一个 var 不会触发 useEffect）
+  const completionFlags = useMemo(() => {
+    const flags: Record<string, unknown> = {};
+    Object.keys(stageState.GameVar).forEach((k) => {
+      if (k.startsWith('_') && k.includes('_completed_affinity_story_')) {
+        flags[k] = stageState.GameVar[k];
+      }
+    });
+    return flags;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageState.GameVar]);
+
+  useEffect(() => {
+    try {
+      const charsRaw = stageState.GameVar['scavenge_characters'];
+      if (typeof charsRaw !== 'string') return;
+      const chars: ScavengeCharacter[] = JSON.parse(charsRaw);
+      let changed = false;
+
+      const newChars = chars.map((char) => {
+        const completedLevels = char.completedAffinityStoryLevels ?? [];
+
+        for (let level = 0; level < 10; level++) {
+          const flagKey = `_${char.id}_completed_affinity_story_${level}`;
+          const flag = stageState.GameVar[flagKey];
+          const isFlagged = flag === true || flag === 'true';
+          if (isFlagged && !completedLevels.includes(level)) {
+            completedLevels.push(level);
+            changed = true;
+          }
+        }
+
+        return { ...char, completedAffinityStoryLevels: completedLevels };
+      });
+
+      if (changed) {
+        stageStateManager.setStageVarAndCommit({
+          key: 'scavenge_characters',
+          value: JSON.stringify(newChars),
+        });
+      }
+    } catch {
+      // 静默
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completionFlags, stageState.GameVar['scavenge_characters']]);
 
   return null;
 };
