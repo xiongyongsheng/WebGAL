@@ -164,6 +164,12 @@ export const ScavengeMissionOutcomeModal = ({ mission, onClose }: ScavengeMissio
                 <span className={styles.rewardValue}>-{outcome.hpLost} HP</span>
               </div>
             )}
+            {outcome.bottlecapsGained !== undefined && outcome.bottlecapsGained > 0 && (
+              <div className={styles.rewardBadge} style={{ borderColor: '#fbbf24' }} title="瓶盖（参考辐射4）">
+                <Icon icon="material-symbols:attach-money" className={styles.rewardIcon} style={{ color: '#fbbf24' }} />
+                <span className={styles.rewardValue}>+{outcome.bottlecapsGained} 瓶盖</span>
+              </div>
+            )}
           </div>
         )}
 

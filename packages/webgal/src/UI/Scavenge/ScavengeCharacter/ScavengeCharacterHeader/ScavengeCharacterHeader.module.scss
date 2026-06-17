@@ -41,6 +41,13 @@
   margin: 0;
 }
 
+// 2026-06-09 加：好感度等级 + 状态 同行显示
+.subInfo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .status {
   font-size: 12px;
   padding: 2px 8px;
@@ -53,6 +60,23 @@
     background: rgba(76, 175, 80, 0.2);
     color: #4CAF50;
   }
+}
+
+// 2026-06-09 加：好感度等级徽章
+.affinityBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  width: fit-content;
+}
+
+.affinityIcon {
+  font-size: 12px;
+  line-height: 1;
 }
 
 .closeButton {

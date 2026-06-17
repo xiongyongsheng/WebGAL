@@ -1,0 +1,15 @@
+; ====================================================================
+; 安全屋 - 厨房（2026-06-09 加）
+; 右下角：回客厅 / 退到门口 / 离开
+; ====================================================================
+
+setVar:show_scavenge_time_control=true;
+setVar:show_scavenge_map=false;
+setVar:scavenge_show_character_list=false;
+setVar:scavenge_show_warehouse=false;
+setVar:scavenge_show_menu=true;
+
+setVar:scavenge_room_targets=[{kind:"room",id:"living_room",label:"回客厅",scene:"safehouse/living_room.txt",icon:"material-symbols:home"}, {kind:"room",id:"entrance",label:"退到门口",scene:"safehouse/entrance.txt",icon:"material-symbols:exit-to-app"}, {kind:"exit",label:"离开安全屋",scene:"scavenge/scavenge_main.txt",icon:"material-symbols:logout"}];
+
+厨房里有几个旧柜子，角落里的炉灶上积了些灰。架子上有几个空罐头，看起来很久没人做饭了。;
+

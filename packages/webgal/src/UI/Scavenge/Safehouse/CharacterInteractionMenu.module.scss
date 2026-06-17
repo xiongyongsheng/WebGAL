@@ -16,6 +16,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  // 2026-06-09 修：父容器 SafehouseCharacterPanel 是 pointer-events: none
   pointer-events: auto;
 }
 

@@ -1,16 +1,25 @@
 /**
  * 角色花名册管理器
  *
- * 监听 `scavenge_character_ids` 变化 → 从 templates 拉基础数据 → merge runtime 状态 → 写回 `scavenge_characters`
+ * 监听阵营相关的 GameVar 变化 → 从 templates 拉基础数据 → merge runtime 状态 → 写回 `scavenge_characters`
+ *
+ * 阵营设计（2026-06-09 加）：
+ * - ally（友方/队伍成员）：scavenge_character_ids 管理
+ *   → 剧情加入、玩家控制、卡片显示、转移操作
+ * - neutral（中立）：scavenge_neutral_ids 管理
+ *   → 商人、可雇佣 NPC。数据独立于队伍
+ *   → 例如商人维克斯是中立，他永远在市场，但不进队伍花名册
+ * - enemy（敌对）：scavenge_enemy_ids（可选）
+ *   → 敌人。战斗时动态生成或用模板
  *
  * 工作流程：
- * 1. 启动时读 `scavenge_character_ids`（已获得的角色 ID 列表）
+ * 1. 启动时读 `scavenge_character_ids` + `scavenge_neutral_ids`
  * 2. 遍历 IDs，从 `CHARACTER_TEMPLATES` 取模板构造角色
  * 3. 合并现有 `scavenge_characters` 中的 runtime 状态（hp/exp/level/isExploring 等）
  * 4. 写回 `scavenge_characters`（其他 UI 读这里用）
  *
  * 触发时机：
- * - `scavenge_character_ids` GameVar 变化时（剧情触发获得新角色）
+ * - 任意 IDs GameVar 变化时
  * - 第一次 mount 时（处理 resetStage 之后 IDs 变化）
  *
  * 2026-06-09 加
@@ -83,25 +92,46 @@ function parseExistingCharacters(raw: unknown): ScavengeCharacter[] {
 export const CharacterRosterManager = () => {
   const stageState = useStageState();
 
-  // 2026-06-09 改：用 stageState._last_built_character_ids 跟踪上次处理
-  // 不用 useRef（resetStage 不清 useRef，会导致 stale 状态）
+  // 2026-06-09 改：按阵营分两层管理
+  // - ally 花名册（scavenge_character_ids）：玩家队伍
+  // - neutral 花名册（scavenge_neutral_ids）：中立 NPC（商人等）
+  // 合并写入 scavenge_characters
   useEffect(() => {
     try {
-      const idsRaw = stageState.GameVar['scavenge_character_ids'];
-      let ids = parseCharacterIds(idsRaw);
+      // 1. 读 ally 阵营（队伍）
+      const allyIdsRaw = stageState.GameVar['scavenge_character_ids'];
+      let allyIds = parseCharacterIds(allyIdsRaw);
 
-      // 2026-06-09 兜底：如果 IDs 是空（首次 mount，玩家还没获得任何角色）
-      //   → 同步写入 [player_1] 默认值（玩家一开始就有主角）
-      // 然后**继续用默认值构建**（不等下次 useEffect，因为 React re-render 是异步的）
-      if (ids.length === 0) {
+      // 兜底：队伍默认为 [player_1]
+      if (allyIds.length === 0) {
         stageStateManager.setStageVarAndCommit({
           key: 'scavenge_character_ids',
           value: '[player_1]',
         });
-        ids = ['player_1'];
+        allyIds = ['player_1'];
       }
 
-      const idsKey = JSON.stringify([...ids].sort());
+      // 2. 读 neutral 阵营（中立 NPC）
+      const neutralIdsRaw = stageState.GameVar['scavenge_neutral_ids'];
+      let neutralIds = parseCharacterIds(neutralIdsRaw);
+
+      // 兜底：中立默认为 [merchant_vix]（商人一开始就在）
+      if (neutralIdsRaw === undefined) {
+        // 仅当 GameVar 完全不存在时（首次启动）才写默认值
+        // 如果 user 清空后是空数组，不重新兜底
+        stageStateManager.setStageVarAndCommit({
+          key: 'scavenge_neutral_ids',
+          value: '[merchant_vix]',
+        });
+        neutralIds = ['merchant_vix'];
+      } else if (neutralIds.length === 0) {
+        // 如果明确设为空数组，保持空
+        neutralIds = [];
+      }
+
+      // 3. 合并：按 ally 优先，然后 neutral
+      const allIds = [...allyIds, ...neutralIds];
+      const idsKey = JSON.stringify([...allIds].sort());
 
       // 用 idsKey 跟当前已写入的 characters 内容比对，避免重复构建
       const lastWrittenCharIds = stageState.GameVar['_last_built_character_ids'];
@@ -109,14 +139,14 @@ export const CharacterRosterManager = () => {
         return;
       }
 
-      // 读现有 characters（保留 runtime 状态：hp/exp/level/isExploring 等）
+      // 读现有 characters（保留 runtime 状态）
       const existing = parseExistingCharacters(stageState.GameVar['scavenge_characters']);
       const existingById = new Map(existing.map((c) => [c.id, c]));
 
-      // 构建新数组：按 IDs 顺序遍历
+      // 构建新数组：先 ally 再 neutral
       const newCharacters: ScavengeCharacter[] = [];
 
-      for (const id of ids) {
+      for (const id of allIds) {
         const runtimeState = existingById.get(id);
         const character = buildCharacterFromTemplate(id, runtimeState);
         if (character) {
@@ -125,11 +155,11 @@ export const CharacterRosterManager = () => {
       }
 
       // 警告：ID 列表中包含未知角色
-      for (const id of ids) {
+      for (const id of allIds) {
         if (!(id in CHARACTER_TEMPLATES)) {
           // eslint-disable-next-line no-console
           console.warn(
-            `[CharacterRosterManager] scavenge_character_ids 包含未知角色: '${id}'（请在 characterRoster.ts 添加模板）`,
+            `[CharacterRosterManager] 包含未知角色: '${id}'（请在 characterRoster.ts 添加模板）`,
           );
         }
       }
@@ -147,7 +177,8 @@ export const CharacterRosterManager = () => {
     } catch {
       // 静默失败（不影响游戏）
     }
-  }, [stageState.GameVar['scavenge_character_ids']]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageState.GameVar['scavenge_character_ids'], stageState.GameVar['scavenge_neutral_ids']]);
 
   // ============== 升阶剧情完成监听（2026-06-09 加）==============
   // 监听 _<charId>_completed_affinity_story_<N> GameVar

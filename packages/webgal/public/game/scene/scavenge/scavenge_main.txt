@@ -16,6 +16,17 @@ setVar:scavenge_show_character_list=false;
 setVar:scavenge_show_warehouse=false;
 setVar:scavenge_warehouse=[{"itemId":"food_apple","quantity":10},{"itemId":"drink_water","quantity":8},{"itemId":"medicine_bandage","quantity":5},{"itemId":"material_parts","quantity":20},{"itemId":"weapon_crowbar","quantity":1,"durability":100},{"itemId":"armor_vest","quantity":1,"durability":100},{"itemId":"tool_flashlight","quantity":1,"durability":100},{"itemId":"quest_key","quantity":1}];
 
+; 初始化货币系统（瓶盖，2026-06-09 加）
+; 参考辐射 4：瓶盖是废土世界的主要货币
+; 用途：商人交易（后续会接入 NPC 商人）、装备维修、特殊服务
+; 初始 100 瓶盖；拾荒任务每个物品掉落 1-5 瓶盖
+setVar:scavenge_bottlecaps=100;
+
+; 初始化角色花名册：2026-06-09 改：移除手动 setVar
+; 兜底逻辑由 CharacterRosterManager 处理（默认 [player_1, merchant_vix]）
+; 露西由 intro.txt 剧情结尾触发 setVar 加入
+; 注：scavenge_main.txt 不再 setVar 角色花名册，避免与剧情冲突
+
 ; 初始化菜单系统
 setVar:scavenge_show_menu=true;
 

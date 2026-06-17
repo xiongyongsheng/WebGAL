@@ -33,4 +33,4 @@ setVar:show_scavenge_time_control=false;
 setVar:_lucy_completed_affinity_story_0=true;
 
 ; 回到安全屋主菜单
-changeScene:safehouse/safehouse_main.txt;
+changeScene:safehouse/entrance.txt;

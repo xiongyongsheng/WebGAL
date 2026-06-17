@@ -48,6 +48,30 @@
   border-radius: 6px;
 }
 
+// 2026-06-09 加：瓶盖显示（金色货币）
+.bottlecaps {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.bottlecapsIcon {
+  color: #fbbf24;
+  font-size: 16px;
+}
+
+.bottlecapsValue {
+  color: #fbbf24;
+  font-weight: 600;
+  text-shadow: 0 0 6px rgba(251, 191, 36, 0.4);
+}
+
 .periodValue {
   font-size: 18px;
   color: #e0e0e0;

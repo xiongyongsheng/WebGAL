@@ -51,6 +51,9 @@ export const ScavengeTimeControl = () => {
   const currentPeriodIndex = (stageState.GameVar['current_period_index'] as number) ?? 0;
   const currentPeriod = TIME_PERIODS[currentPeriodIndex] ?? '上午';
 
+  // 2026-06-09 加：瓶盖（货币显示）
+  const currentBottlecaps = (stageState.GameVar['scavenge_bottlecaps'] as number) ?? 0;
+
   const isVisible = (stageState.GameVar['show_scavenge_time_control'] as boolean) ?? false;
   const isEnterGame = GUIState.isEnterGame;
 
@@ -181,6 +184,25 @@ export const ScavengeTimeControl = () => {
             );
           }
           justCompletedCount++;
+          // 2026-06-09 加：瓶盖掉落奖励（每个物品 1-5 瓶盖）
+          // 设计：每个掉落物品给 1-5 瓶盖（伪随机，按 itemId 哈希）
+          if (completed.outcome && completed.outcome.itemsGained.length > 0) {
+            const bottlecapReward = completed.outcome.itemsGained.reduce((sum, item) => {
+              // 用 itemId 字符和算 hash，避免 Math.random（保证确定性）
+              const hash = item.itemId.split('').reduce((h, c) => h + c.charCodeAt(0), 0);
+              return sum + (hash % 5) + 1; // 1-5
+            }, 0);
+            const currentBottlecaps = Number(stageStateManager.getCalculationStageState().GameVar['scavenge_bottlecaps'] ?? 0);
+            stageStateManager.setStageVarAndCommit({
+              key: 'scavenge_bottlecaps',
+              value: String(currentBottlecaps + bottlecapReward),
+            });
+            // 把瓶盖奖励加到 outcome.bottlecapsGained（用于 UI 显示）
+            completed.outcome.bottlecapsGained = bottlecapReward;
+            console.log(
+              `[派遣/瓶盖] 角色=${char.name} 物品${completed.outcome.itemsGained.length}类 瓶盖+${bottlecapReward}`,
+            );
+          }
           // 只算"真实遭遇"（排除准备期 no_encounter 占位）
           const realEncounters = mWithEncounters.encounters.filter(e => e.kind !== 'no_encounter').length;
           console.log(
@@ -245,6 +267,11 @@ export const ScavengeTimeControl = () => {
         </div>
         <div className={styles.period}>
           <span className={styles.periodValue}>{currentPeriod}</span>
+        </div>
+        {/* 2026-06-09 加：瓶盖显示 */}
+        <div className={styles.bottlecaps} title="瓶盖（货币）">
+          <Icon icon="material-symbols:attach-money" className={styles.bottlecapsIcon} />
+          <span className={styles.bottlecapsValue}>{currentBottlecaps}</span>
         </div>
       </div>
       <button className={styles.advanceButton} onClick={handleTimeAdvance} title="时间流逝">

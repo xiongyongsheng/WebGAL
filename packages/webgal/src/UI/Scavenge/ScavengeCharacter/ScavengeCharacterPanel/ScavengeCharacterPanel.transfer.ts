@@ -20,8 +20,35 @@ import {
 } from '../../ScavengeItems/inventory';
 import { getCharacters, updateCharacter, getWarehouse, setWarehouse } from './ScavengeCharacterPanel.stage';
 import { TransferSource, TransferTarget, DraggedItemState } from './ScavengeCharacterPanel.types';
+import { computeDisplayLevel, getAffinityLevelName } from '../affinityUtils';
 
 // ============== 转移核心 ==============
+
+/**
+ * 检查：从其他角色背包拿出物品（to 玩家或仓库）的权限
+ *
+ * 2026-06-09 加：好感度门槛
+ * - 与赠送门槛**镜像**：cheap 1 级，normal 2 级，precious 3 级
+ *   （与赠送的 cheap 0 / normal 1 / precious 2 相反）
+ * - 主角本身（player_1）拿自己的物品不受限
+ * - 装备/使用（不走 executeTransfer）不受限
+ */
+const canTakeFromOtherCharacter = (
+  charId: string,
+  itemAffinityValue: string | undefined,
+): boolean => {
+  if (charId === 'player_1') return true;  // 主角
+  if (!itemAffinityValue) return true;  // 没有 affinityValue 标记的物品不受限（如任务物品）
+  const chars = getCharacters();
+  const char = chars.find(c => c.id === charId);
+  if (!char) return false;
+  // 镜像门槛：cheap 1, normal 2, precious 3
+  const level = computeDisplayLevel(char);
+  const requiredLevel: Record<string, number> = { cheap: 1, normal: 2, precious: 3 };
+  const required = requiredLevel[itemAffinityValue];
+  if (required === undefined) return true;  // 未知档次，不限
+  return level >= required;
+};
 
 /** 统一执行转移（角色 ↔ 角色 / 角色 ↔ 仓库） */
 export const executeTransfer = (
@@ -35,6 +62,25 @@ export const executeTransfer = (
   if (quantity <= 0 || quantity > item.quantity) return false;
   if (source.kind === 'character' && target.kind === 'character' && source.characterId === target.characterId) return false;
   if (source.kind === 'warehouse' && target.kind === 'warehouse') return false;
+
+  // 2026-06-09 加：从其他角色背包拿出物品（目标不是该角色时）的权限检查
+  // 拿物品的目标是：玩家自己 / 仓库 / 其他角色
+  // 不包括：装备/使用（不走这里）
+  const allChars = getCharacters();
+  if (source.kind === 'character' && source.characterId !== 'player_1') {
+    // 拿出方不是玩家自己 → 检查好感度
+    const itemDef = getItemById(item.itemId);
+    if (!canTakeFromOtherCharacter(source.characterId, itemDef?.affinityValue)) {
+      const sourceName = allChars.find(c => c.id === source.characterId)?.name ?? '?';
+      const requiredLevelName = ({ cheap: '熟悉', normal: '亲密', precious: '挚友' } as any)[itemDef?.affinityValue ?? ''] ?? '更高';
+      const sourceChar = allChars.find(c => c.id === source.characterId);
+      const currentLevelName = sourceChar ? getAffinityLevelName(computeDisplayLevel(sourceChar)) : '?';
+      showTransferError(
+        `从 ${sourceName} 拿取 ${itemDef?.name ?? item.itemId} 需要 ${requiredLevelName}以上好感度（当前是 ${currentLevelName}）`,
+      );
+      return false;
+    }
+  }
 
   // 目标侧容量预检（只对角色背包有意义，仓库永远能放）
   if (target.kind === 'character') {

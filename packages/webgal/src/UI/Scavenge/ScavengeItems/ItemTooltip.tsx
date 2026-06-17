@@ -390,6 +390,13 @@ export const ItemTooltip = ({ data }: ItemTooltipProps) => {
                 · {EQUIPMENT_SUBTYPE_LABELS[def.slot]}
               </span>
             )}
+            {/* 2026-06-09 加：显示价格（瓶盖） */}
+            {def.price !== undefined && (
+              <span className={styles.priceLabel} title="商人交易基础价">
+                · <Icon icon="material-symbols:attach-money" className={styles.priceIcon} />
+                {def.price}
+              </span>
+            )}
           </div>
         </div>
       </div>

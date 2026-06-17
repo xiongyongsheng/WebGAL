@@ -1,0 +1,25 @@
+; ====================================================================
+; 安全屋 - 门口（2026-06-09 重构：场景 + targets 架构）
+;
+; 玩家点地图上的"贫民窟/安全屋" → 落到这里
+; 右下角显示"进入客厅"等卡片 → 玩家**主动点卡片**切换场景
+;
+; 注：2026-06-09 改：移除 choose 行
+;   原因：choose 会让 nextSentence 自动选第一个 option（label_living_room），
+;         玩家没机会点卡片（卡片被 choose "抢" 了）
+;   现在：剧情播完后停在门口，等玩家点右下角卡片
+; ====================================================================
+
+; 关闭拾荒 UI
+setVar:show_scavenge_time_control=true;
+setVar:show_scavenge_map=false;
+setVar:scavenge_show_character_list=false;
+setVar:scavenge_show_warehouse=false;
+setVar:scavenge_show_menu=true;
+
+; 场景 targets（2026-06-09 加）
+; 右下角显示的卡片列表（点击切换场景）
+setVar:scavenge_room_targets=[{"kind":"room","id":"living_room","label":"进入客厅","scene":"safehouse/living_room.txt","icon":"material-symbols:door-front"},{"kind":"room","id":"market","label":"直接去市场","scene":"safehouse/market.txt","icon":"material-symbols:storefront"},{"kind":"exit","label":"离开安全屋","scene":"scavenge/scavenge_main.txt","icon":"material-symbols:logout"}];
+
+; 门口剧情（播完后停在门口，等玩家点卡片）
+你站在安全屋门口。门虚掩着，里面传来断断续续的说话声。;

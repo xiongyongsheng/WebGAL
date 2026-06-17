@@ -115,6 +115,13 @@ export interface ScavengeCharacter {
    *  门控：affinity 达到下一阈值时，对应索引必须在该列表中才能升级
    */
   completedAffinityStoryLevels: number[];
+  // ============== 商人好感度（2026-06-09 加，可选）==============
+  /** 商人好感度（独立字段，仅商人有）。
+   *  与 affinity 不共用，命名空间独立。
+   *  范围 -100~100。
+   *  默认 0（普通客户）。
+   */
+  merchantAffection?: number;
 }
 
 /**
@@ -151,6 +158,7 @@ export const DEFAULT_CHARACTER: ScavengeCharacter = {
   // 好感度系统（2026-06-09 加）
   affinity: 0,
   completedAffinityStoryLevels: [],
+  merchantAffection: 0,
 };
 
 /**

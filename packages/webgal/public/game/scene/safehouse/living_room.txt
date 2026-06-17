@@ -1,0 +1,21 @@
+; ====================================================================
+; 安全屋 - 客厅（2026-06-09 重构：场景 + targets 架构）
+;
+; 右下角显示：
+; - 露西（角色卡片）
+; - 去厨房 / 去卫生间 / 去主卧 / 上楼 / 去市场 / 退到门口（房间入口卡片）
+; ====================================================================
+
+; 关闭拾荒 UI
+setVar:show_scavenge_time_control=true;
+setVar:show_scavenge_map=false;
+setVar:scavenge_show_character_list=false;
+setVar:scavenge_show_warehouse=false;
+setVar:scavenge_show_menu=true;
+
+; 场景 targets（2026-06-09 加）
+setVar:scavenge_room_targets=[{kind:"character",id:"lucy"}, {kind:"room",id:"kitchen",label:"去厨房",scene:"safehouse/kitchen.txt",icon:"material-symbols:kitchen"}, {kind:"room",id:"bathroom",label:"去卫生间",scene:"safehouse/bathroom.txt",icon:"material-symbols:bathroom"}, {kind:"room",id:"bedroom_main",label:"去主卧",scene:"safehouse/bedroom_main.txt",icon:"material-symbols:bed"}, {kind:"room",id:"corridor",label:"上楼",scene:"safehouse/corridor.txt",icon:"material-symbols:stairs"}, {kind:"room",id:"market",label:"去市场（找商人）",scene:"safehouse/market.txt",icon:"material-symbols:storefront"}, {kind:"room",id:"entrance",label:"退到门口",scene:"safehouse/entrance.txt",icon:"material-symbols:exit-to-app"}];
+
+; 客厅剧情（占位）
+客厅是一个相对宽敞的空间，墙角的沙发看起来有些破旧。透过脏兮兮的窗户，外面的天空灰蒙蒙的。露西坐在窗边，看着你。;
+

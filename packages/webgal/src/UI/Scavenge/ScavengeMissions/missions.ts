@@ -45,6 +45,8 @@ export interface MissionOutcome {
   expGained: number;
   /** 派遣期间损失（已包含 period 推进的消耗） */
   hpLost: number;
+  /** 瓶盖获得（2026-06-09 加：拾荒每个物品给 1-5 瓶盖） */
+  bottlecapsGained?: number;
 }
 
 /** 派遣任务 */

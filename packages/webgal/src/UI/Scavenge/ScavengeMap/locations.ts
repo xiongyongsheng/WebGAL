@@ -120,7 +120,8 @@ const RAW_LOCATIONS: ScavengeLocationItem[] = [
     // 2026-06-09 加：点击跳转到安全屋场景
     // 但首次点击时，剧情系统会优先触发 intro（handleLocationSelect 检测红点）
     // 剧情完成后，再点 slums 才会真正跳到 safehouse
-    jumpScene: './game/scene/safehouse/safehouse_main.txt',
+    // 2026-06-09 改：跳到 entrance（入口），不再用 safehouse_main（已拆分为多场景）
+    jumpScene: './game/scene/safehouse/entrance.txt',
   },
   {
     id: 'park',

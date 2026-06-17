@@ -1,0 +1,15 @@
+; ====================================================================
+; 安全屋 - 市场（2026-06-09 重构：场景 + targets）
+; 右下角：维克斯（商人） + 去其他房间
+; ====================================================================
+
+setVar:show_scavenge_time_control=true;
+setVar:show_scavenge_map=false;
+setVar:scavenge_show_character_list=false;
+setVar:scavenge_show_warehouse=false;
+setVar:scavenge_show_menu=true;
+
+setVar:scavenge_room_targets=[{kind:"character",id:"merchant_vix"}, {kind:"room",id:"living_room",label:"去客厅",scene:"safehouse/living_room.txt",icon:"material-symbols:home"}, {kind:"room",id:"entrance",label:"退到门口",scene:"safehouse/entrance.txt",icon:"material-symbols:exit-to-app"}, {kind:"exit",label:"离开安全屋",scene:"scavenge/scavenge_main.txt",icon:"material-symbols:logout"}];
+
+市场的灯有些昏暗，空气中有一股铁锈和烟草混合的味道。一个穿着破旧大衣的中年男子靠在柜台后面，看着你走进来。;
+

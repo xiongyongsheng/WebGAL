@@ -22,6 +22,13 @@
 
 import { ScavengeCharacter, normalizeCharacter } from './character';
 
+/** 角色阵营（2026-06-09 加）
+ *  - ally（友方/队伍成员）：在 scavenge_character_ids 花名册里
+ *  - neutral（中立）：商人、可雇佣 NPC；不进花名册，单独管理
+ *  - enemy（敌对）：敌人；不进花名册，战斗时动态生成
+ */
+export type CharacterFaction = 'ally' | 'neutral' | 'enemy';
+
 /** 角色基础模板（与 ScavengeCharacter 同形，但只描述"初始/默认"状态）*/
 export interface CharacterTemplate {
   /** 角色唯一 ID（与 ScavengeCharacter.id 一致）*/
@@ -30,6 +37,13 @@ export interface CharacterTemplate {
   name: string;
   /** 头像（可选，资源路径）*/
   avatar?: string;
+  // ============== 阵营（2026-06-09 加）==============
+  /** 角色阵营
+   *  - 默认 'ally'（友方/队伍成员）
+   *  - 'neutral' = 中立（商人、可雇佣 NPC）
+   *  - 'enemy' = 敌对
+   */
+  faction?: CharacterFaction;
   /** 基础属性 */
   str: number;
   agi: number;
@@ -101,6 +115,17 @@ export interface CharacterTemplate {
    *  例：'living_room' / 'bedroom_main' / 'corridor'
    */
   homeRoom: string;
+  // ============== 商人系统（2026-06-09 加，可选）==============
+  /** 是否是商人（true = 该角色是商人，可交易）*/
+  isMerchant?: boolean;
+  /** 商人初始好感度（独立字段 merchantAffection，不与普通 affinity 共用）*/
+  initialMerchantAffection?: number;
+  /** 商人好感度等级阈值（-100~100 范围，可负数）*/
+  merchantAffectionThresholds?: number[];
+  /** 商人好感度等级名 */
+  merchantAffectionLevelNames?: string[];
+  /** 商人折扣率（每个等级对应折扣，例如 {0: 1.0, 1: 0.9, 2: 0.8, 3: 0.7}）*/
+  merchantDiscountMap?: Record<number, number>;
 }
 
 /**
@@ -161,6 +186,7 @@ export const CHARACTER_TEMPLATES: Record<string, CharacterTemplate> = {
     giftAccessMap: {},  // 主角不接礼物
     chatAccessMap: {},
     homeRoom: 'living_room',
+    faction: 'ally',  // 2026-06-09 加：主角是友方
   },
 
   // ============== 露西（剧情获得）==============
@@ -209,6 +235,72 @@ export const CHARACTER_TEMPLATES: Record<string, CharacterTemplate> = {
     // - secret（秘密）: 亲密（2）以上
     chatAccessMap: { casual: 0, personal: 1, secret: 2 },
     homeRoom: 'living_room',  // 露西住在客厅
+    faction: 'ally',  // 2026-06-09 加：露西是友方（剧情加入队伍）
+  },
+
+  // ============== 商人：维克斯（中立角色，2026-06-09 加）==============
+  // 设计：
+  //   - 阵营 = 'neutral'（中立，不进 scavenge_character_ids 花名册）
+  //   - 商人住在 safehouse 的 market 房间
+  //   - 有独立的好感度（merchantAffection），不影响玩家与露西的 affinity
+  //   - 折扣率：陌生 100% / 熟客 90% / 老主顾 80% / 至交 70%
+  //   - 数据由 CharacterRosterManager 单独管理（faction='neutral' 不会被 ally 花名册过滤掉）
+  merchant_vix: {
+    id: 'merchant_vix',
+    name: '维克斯',
+    str: 4,
+    agi: 6,
+    end: 5,
+    int: 8,
+    hp: 80,
+    maxHp: 80,
+    hunger: 100,
+    maxHunger: 100,
+    thirst: 100,
+    maxThirst: 100,
+    sanity: 100,
+    maxSanity: 100,
+    stamina: 100,
+    maxStamina: 100,
+    exp: 0,
+    level: 1,
+    expToNext: 100,
+    statPoints: 0,
+    mainStat: 'int',
+    strategy: 'stealth',
+    traitIds: [],
+    // 商人商品（来源：基类物品 + 价格由 items.ts.price 决定）
+    inventory: [
+      { itemId: 'food_apple', quantity: 20 },
+      { itemId: 'drink_water', quantity: 20 },
+      { itemId: 'medicine_bandage', quantity: 15 },
+      { itemId: 'food_canned', quantity: 10 },
+      { itemId: 'drink_soda', quantity: 10 },
+      { itemId: 'material_parts', quantity: 30 },
+      { itemId: 'material_cloth', quantity: 20 },
+      { itemId: 'weapon_crowbar', quantity: 2, durability: 120 },
+      { itemId: 'armor_vest', quantity: 2, durability: 120 },
+      { itemId: 'tool_flashlight', quantity: 5, durability: 100 },
+    ],
+    // 好感度系统（普通 NPC 部分，商人模式下不用，但保留以防 NPC 逻辑冲突）
+    initialAffinity: 0,
+    affinityThresholds: [0, 30, 60, 90],
+    affinityLevelNames: ['陌生', '熟悉', '亲密', '挚友'],
+    giftAccessMap: {},
+    chatAccessMap: {},
+    homeRoom: 'market',
+    // ============== 商人特有配置 ==============
+    faction: 'neutral',  // 2026-06-09 加：阵营 = 中立（不进花名册，单独管理）
+    isMerchant: true,
+    initialMerchantAffection: 0,
+    // 商人好感度阈值（独立计算）
+    // 陌生（< 30）：原价
+    // 熟客（>= 30）：9 折
+    // 老主顾（>= 60）：8 折
+    // 至交（>= 90）：7 折
+    merchantAffectionThresholds: [30, 60, 90],
+    merchantAffectionLevelNames: ['陌生', '熟客', '老主顾', '至交'],
+    merchantDiscountMap: { 0: 1.0, 1: 0.9, 2: 0.8, 3: 0.7 },
   },
 };
 
@@ -239,6 +331,8 @@ export function buildCharacterFromTemplate(
     // 好感度 runtime 字段：模板提供 initial, runtime 可以覆盖
     affinity: runtimeState?.affinity ?? template.initialAffinity,
     completedAffinityStoryLevels: runtimeState?.completedAffinityStoryLevels ?? [],
+    // 商人好感度（独立字段）
+    merchantAffection: runtimeState?.merchantAffection ?? template.initialMerchantAffection ?? 0,
   };
   return normalizeCharacter(merged);
 }

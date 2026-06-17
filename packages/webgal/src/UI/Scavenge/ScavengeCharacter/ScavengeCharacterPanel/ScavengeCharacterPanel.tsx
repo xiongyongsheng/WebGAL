@@ -16,6 +16,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
 import { useStageState } from '@/hooks/useStageState';
 import { ScavengeCharacter, getCharacterStatusText } from '../character';
+import { CHARACTER_TEMPLATES } from '../characterRoster';
 import { ScavengeCharacterTraits } from '../ScavengeCharacterTraits/ScavengeCharacterTraits';
 import { getItemName, getItemById } from '../../ScavengeItems/items';
 import { ItemTooltip, ItemTooltipData } from '../../ScavengeItems/ItemTooltip';
@@ -145,7 +146,16 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
 
   // ============== 拉取数据（每次渲染时） ==============
   const characters = getCharacters();
-  const safeCharacters: ScavengeCharacter[] = characters.map(c => ({ ...c, inventory: c.inventory ?? [] }));
+  // 2026-06-09 改：按阵营过滤
+  //   - 角色列表只显示 ally（友方/队伍成员）
+  //   - neutral（中立，如商人）有独立交易入口
+  //   - enemy（敌对）不进角色列表
+  const allyCharacters = characters.filter((c) => {
+    const template = CHARACTER_TEMPLATES[c.id];
+    if (!template) return false;
+    return (template.faction ?? 'ally') === 'ally';
+  });
+  const safeCharacters: ScavengeCharacter[] = allyCharacters.map(c => ({ ...c, inventory: c.inventory ?? [] }));
   const warehouseItems = getWarehouse();
 
   // ============== 包装层（2026-06-09 改：直接用 handleXxx 闭包，避免 LSP 缓存冲突） ==============
@@ -185,6 +195,7 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
                     name={charData.name}
                     statusText={getCharacterStatusText(charData)}
                     isExploring={Boolean(charData.isExploring)}
+                    character={charData}
                     onClose={() => {}}
                   />
                   <div className={styles.cardContent}>
