@@ -85,6 +85,78 @@
   }
 }
 
+// 2026-06-09 加：多选队伍 UI
+.partyCounter {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 12px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: #ffd54f;
+  background: rgba(255, 213, 79, 0.15);
+  border: 1px solid rgba(255, 213, 79, 0.4);
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.charCardSelected {
+  background: rgba(76, 175, 80, 0.15) !important;
+  border-color: rgba(76, 175, 80, 0.5) !important;
+}
+
+.charCardDisabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+}
+
+.charCheckbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.checkboxIcon {
+  font-size: 24px;
+  color: #888;
+}
+
+.checkboxIconChecked {
+  font-size: 24px;
+  color: #4caf50;
+}
+
+.partyLeaderTag {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 1px 6px;
+  font-size: 10px;
+  color: #ffd54f;
+  background: rgba(255, 213, 79, 0.2);
+  border: 1px solid rgba(255, 213, 79, 0.5);
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.partyActions {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+
+  .primaryButton {
+    min-width: 160px;
+  }
+}
+
 .exploringStatus {
   display: flex;
   align-items: center;
@@ -250,6 +322,36 @@
 
   &:hover {
     background: rgba(255, 255, 255, 0.15);
+  }
+}
+
+// 2026-06-09 加：派遣中按钮组（休整 + 提前返回）
+.activeMissionActions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+
+  .secondaryButton,
+  .restButton {
+    flex: 1;
+  }
+}
+
+// 2026-06-09 加：休整按钮（绿色）
+.restButton {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #66bb6a 0%, #2e7d32 100%);
+  border: 1px solid #2e7d32;
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: linear-gradient(135deg, #81c784 0%, #388e3c 100%);
+    border-color: #388e3c;
   }
 }
 

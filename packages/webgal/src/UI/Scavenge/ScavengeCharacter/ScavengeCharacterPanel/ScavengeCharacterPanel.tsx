@@ -54,11 +54,40 @@ import styles from './ScavengeCharacterPanel.module.scss';
 
 interface ScavengeCharacterPanelProps {
   onClose: () => void;
+  /**
+   * 限制视图（2026-06-09 重构：拆自 restMode）
+   * - true：只显示 partyCharacterIds 里的角色，隐藏仓库
+   * - false（默认）：显示所有 ally 角色 + 仓库
+   *
+   * 用途：休整 modal（玩家只能用队内物品 + 不能和仓库交换）
+   */
+  restrictView?: boolean;
+  /**
+   * 限制转移（2026-06-09 重构：拆自 restMode）
+   * - true：转移 submenu 隐藏"非队内"和"仓库"选项
+   * - false（默认）：可转移到任何角色 + 仓库
+   *
+   * 用途：
+   * - 派遣中角色列表（保留全部视图，但转移受限）
+   * - 休整 modal（视图受限 + 转移受限 = 完全限制）
+   *
+   * 注意：restrictView=true 时，**总是**隐含 restrictTransfer=true
+   *   - 因为只看到队内，自然也转不到非队内 / 仓库
+   *   - 但代码里不强制：需要 explicit `restrictTransfer: true`
+   */
+  restrictTransfer?: boolean;
+  /** 派遣时显示的角色 ID 列表（最多 3 人） */
+  partyCharacterIds?: string[];
 }
 
 type ItemFilter = 'all' | 'consumable' | 'equipment' | 'material' | 'quest';
 
-export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps) => {
+export const ScavengeCharacterPanel = ({
+  onClose,
+  restrictView = false,
+  restrictTransfer = false,
+  partyCharacterIds = [],
+}: ScavengeCharacterPanelProps) => {
   // ============== UI state ==============
   useStageState();  // 订阅 stage state 变化自动重渲染
   const [, forceUpdate] = useState({});
@@ -149,13 +178,24 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
   //   - 角色列表只显示 ally（友方/队伍成员）
   //   - neutral（中立，如商人）有独立交易入口
   //   - enemy（敌对）不进角色列表
-  const allyCharacters = characters.filter((c) => {
-    const template = CHARACTER_TEMPLATES[c.id];
-    if (!template) return false;
-    return (template.faction ?? 'ally') === 'ally';
-  });
+  // 2026-06-09 加：restrictView（休整模式）
+  //   - true：只显示 partyCharacterIds 里的角色（不分阵营）
+  //   - false：显示所有 ally 角色
+  // 2026-06-09 加：restrictTransfer（派遣中）— **只限转移，不限视图**
+  //   - restrictTransfer=true 仍显示所有 ally 角色
+  //   - 但 transfer submenu 隐藏非队内 + 仓库
+  //   - 让玩家能看其他角色（给非拾荒角色换装），但不能和它们交换
+  const allyCharacters = restrictView
+    ? characters.filter(c => partyCharacterIds.includes(c.id))
+    : characters.filter((c) => {
+        const template = CHARACTER_TEMPLATES[c.id];
+        if (!template) return false;
+        return (template.faction ?? 'ally') === 'ally';
+      });
   const safeCharacters: ScavengeCharacter[] = allyCharacters.map(c => ({ ...c, inventory: c.inventory ?? [] }));
-  const warehouseItems = getWarehouse();
+  // 2026-06-09 改：restrictView 时不加载仓库（不显示）
+  //   restrictTransfer=true 仍显示仓库（玩家可看不能操作）
+  const warehouseItems = restrictView ? [] : getWarehouse();
 
   // ============== 包装层（2026-06-09 改：直接用 handleXxx 闭包，避免 LSP 缓存冲突） ==============
   // 之前用 onXxx = () => handleXxx(args, refresh) 包装，但 IDE LSP 缓存误判"局部声明与导入冲突"
@@ -169,7 +209,15 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
       <div className={styles.panel} onClick={(e) => e.stopPropagation()}>
         {/* 顶部标题 */}
         <div className={styles.panelHeader}>
-          <h2 className={styles.panelTitle}>角色列表</h2>
+          <h2 className={styles.panelTitle}>
+            {restrictView ? '战斗休整' : '角色列表'}
+          </h2>
+          {restrictView && (
+            <span className={styles.restHint}>只显示小队角色 · 已隐藏仓库</span>
+          )}
+          {restrictTransfer && !restrictView && (
+            <span className={styles.restHint}>已限制转移（不能跨队/仓库）</span>
+          )}
           <button className={styles.closeButton} onClick={onClose}>
             <Icon icon="material-symbols:close" />
           </button>
@@ -188,7 +236,7 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
                   className={`${styles.characterCard} ${isOver ? styles.cardDragOver : ''}`}
                   onDragOver={(e) => handleCardDragOver(charData.id, e, draggedItem, setDragOverTarget)}
                   onDragLeave={() => handleCardDragLeave(setDragOverTarget)}
-                  onDrop={(e) => handleCardDrop(charData.id, e, draggedItem, setDraggedItem, setDragOverTarget, setDragQuantityDialog, executeTransfer, refresh, showTransferError)}
+                  onDrop={(e) => handleCardDrop(charData.id, e, draggedItem, setDraggedItem, setDragOverTarget, setDragQuantityDialog, executeTransfer, refresh, showTransferError, { restrictTransfer, partyCharacterIds })}
                 >
                   <ScavengeCharacterHeader
                     name={charData.name}
@@ -230,7 +278,7 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
                       onQuantityChange={setActionQuantity}
                       onExecuteAction={(action) => executeItemAction(action, selectedItem, actionQuantity, refresh, closeItemMenu)}
                       onCloseMenu={closeItemMenu}
-                      onTransferRequest={(item) => handleTransferRequest(item, selectedItem, actionQuantity, menuPosition, setTransferSubmenu)}
+                      onTransferRequest={(item) => handleTransferRequest(item, selectedItem, actionQuantity, menuPosition, setTransferSubmenu, { restrictTransfer, partyCharacterIds, showTransferError })}
                       onItemDragStart={(item, e) => handleInventoryItemDragStart(item, e, setDraggedItem)}
                       onItemDragEnd={() => handleItemDragEnd(setDraggedItem, setDragOverTarget)}
                       makeItemHoverProps={makeItemHoverProps}
@@ -245,28 +293,43 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
           )}
         </div>
 
-        {/* 底部仓库 */}
-        <div
-          className={styles.warehouseSection}
+        {/* 底部仓库（2026-06-09 改：restrictView 时不渲染）
+            restrictTransfer=true 仍渲染仓库（玩家可看不能操作） */}
+        {!restrictView && (
+          <div
+            className={styles.warehouseSection}
           onDragOver={(e) => handleWarehouseDragOver(e, draggedItem, setDragOverTarget)}
           onDragLeave={() => handleCardDragLeave(setDragOverTarget)}
-          onDrop={(e) => handleWarehouseDrop(e, draggedItem, setDraggedItem, setDragOverTarget, setDragQuantityDialog, executeTransfer, refresh, showTransferError)}
+          onDrop={(e) => handleWarehouseDrop(e, draggedItem, setDraggedItem, setDragOverTarget, setDragQuantityDialog, executeTransfer, refresh, showTransferError, { restrictTransfer, partyCharacterIds })}
         >
           <ScavengeWarehouse
             onClose={() => {}}
             embedded
             items={warehouseItems}
-            onItemClick={(item, e) => handleWarehouseItemClick(item, e, closeItemMenu, setTransferSubmenu)}
+            onItemClick={(item, e) => handleWarehouseItemClick(item, e, closeItemMenu, setTransferSubmenu, { restrictTransfer, showTransferError })}
             onItemDragStart={(item, e) => handleWarehouseItemDragStart(item, e, setDraggedItem)}
             onItemDragEnd={() => handleItemDragEnd(setDraggedItem, setDragOverTarget)}
             isDragOver={dragOverTarget === 'warehouse'}
             makeItemHoverProps={makeItemHoverProps}
           />
-        </div>
+          </div>
+        )}
 
         {/* 转移子菜单 */}
         {transferSubmenu && (() => {
-          const options = getTransferTargetOptions(transferSubmenu.source, transferSubmenu.item, transferSubmenu.quantity);
+          // 2026-06-09 改：restrictTransfer 限制转移（视图不变）
+          //   - restrictTransfer=true：只允许队内（隐藏非队内 + 仓库）
+          //   - restrictTransfer=false：全部可转
+          //   - 注意：restrictView=true 时自动 restrictTransfer=true（队内才能看见，自然也转不到外面）
+          //     但代码不强制，调用方要自己传 restrictTransfer: true
+          const allOptions = getTransferTargetOptions(transferSubmenu.source, transferSubmenu.item, transferSubmenu.quantity);
+          const options = restrictTransfer
+            ? allOptions.filter(opt => {
+                if (opt.target.kind !== 'character') return false;  // 不显示仓库
+                const charId = (opt.target as any).characterId;
+                return partyCharacterIds.includes(charId);  // 只显示队内
+              })
+            : allOptions;
           const MENU_WIDTH_ESTIMATE = 220;
           const left = transferSubmenu.position.x + MENU_WIDTH_ESTIMATE + 8;
           const finalLeft = left + 220 > window.innerWidth
@@ -297,7 +360,7 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
                       key={isChar ? (opt.target as any).characterId : 'warehouse'}
                       className={`${styles.submenuTargetBtn} ${!opt.available ? styles.submenuTargetDisabled : ''}`}
                       disabled={!opt.available}
-                      onClick={() => opt.available && handleSubmenuTargetClick(opt.target, transferSubmenu, executeTransfer, setTransferSubmenu, refresh, showTransferError)}
+                      onClick={() => opt.available && handleSubmenuTargetClick(opt.target, transferSubmenu, executeTransfer, setTransferSubmenu, refresh, showTransferError, { restrictTransfer, partyCharacterIds })}
                       title={opt.reason}
                     >
                       <Icon icon={icon} />

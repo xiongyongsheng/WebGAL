@@ -12,7 +12,8 @@ import { applyPeriodEffectsToCharacters } from './characterTimeEffects';
 import { checkMerchantRefresh } from '../Merchant/merchantRefresh';
 import {
   readMissions, writeMissions,
-  applyMissionOutcomeToCharacter, completeMission,
+  applyMissionOutcomeToParty, applyMissionOutcomeToCharacter, completeMission,
+  calculateLostItems,
   encounterCheck, isTimeReached,
   Mission, EncounterLog,
 } from '../ScavengeMissions/missions';
@@ -116,7 +117,19 @@ export const ScavengeTimeControl = () => {
           resultMissions.push(m);
           continue;
         }
-        const char = finalChars.find(c => c.id === m.characterId);
+        // 2026-06-09 改：取整个队伍（partyCharacterIds），不是单角色
+        // 兼容：旧 mission 没有 partyCharacterIds（用 characterId 作为单人 party）
+        const partyIds = m.partyCharacterIds && m.partyCharacterIds.length > 0
+          ? m.partyCharacterIds
+          : [m.characterId];
+        const party = partyIds
+          .map(id => finalChars.find(c => c.id === id))
+          .filter((c): c is ScavengeCharacter => Boolean(c));
+        if (party.length === 0) {
+          resultMissions.push(m);
+          continue;
+        }
+        const char = party[0];  // 主队员（兼容旧逻辑）
         const loc = SCAVENGE_LOCATIONS.find(l => l.id === m.locationId);
         if (!char || !loc) {
           resultMissions.push(m);
@@ -124,14 +137,12 @@ export const ScavengeTimeControl = () => {
         }
 
         // 1. 准备期判定：第 1 次推进（m.encounters 还没任何记录）算准备期
-        // 后续每次推进往 encounters 插占位（kind='no_encounter'）让"准备期"标记持久化
         const hasAnyEncounter = (m.encounters ?? []).length > 0;
         const isPreparing = !hasAnyEncounter;
-        // （2026-06-09 改：删除 isActivePeriod 判断，最后一期也要跑 encounterCheck）
 
         // 3. 处理三种状态
         let encounter: EncounterLog | null = null;
-        let updatedChar = char;
+        let updatedParty = party;  // 2026-06-09 改：updatedParty
         let missionOver = false;
         let mWithEncounters: Mission = m;
 
@@ -148,23 +159,38 @@ export const ScavengeTimeControl = () => {
             }],
           };
         } else {
-          // 活跃期 + returnTime 当期（2026-06-09 改：最后一个阶段也要遇敌判定）
-          const result = encounterCheck(m, char, loc, newDay, newPeriodIndex);
+          // 活跃期：encounterCheck 接收整个队伍
+          const result = encounterCheck(m, party, loc, newDay, newPeriodIndex);
           encounter = result.encounter;
-          updatedChar = result.updatedChar;
+          updatedParty = result.updatedParty;
           missionOver = result.missionOver;
-          finalChars = finalChars.map(c => c.id === char.id ? updatedChar : c);
+          const restAvailable = result.restAvailable;  // 2026-06-09 加：Plan 3
+          // 把 updatedParty 的所有队员写回 finalChars
+          for (const upd of updatedParty) {
+            finalChars = finalChars.map(c => c.id === upd.id ? upd : c);
+          }
           allEncounters.push(encounter);
           mWithEncounters = { ...m, encounters: [...m.encounters, encounter] };
+          // 2026-06-09 加：战斗胜利 → 写 GameVar scavenge_rest_pending
+          //   ScavengeMain 监听到弹 ScavengeRestModal
+          if (restAvailable) {
+            stageStateManager.setStageVarAndCommit({
+              key: 'scavenge_rest_pending',
+              value: JSON.stringify({ missionId: m.id, encounterId: encounter.id }),
+            });
+          }
         }
-        // 准备期：插 no_encounter 占位；活跃期 + returnTime 当期：都跑 encounterCheck
-        // （2026-06-09 改：原代码最后阶段不跑 encounterCheck，现在改为也跑）
 
         // 3. 判定是否到 returnTime
         const reached = isTimeReached(newDay, newPeriodIndex, m.returnDay, m.returnPeriodIndex);
 
         if (encounter && missionOver) {
           // 战斗败：标记 failed + 立即结算
+          // 2026-06-09 加：50% 概率丢失物品（主队员背包）
+          const lostItems = calculateLostItems(updatedParty[0]);
+          const lostMessage = lostItems.length > 0
+            ? `（丢失 ${lostItems.length} 类物品）`
+            : '';
           const failed: Mission = {
             ...mWithEncounters,
             status: 'failed',
@@ -173,32 +199,38 @@ export const ScavengeTimeControl = () => {
             outcome: {
               success: false,
               reason: 'character_dead',
-              message: encounter.message,
+              message: `${encounter.message}${lostMessage}`,
               itemsGained: [],
               expGained: 0,
               hpLost: Math.abs(encounter.hpDelta ?? 0),
+              lostItems,  // 2026-06-09 加：失败丢失物品
             },
             outcomeShown: false,
           };
           resultMissions.push(failed);
           if (failed.outcome) {
-            finalChars = finalChars.map(c =>
-              c.id === char.id ? applyMissionOutcomeToCharacter(c, failed.outcome!) : c
-            );
+            // 2026-06-09 改：用 applyMissionOutcomeToParty
+            const appliedParty = applyMissionOutcomeToParty(updatedParty, failed.outcome);
+            for (const upd of appliedParty) {
+              finalChars = finalChars.map(c => c.id === upd.id ? upd : c);
+            }
           }
           failedCount++;
           console.log(
-            `[派遣/失败] 角色=${char.name} 地点=${loc.name} 遭遇=${encounter.kind} ` +
+            `[派遣/失败] 队伍=${party.length}人 主队员=${char.name} 地点=${loc.name} 遭遇=${encounter.kind} ` +
             `敌人=${encounter.enemiesEncountered} HP变化=${encounter.hpDelta}`,
           );
         } else if (reached) {
-          // 时间到：正常完成（outcome.itemsGained 从 encounters 收集）
-          const completed = completeMission(mWithEncounters, char, loc);
+          // 时间到：正常完成
+          // 2026-06-09 改：传 party
+          const completed = completeMission(mWithEncounters, updatedParty, loc);
           resultMissions.push(completed);
           if (completed.outcome) {
-            finalChars = finalChars.map(c =>
-              c.id === char.id ? applyMissionOutcomeToCharacter(c, completed.outcome!) : c
-            );
+            // 2026-06-09 改：用 applyMissionOutcomeToParty
+            const appliedParty = applyMissionOutcomeToParty(updatedParty, completed.outcome);
+            for (const upd of appliedParty) {
+              finalChars = finalChars.map(c => c.id === upd.id ? upd : c);
+            }
           }
           justCompletedCount++;
           // 2026-06-09 加：瓶盖掉落奖励（每个物品 1-5 瓶盖）

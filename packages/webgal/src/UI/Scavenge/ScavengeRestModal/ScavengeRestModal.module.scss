@@ -1,0 +1,32 @@
+/**
+ * 战斗休整 modal 包装样式（2026-06-09 重构）
+ * 内部直接复用 ScavengeCharacterPanel，所以这里只放 wrapper 样式
+ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  backdrop-filter: blur(4px);
+}
+
+.panelWrapper {
+  position: relative;
+  width: 100%;
+  max-width: 1280px;
+  max-height: 95vh;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+/* ScavengeCharacterPanel 内部已经显示关闭按钮了
+   这里只是确保 panel 撑满 wrapper */
+.panelWrapper > * {
+  flex: 1;
+}

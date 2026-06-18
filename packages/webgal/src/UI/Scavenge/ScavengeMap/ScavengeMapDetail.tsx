@@ -5,6 +5,8 @@ import { Icon } from '@iconify/react';
 import close from '@iconify-icons/material-symbols/close';
 import locationOn from '@iconify-icons/material-symbols/location-on';
 import inventory from '@iconify-icons/material-symbols/inventory';
+import checkBox from '@iconify-icons/material-symbols/check-box-outline';
+import checkBoxOutlineBlank from '@iconify-icons/material-symbols/check-box-outline-blank';
 import { ScavengeLocationItem, getRegionDisplayName, getDangerStars } from "./locations";
 import { getItemName } from "../ScavengeItems/items";
 import { ENEMY_TEMPLATES } from "../ScavengeEnemies/enemies";
@@ -17,7 +19,9 @@ import {
 import { ScavengeCharacter, normalizeCharacter, getCharacterStatusText } from '../ScavengeCharacter/character';
 import { CHARACTER_TEMPLATES } from '../ScavengeCharacter/characterRoster';
 import { canDispatch } from '../ScavengeCharacter/traits';
-import { startMission, readMissions, writeMissions } from '../ScavengeMissions/missions';
+import { startMission, readMissions, writeMissions, MAX_PARTY_SIZE, buildEarlyReturnMission, applyMissionOutcomeToParty } from '../ScavengeMissions/missions';
+import { SCAVENGE_LOCATIONS } from '../ScavengeMap/locations';
+import { ScavengeConfirmModal } from '../ScavengeConfirm/ScavengeConfirmModal';
 import styles from './ScavengeMapDetail.module.scss';
 
 interface ScavengeMapDetailProps {
@@ -28,7 +32,11 @@ interface ScavengeMapDetailProps {
 export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps) => {
   const stageState = useStageState();
   const [showCharPicker, setShowCharPicker] = useState(false);
+  // 2026-06-09 加：多选队伍（最多 3 人）
+  const [selectedParty, setSelectedParty] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // 2026-06-09 加：提前返回确认 modal
+  const [showReturnConfirm, setShowReturnConfirm] = useState(false);
 
   // 派往该地点的角色 ID（从 missions 列表里查）
   const allMissions = readMissions();
@@ -36,7 +44,12 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
     m => m.locationId === location.id && m.status === 'active',
   );
   const isCurrentlyExploring = activeMissionsAtLocation.length > 0;
-  const exploringCharacterIds = activeMissionsAtLocation.map(m => m.characterId);
+  // 2026-06-09 改：显示所有队伍成员（partyCharacterIds 优先）
+  const exploringPartyIds = activeMissionsAtLocation.flatMap(m =>
+    m.partyCharacterIds && m.partyCharacterIds.length > 0
+      ? m.partyCharacterIds
+      : [m.characterId],
+  );
 
   // 物资类型显示映射
   const lootTypeNames: Record<string, string> = {
@@ -86,33 +99,49 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
     return canDispatch(c).canDispatch;
   });
 
-  const handleDispatch = (charId: string) => {
+  /**
+   * 派遣队伍（2026-06-09 改：多角色）
+   * @param partyIds 队伍 ID 列表（1-3 人）
+   */
+  const handleDispatchParty = (partyIds: string[]) => {
     setError(null);
-    const char = characters.find(c => c.id === charId);
-    if (!char) {
-      setError('角色不存在');
+    if (partyIds.length === 0) {
+      setError('请至少选择 1 个角色');
       return;
     }
-    if (char.isExploring) {
-      setError('该角色正在执行其他任务');
+    if (partyIds.length > MAX_PARTY_SIZE) {
+      setError(`队伍上限 ${MAX_PARTY_SIZE} 人`);
       return;
     }
-    if (char.hp <= 0) {
-      setError('该角色无法行动');
-      return;
+    // 检查每个角色
+    for (const id of partyIds) {
+      const char = characters.find(c => c.id === id);
+      if (!char) {
+        setError(`角色 ${id} 不存在`);
+        return;
+      }
+      if (char.isExploring) {
+        setError(`${char.name} 正在执行其他任务`);
+        return;
+      }
+      if (char.hp <= 0) {
+        setError(`${char.name} 无法行动（HP=0）`);
+        return;
+      }
+      if (char.stamina < 20) {
+        setError(`${char.name} 体力不足（需要 ≥ 20）`);
+        return;
+      }
     }
-    if (char.stamina < 20) {
-      setError('体力不足（需要 ≥ 20）');
-      return;
-    }
-    // 创建 mission
-    const mission = startMission(charId, location, currentDay, currentPeriodIndex);
+    // 创建 mission（partyCharacterIds = partyIds）
+    const mission = startMission(partyIds, location, currentDay, currentPeriodIndex);
     // 写回 missions
     const allMissions = readMissions();
     writeMissions([...allMissions, mission]);
-    // 更新角色：isExploring=true, exploringLocationId, returnDay, returnPeriodIndex
+    // 更新所有队员：isExploring=true, exploringLocationId, returnDay, returnPeriodIndex
+    const partySet = new Set(partyIds);
     const updatedChars = characters.map(c => {
-      if (c.id !== charId) return c;
+      if (!partySet.has(c.id)) return c;
       return {
         ...c,
         isExploring: true,
@@ -126,8 +155,105 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
       value: JSON.stringify(updatedChars),
     });
     setShowCharPicker(false);
+    setSelectedParty([]);
     onClose();
   };
+
+  /**
+   * 切换队伍成员（多选 checkbox）
+   */
+  const togglePartyMember = (charId: string) => {
+    setSelectedParty((prev) => {
+      if (prev.includes(charId)) {
+        return prev.filter(id => id !== charId);
+      } else {
+        if (prev.length >= MAX_PARTY_SIZE) {
+          setError(`队伍最多 ${MAX_PARTY_SIZE} 人`);
+          return prev;
+        }
+        setError(null);
+        return [...prev, charId];
+      }
+    });
+  };
+
+  /**
+   * 提前返回（2026-06-09 加：Plan 4）
+   * 玩家主动放弃剩余派遣时间，立即结算（奖励 50%）
+   *
+   * 流程（2026-06-09 改）：
+   * 1. 显示 ScavengeConfirmModal 确认（不直接弹原生 confirm）
+   * 2. 用户确认 → 调 buildEarlyReturnMission
+   * 3. 应用 outcome
+   * 4. 写回 GameVar
+   * 5. 关闭 location detail modal
+   * 6. **ScavengeMain 监听 missions 变化自动弹 outcome modal**（提前返回的结算）
+   */
+  const doReturnEarly = (mission: ReturnType<typeof readMissions>[number]) => {
+    // 找队伍
+    const partyIds = mission.partyCharacterIds && mission.partyCharacterIds.length > 0
+      ? mission.partyCharacterIds
+      : [mission.characterId];
+    const party = partyIds
+      .map(id => characters.find(c => c.id === id))
+      .filter((c): c is ScavengeCharacter => Boolean(c));
+    if (party.length === 0) {
+      setError('队伍数据异常');
+      return;
+    }
+
+    // 算 outcome（提前返回模式）
+    const updatedMission = buildEarlyReturnMission(mission, party, location);
+
+    // 应用 outcome（更新所有队员）
+    if (!updatedMission.outcome) return;
+    const appliedParty = applyMissionOutcomeToParty(party, updatedMission.outcome);
+    const partyMap = new Map(appliedParty.map(p => [p.id, p]));
+    const newChars = characters.map(c => partyMap.get(c.id) ?? c);
+
+    // 写回 GameVar
+    const allMissions = readMissions();
+    const newMissions = allMissions.map(x => x.id === mission.id ? updatedMission : x);
+    writeMissions(newMissions);
+    stageStateManager.setStageVarAndCommit({
+      key: 'scavenge_characters',
+      value: JSON.stringify(newChars),
+    });
+
+    // 关 location detail modal
+    setShowCharPicker(false);
+    setShowReturnConfirm(false);
+    onClose();
+    // 注意：ScavengeMain 监听 missions 变化，会自动弹 outcome modal
+  };
+
+  const handleReturnEarlyClick = () => {
+    if (activeMissionsAtLocation.length === 0) return;
+    setShowReturnConfirm(true);
+  };
+
+  /**
+   * 打开休整 modal（2026-06-09 加：Plan 3 重构）
+   * 派遣中任何时候可点 → 打开休整面板（用物品恢复状态）
+   * 与"战斗后自动弹休整"的关系：
+   *   - 战斗胜 → ScavengeTimeControl 写 GameVar scavenge_rest_pending → 自动弹
+   *   - 没战斗但想休整 → 点 location detail modal 里的"休整"按钮 → 这里触发
+   * 实现：
+   *   - 写 GameVar scavenge_rest_pending = { missionId, encounterId: null }
+   *   - ScavengeMain 监听到 → 弹 ScavengeRestModal
+   *   - encounterId=null 表示"非战斗触发的休整"
+   */
+  const handleRestClick = () => {
+    if (activeMissionsAtLocation.length === 0) return;
+    const m = activeMissionsAtLocation[0];
+    // 写 rest_pending 触发 modal（encounterId 为 null 表示主动休整）
+    stageStateManager.setStageVarAndCommit({
+      key: 'scavenge_rest_pending',
+      value: JSON.stringify({ missionId: m.id, encounterId: null }),
+    });
+    onClose();  // 关 location detail modal
+  };
+
   return (
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -147,14 +273,14 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
         </div>
 
         {/* 探索状态 */}
-        {isCurrentlyExploring && exploringCharacterIds.length > 0 && (
+        {isCurrentlyExploring && exploringPartyIds.length > 0 && (
           <div className={styles.exploringStatus}>
             <div className={styles.exploringLabel}>
               <span className={styles.pulse}></span>
-              正在派遣 {exploringCharacterIds.length} 人
+              正在派遣 {exploringPartyIds.length} 人
             </div>
             <div className={styles.exploringCharacter}>
-              {exploringCharacterIds.map(id => {
+              {exploringPartyIds.map(id => {
                 const c = characters.find(ch => ch.id === id);
                 return c ? (
                   <span key={id} className={styles.characterName}>
@@ -297,34 +423,42 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
                   setError('没有可派遣的角色（HP>0 且体力≥20 且未在任务中）');
                   return;
                 }
-                if (dispatchable.length === 1) {
-                  handleDispatch(dispatchable[0].id);
-                } else {
-                  setShowCharPicker(true);
-                }
+                // 2026-06-09 改：永远打开多选 modal（不再跳过，让玩家选队伍）
+                setShowCharPicker(true);
               }}
             >
               派遣探索
             </button>
           ) : (
-            <button
-              className={styles.secondaryButton}
-              onClick={() => {
-                setError('取消派遣功能待实现（接口已预留 cancelMissionInList）');
-              }}
-            >
-              召回角色
-            </button>
+            <div className={styles.activeMissionActions}>
+              <button
+                className={styles.restButton}
+                onClick={handleRestClick}
+                title="打开休整面板（用物品恢复状态）"
+              >
+                休整
+              </button>
+              <button
+                className={styles.secondaryButton}
+                onClick={handleReturnEarlyClick}
+                title="立即返回（经验 ×50%）"
+              >
+                提前返回
+              </button>
+            </div>
           )}
         </div>
 
-        {/* 选角色浮层 */}
+        {/* 选队伍浮层（2026-06-09 改：多选） */}
         {showCharPicker && (
           <div className={styles.overlay} onClick={() => setShowCharPicker(false)}>
             <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
               <div className={styles.header}>
                 <div className={styles.titleGroup}>
-                  <h2 className={styles.title}>选择派遣角色</h2>
+                  <h2 className={styles.title}>组建派遣队伍</h2>
+                  <span className={styles.partyCounter}>
+                    已选 {selectedParty.length} / {MAX_PARTY_SIZE}
+                  </span>
                 </div>
                 <button className={styles.closeButton} onClick={() => setShowCharPicker(false)}>
                   <Icon icon={close} />
@@ -333,22 +467,63 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
               <div className={styles.charList}>
                 {dispatchable.map(c => {
                   const statusText = getCharacterStatusText(c);
+                  const isSelected = selectedParty.includes(c.id);
+                  const isDisabled = !isSelected && selectedParty.length >= MAX_PARTY_SIZE;
                   return (
-                    <div key={c.id} className={styles.charCard} onClick={() => handleDispatch(c.id)}>
+                    <div
+                      key={c.id}
+                      className={`${styles.charCard} ${isSelected ? styles.charCardSelected : ''} ${isDisabled ? styles.charCardDisabled : ''}`}
+                      onClick={() => !isDisabled && togglePartyMember(c.id)}
+                    >
+                      <div className={styles.charCheckbox}>
+                        <Icon
+                          icon={isSelected ? checkBox : checkBoxOutlineBlank}
+                          className={isSelected ? styles.checkboxIconChecked : styles.checkboxIcon}
+                        />
+                      </div>
                       <div className={styles.charInfo}>
-                        <div className={styles.charName}>{c.name}</div>
+                        <div className={styles.charName}>
+                          {c.name}
+                          {isSelected && <span className={styles.partyLeaderTag}>主</span>}
+                        </div>
                         <div className={styles.charStats}>
                           Lv.{c.level} · HP {c.hp} · 体力 {c.stamina}
                         </div>
                         <div className={styles.charStatus}>{statusText}</div>
                       </div>
-                      <button className={styles.primaryButton}>派遣</button>
                     </div>
                   );
                 })}
               </div>
+              {/* 2026-06-09 加：底部"派遣"按钮（按队伍派遣） */}
+              <div className={styles.partyActions}>
+                <button
+                  className={styles.primaryButton}
+                  disabled={selectedParty.length === 0}
+                  onClick={() => handleDispatchParty(selectedParty)}
+                >
+                  派遣 {selectedParty.length > 0 ? `（${selectedParty.length} 人）` : ''}
+                </button>
+              </div>
             </div>
           </div>
+        )}
+
+        {/* 2026-06-09 加：提前返回确认 modal（替代 window.confirm） */}
+        {activeMissionsAtLocation.length > 0 && (
+          <ScavengeConfirmModal
+            open={showReturnConfirm}
+            title="提前返回"
+            message={[
+              `确定立即从【${location.name}】返回安全屋？`,
+              '经验 ×50% 折扣（已获得物资全部带回）',
+            ]}
+            confirmText="提前返回"
+            cancelText="继续派遣"
+            variant="warning"
+            onConfirm={() => doReturnEarly(activeMissionsAtLocation[0])}
+            onCancel={() => setShowReturnConfirm(false)}
+          />
         )}
       </div>
     </div>

@@ -51,6 +51,57 @@ const canTakeFromOtherCharacter = (
   return level >= required;
 };
 
+/**
+ * 限制检查（2026-06-09 加：Plan 3 重构）
+ * 检查 source / target 是否符合 restrictTransfer + partyCharacterIds
+ * @returns true = 通过，false = 触发限制（应阻止）
+ */
+export const checkTransferRestriction = (
+  source: TransferSource,
+  target: TransferTarget,
+  restrictTransfer: boolean,
+  partyCharacterIds: string[],
+  showTransferError?: (msg: string) => void,
+): boolean => {
+  if (!restrictTransfer) return true;
+
+  // 限制规则：
+  // - source 必须是队内
+  // - target 必须是队内（不能是仓库）
+  // 也就是：所有转移**只能**在队内角色之间进行
+  const inParty = (id: string) => partyCharacterIds.includes(id);
+
+  if (source.kind === 'warehouse') {
+    if (showTransferError) {
+      showTransferError('派遣中不能从仓库转移物品');
+    }
+    return false;
+  }
+  if (target.kind === 'warehouse') {
+    if (showTransferError) {
+      showTransferError('派遣中不能转移到仓库');
+    }
+    return false;
+  }
+  if (!inParty(source.characterId)) {
+    if (showTransferError) {
+      const chars = getCharacters();
+      const name = chars.find(c => c.id === source.characterId)?.name ?? '?';
+      showTransferError(`${name} 不在拾荒队伍中，不能作为转移源`);
+    }
+    return false;
+  }
+  if (!inParty(target.characterId)) {
+    if (showTransferError) {
+      const chars = getCharacters();
+      const name = chars.find(c => c.id === target.characterId)?.name ?? '?';
+      showTransferError(`${name} 不在拾荒队伍中，不能作为转移目标`);
+    }
+    return false;
+  }
+  return true;
+};
+
 /** 统一执行转移（角色 ↔ 角色 / 角色 ↔ 仓库） */
 export const executeTransfer = (
   source: TransferSource,
@@ -59,7 +110,16 @@ export const executeTransfer = (
   quantity: number,
   refresh: () => void,
   showTransferError: (msg: string) => void,
+  // 2026-06-09 加：限制参数（Plan 3 重构）
+  //   - restrictTransfer=true + partyCharacterIds=[...] → 限制
+  //   - 默认 false / [] = 不限
+  options: { restrictTransfer?: boolean; partyCharacterIds?: string[] } = {},
 ): boolean => {
+  // 2026-06-09 改：先做限制检查（防止 UI 漏过滤）
+  if (!checkTransferRestriction(source, target, options.restrictTransfer ?? false, options.partyCharacterIds ?? [], showTransferError)) {
+    return false;
+  }
+
   if (quantity <= 0 || quantity > item.quantity) return false;
   if (source.kind === 'character' && target.kind === 'character' && source.characterId === target.characterId) return false;
   if (source.kind === 'warehouse' && target.kind === 'warehouse') return false;
@@ -149,8 +209,27 @@ export const handleTransferRequest = (
   actionQuantity: number,
   menuPosition: { x: number; y: number },
   setTransferSubmenu: (s: any) => void,
+  // 2026-06-09 加：限制参数（Plan 3 重构）
+  //   - restrictTransfer=true：派遣中
+  //   - 派遣中只允许**队内**角色打开 submenu（不能从非队内角色点"转移"）
+  //   - 仓库方向单独处理（handleWarehouseItemClick）
+  options: { restrictTransfer?: boolean; partyCharacterIds?: string[]; showTransferError?: (msg: string) => void } = {},
 ) => {
   if (!selectedItem) return;
+
+  // 2026-06-09 加：派遣中检查（source 必须是队内）
+  if (options.restrictTransfer) {
+    const partyIds = options.partyCharacterIds ?? [];
+    if (!partyIds.includes(selectedItem.charId)) {
+      const chars = getCharacters();
+      const name = chars.find(c => c.id === selectedItem.charId)?.name ?? '?';
+      if (options.showTransferError) {
+        options.showTransferError(`${name} 不在拾荒队伍中，不能转移物品`);
+      }
+      return;  // 不开 submenu
+    }
+  }
+
   setTransferSubmenu({
     source: { kind: 'character', characterId: selectedItem.charId },
     item,
@@ -165,9 +244,20 @@ export const handleWarehouseItemClick = (
   e: React.MouseEvent,
   closeItemMenu: () => void,
   setTransferSubmenu: (s: any) => void,
+  // 2026-06-09 加：限制参数
+  options: { restrictTransfer?: boolean; showTransferError?: (msg: string) => void } = {},
 ) => {
   e.stopPropagation();
   closeItemMenu();
+
+  // 2026-06-09 加：派遣中**禁**仓库 → 角色（流程图规定）
+  if (options.restrictTransfer) {
+    if (options.showTransferError) {
+      options.showTransferError('派遣中不能从仓库转移物品');
+    }
+    return;  // 不开 submenu
+  }
+
   setTransferSubmenu({
     source: { kind: 'warehouse' },
     item,
@@ -184,10 +274,16 @@ export const handleSubmenuTargetClick = (
   setTransferSubmenu: (s: any) => void,
   refresh: () => void,
   showTransferError: (msg: string) => void,
+  // 2026-06-09 加：限制参数（Plan 3 重构）
+  options: { restrictTransfer?: boolean; partyCharacterIds?: string[] } = {},
 ) => {
   if (!transferSubmenu) return;
   const { source, item, quantity } = transferSubmenu;
-  executeTransferFn(source, target, item, quantity, refresh, showTransferError);
+  // 2026-06-09 改：传限制参数
+  executeTransferFn(source, target, item, quantity, refresh, showTransferError, {
+    restrictTransfer: options.restrictTransfer,
+    partyCharacterIds: options.partyCharacterIds,
+  });
   setTransferSubmenu(null);
 };
 
@@ -272,6 +368,8 @@ export const handleDrop = (
   executeTransferFn: typeof executeTransfer,
   refresh: () => void,
   showTransferError: (msg: string) => void,
+  // 2026-06-09 加：限制参数
+  options: { restrictTransfer?: boolean; partyCharacterIds?: string[] } = {},
 ) => {
   e.preventDefault();
   setDragOverTarget(null);
@@ -281,8 +379,13 @@ export const handleDrop = (
   if (source.kind === 'warehouse' && target.kind === 'warehouse') return;
   setDraggedItem(null);
 
+  // 2026-06-09 加：拖拽源限制检查（防止 UI 漏过滤）
+  if (!checkTransferRestriction(source, target, options.restrictTransfer ?? false, options.partyCharacterIds ?? [], showTransferError)) {
+    return;
+  }
+
   if (item.quantity === 1) {
-    executeTransferFn(source, target, item, 1, refresh, showTransferError);
+    executeTransferFn(source, target, item, 1, refresh, showTransferError, options);
   } else {
     setDragQuantityDialog({
       source,
@@ -302,10 +405,12 @@ export const confirmDragQuantity = (
   executeTransferFn: typeof executeTransfer,
   refresh: () => void,
   showTransferError: (msg: string) => void,
+  // 2026-06-09 加：限制参数
+  options: { restrictTransfer?: boolean; partyCharacterIds?: string[] } = {},
 ) => {
   if (!dragQuantityDialog) return;
   const { source, item, target, quantity } = dragQuantityDialog;
-  const success = executeTransferFn(source, target, item, quantity, refresh, showTransferError);
+  const success = executeTransferFn(source, target, item, quantity, refresh, showTransferError, options);
   setDragQuantityDialog(null);
   if (success) {
     setActionQuantity(1);
@@ -332,12 +437,15 @@ export const handleCardDrop = (
   executeTransferFn: typeof executeTransfer,
   refresh: () => void,
   showTransferError: (msg: string) => void,
+  // 2026-06-09 加：限制参数
+  options: { restrictTransfer?: boolean; partyCharacterIds?: string[] } = {},
 ) => {
   handleDrop(
     { kind: 'character', characterId: targetCharId },
     e,
     draggedItem, setDraggedItem, setDragOverTarget, setDragQuantityDialog,
     executeTransferFn, refresh, showTransferError,
+    options,  // 2026-06-09 加：传限制
   );
 };
 
@@ -372,12 +480,15 @@ export const handleWarehouseDrop = (
   executeTransferFn: typeof executeTransfer,
   refresh: () => void,
   showTransferError: (msg: string) => void,
+  // 2026-06-09 加：限制参数（拖到仓库也需要检查）
+  options: { restrictTransfer?: boolean; partyCharacterIds?: string[] } = {},
 ) => {
   handleDrop(
     { kind: 'warehouse' },
     e,
     draggedItem, setDraggedItem, setDragOverTarget, setDragQuantityDialog,
     executeTransferFn, refresh, showTransferError,
+    options,  // 2026-06-09 加：传限制
   );
 };
 

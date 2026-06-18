@@ -67,13 +67,16 @@ export const ScavengeMissionOutcomeModal = ({ mission, onClose }: ScavengeMissio
   const MAX_LOG_LINES = 30;
   const visibleLogs = allCombatLogs.slice(0, MAX_LOG_LINES);
   const hiddenCount = allCombatLogs.length - visibleLogs.length;
-  const accentColor = isSuccess ? '#4CAF50' : '#F44336';
-  const statusIcon = isSuccess ? checkCircle : cancel;
-  const statusLabel = isSuccess ? '任务完成' : '任务失败';
+  // 2026-06-09 改：提前返回用黄色（中性）
+  const isEarlyReturn = outcome.reason === 'early_return';
+  const accentColor = isEarlyReturn ? '#FFA726' : (isSuccess ? '#4CAF50' : '#F44336');
+  const statusIcon = isEarlyReturn ? 'material-symbols:logout' : (isSuccess ? checkCircle : cancel);
+  const statusLabel = isEarlyReturn ? '提前返回' : (isSuccess ? '任务完成' : '任务失败');
   const reasonText: Record<string, string> = {
     completed: '任务顺利完成',
     cancelled: '派遣被取消',
     character_dead: '角色在任务中倒下',
+    early_return: '提前返回（经验 ×50%）',  // 2026-06-09 加：Plan 4
   };
 
   const handleClose = () => {
@@ -176,6 +179,31 @@ export const ScavengeMissionOutcomeModal = ({ mission, onClose }: ScavengeMissio
         {/* 失败原因详情 */}
         {!isSuccess && (
           <div className={styles.failureMsg}>{outcome.message}</div>
+        )}
+
+        {/* 2026-06-09 加：丢失物品（战斗失败时显示） */}
+        {!isSuccess && outcome.lostItems && outcome.lostItems.length > 0 && (
+          <div className={styles.section}>
+            <div className={styles.sectionTitle}>
+              <Icon icon="material-symbols:remove-shopping-cart" className={styles.sectionIcon} style={{ color: '#F44336' }} />
+              丢失物品
+            </div>
+            <div className={styles.itemList}>
+              {outcome.lostItems.map((lost, idx) => (
+                <div key={`${lost.item.instanceId}-${idx}`} className={styles.itemRow} style={{ opacity: 0.6 }}>
+                  <div className={styles.itemIcon} style={{ color: getItemRarityColor(lost.item.itemId) }}>
+                    <Icon icon={getItemIcon(lost.item.itemId)} />
+                  </div>
+                  <div className={styles.itemInfo}>
+                    <div className={styles.itemName} style={{ textDecoration: 'line-through' }}>
+                      {getItemName(lost.item.itemId)}
+                    </div>
+                    <div className={styles.itemQty}>× {lost.lostCount} 丢失</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* 战斗记录（2026-06-09 加：被击倒时让玩家看到战斗过程） */}

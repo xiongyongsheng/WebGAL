@@ -1,5 +1,5 @@
 /**
- * 拾荒系统 - 派遣遭遇检查（2026-06-08 拆分自 missions.ts）
+ * 拾荒系统 - 派遣遭遇检查（2026-06-09 重构：多角色队伍）
  *
  * 遭遇检查：每个 period 调一次
  * 1. 60% 不遭遇 / 40% 遭遇
@@ -7,9 +7,17 @@
  * 3. 丧尸：从 locationState.enemyCount 抽 1~3 个
  *    - char.strategy='stealth'：先隐蔽判定，失败再进入战斗
  *    - char.strategy='combat'：直接进入战斗
- * 4. 战斗：用 runCombat 算胜负
+ * 4. 战斗：用 runCombat 算胜负（**主队员 party[0] 参战**，其他队员挂机）
  *    - 胜：可获得物资 + 经验
  *    - 败：扣 HP，mission 标记失败（completeMission 时不再给奖励）
+ *
+ * ===== 2026-06-09 改：多角色队伍 =====
+ * - party: 队伍（1-3 人）
+ * - party[0] = 主派遣角色（参与战斗）
+ * - 其他队员 = 挂机（HP 不变，但 applyAutoTraits 还是会跑）
+ * - 经验按 party.length 平分（Math.floor）
+ * - 资源都给 party[0]（物品入主队员背包）
+ *   后续可改：资源入"公用背包"或"按需分配"
  */
 
 import { ScavengeCharacter } from '../ScavengeCharacter/character';
@@ -39,24 +47,50 @@ const POST_COMBAT_BONUS_LOOT_RATE = 0.3;
 /**
  * 派遣期间每个 period 调一次：决定是否遭遇 + 触发战斗/资源
  *
- * @returns { encounter, updatedChar, missionOver } encounter 记录 + 角色 HP 更新后的副本 + 是否立即结束 mission
+ * @param mission 派遣任务
+ * @param party 队伍（2026-06-09 改：1-3 人）
+ *   - party[0] 是主派遣角色（参与战斗）
+ * @param location 派遣地点
+ * @param triggerDay 当前 day
+ * @param triggerPeriodIndex 当前 period
+ * @returns { encounter, updatedParty, missionOver, restAvailable }
+ *   - encounter 记录
+ *   - updatedParty 队伍中所有角色更新后的副本（每个角色都跑 applyAutoTraits）
+ *   - missionOver 是否立即结束 mission
+ *   - restAvailable 2026-06-09 加：是否可休整（战斗胜 → true）
  */
 export const encounterCheck = (
   mission: Mission,
-  character: ScavengeCharacter,
+  party: ScavengeCharacter[],
   location: ScavengeLocationItem,
   triggerDay: number,
   triggerPeriodIndex: number,
-): { encounter: EncounterLog; updatedChar: ScavengeCharacter; missionOver: boolean } => {
+): { encounter: EncounterLog; updatedParty: ScavengeCharacter[]; missionOver: boolean; restAvailable: boolean } => {
+  if (party.length === 0) {
+    throw new Error('encounterCheck: party 不能为空');
+  }
+  const character = party[0];  // 主派遣角色（参与战斗）
+
   const encId = generateInstanceId();
   const baseItems: InventoryItem[] = [];
 
-  // 2026-06-09 加：自动特性更新包装
-  //   每次 return 前调 applyAutoTraits，让派遣中的特性立即更新
-  //   （不依赖下一次时间推进）
+  // 2026-06-09 改：每个队员独立跑 applyAutoTraits（不依赖下一次时间推进）
+  //   派遣中每个队员的状态都各自更新（HP/饥/渴 变化都可能触发特性）
+  const updateParty = (newMainChar: ScavengeCharacter): ScavengeCharacter[] => {
+    return party.map((c) => {
+      if (c.id === newMainChar.id) {
+        // 主队员：使用新的（HP 已更新）
+        return applyAutoTraits(newMainChar, 0);
+      }
+      // 其他队员：仅跑 applyAutoTraits（HP 不变，但特性可能变化）
+      return applyAutoTraits(c, 0);
+    });
+  };
   const wrap = (result: { encounter: EncounterLog; updatedChar: ScavengeCharacter; missionOver: boolean }) => ({
-    ...result,
-    updatedChar: applyAutoTraits(result.updatedChar, 0),
+    encounter: result.encounter,
+    updatedParty: updateParty(result.updatedChar),
+    missionOver: result.missionOver,
+    restAvailable: false,  // 2026-06-09 加：默认不可休整（只有战斗胜才 true）
   });
 
   // 2026-06-08 加：取/刷新 location 状态（如果时间过期或 dirty）
@@ -96,7 +130,7 @@ export const encounterCheck = (
       baseItems.push(item);
       // 减 state
       takeLootByItemId(location.id, [itemId]);
-      // 加到角色背包
+      // 加到主队员背包
       updatedChar = {
         ...character,
         inventory: addToInventory(character.inventory ?? [], item),
@@ -135,28 +169,8 @@ export const encounterCheck = (
   // 抽 1~min(3, allEnemies.length) 个
   const encounterEnemies = pickRandomEncounterEnemies(allEnemies);
 
-  // 4. 警觉判定（2026-06-08 第四次改：Luce choice 非对称公式）：
-  // 角色 stealth = Σ(equipped.stealth) × (1 + agi/10)  （integer，computeDerivedStats 算好）
-  // 敌人 detection = integer 25/50/75/90
-  //
-  // 单敌人成功潜行率 = char / (char + enemy)        ← 非对称！
-  //   char 主导（大于 enemy）→ success 偏高
-  //   enemy 主导（大于 char）→ success 偏低
-  //   char == enemy           → 50% 掷硬币
-  //
-  // 与上一版区别：上一版用 1 - min/max 是对称的，char=22 vs enemy=90 给 76% 成功（反直觉）
-  // 新版：char=22 vs enemy=90 → 22/112 = 19.6%（enemy 主导，潜行难）
-  //
-  // 例：char=50, enemy=25 → 50/75 = 66.7%   (char 主导，合理的高)
-  //   char=50, enemy=75 → 50/125 = 40%    (enemy 主导，合理的低)
-  //   char=22, enemy=25 → 22/47 = 46.8%   (略低于敌人，掷硬币)
-  //   char=22, enemy=90 → 22/112 = 19.6%  (差很多，难)
-  //   char=53, enemy=90 → 53/143 = 37.1%  (好装备也勉强)
-  //
-  // 全部敌人都没发现 → evade_success
-  // 至少一个发现 → combat，发现的敌人 ATB 起始 50（首轮先手）
-  // char ≤ 0（装备总暴露或无潜行装备） → 强制被发现（success = 0）
-  // enemy ≤ 0（特殊敌人不警觉） → 100% 潜行成功
+  // 4. 警觉判定（主队员 stealth）
+  // 2026-06-09 注：暂用 party[0] 的 stealth（可改为"取全队最大 stealth"）
   const isNight = triggerPeriodIndex === 4; // 黑夜
   const stats = computeDerivedStats(character, isNight);
   const charStealth = stats.stealth;  // integer
@@ -189,7 +203,8 @@ export const encounterCheck = (
     }
   }
 
-  // 战斗
+  // 战斗（2026-06-09 改：主队员 party[0] 参战，其他队员挂机）
+  // 后续可升级为"全队参战"（runCombat 支持 party）
   const combatResult = runCombat(character, encounterEnemies);
   const hpDelta = combatResult.characterFinalHp - character.hp;
   const updatedChar: ScavengeCharacter = {
@@ -219,7 +234,6 @@ export const encounterCheck = (
       updatedChar.inventory = addToInventory(updatedChar.inventory ?? [], item);
     }
     // 2026-06-09 加：胜仗 30% 概率额外抽 1 个物资（bonus loot）
-    // 抽完第一个后再读 state（已变化），最多 1 个 bonus
     let bonusLootCount = 0;
     if (Math.random() < POST_COMBAT_BONUS_LOOT_RATE) {
       const bonusLootEntries = Object.entries(getOrRefreshLocationState(location, triggerDay).lootCount)
@@ -237,7 +251,7 @@ export const encounterCheck = (
         bonusLootCount = 1;
       }
     }
-    return wrap({
+    return {
       encounter: {
         id: encId,
         triggerDay,
@@ -249,12 +263,14 @@ export const encounterCheck = (
         hpDelta,
         message: `战胜了 ${encounterEnemies.length} 个敌人！${hpDelta < 0 ? `（扣血 ${-hpDelta}）` : ''}${bonusLootCount > 0 ? '（额外战利品！）' : ''}`,
       },
-      updatedChar,
+      updatedParty: updateParty(updatedChar),
       missionOver: false, // 战斗胜不结束 mission，继续探索
-    });
+      // 2026-06-09 加：Plan 3 战斗胜利 → 标记可休整
+      restAvailable: true,
+    };
   }
 
-  // 败：扣 state 中所有遇到的敌人（虽然没全部击败，但遇到了就是遇到了）
+  // 败：扣 state 中所有遇到的敌人
   const defeatedCounts: Record<string, number> = {};
   for (const e of encounterEnemies) {
     defeatedCounts[e.type] = (defeatedCounts[e.type] ?? 0) + 1;
@@ -276,4 +292,15 @@ export const encounterCheck = (
     updatedChar,
     missionOver: true, // 战斗败 → 立即结束 mission
   });
+};
+
+/**
+ * 计算经验平分（2026-06-09 加：全队平分）
+ * @param totalExp 总经验
+ * @param partySize 队伍人数
+ * @returns 每人经验（向下取整）
+ */
+export const splitExpAmongParty = (totalExp: number, partySize: number): number => {
+  if (partySize <= 0) return 0;
+  return Math.floor(totalExp / partySize);
 };

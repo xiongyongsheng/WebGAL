@@ -5,50 +5,82 @@
 import { ScavengeCharacter } from '../ScavengeCharacter/character';
 import { gainExp } from '../ScavengeCharacter/characterExperience';
 import { applyAutoTraits } from '../ScavengeCharacter/traits';
-import { InventoryItem, addToInventory } from '../ScavengeItems/inventory';
+import { InventoryItem, addToInventory, removeFromInventory } from '../ScavengeItems/inventory';
 import { ScavengeLocationItem } from '../ScavengeMap/locations';
 import {
   Mission,
   MissionOutcome,
+  LostItem,
   MISSION_BASE_EXP,
   MISSION_EXP_PER_DANGER,
   MISSION_HP_LOSS_PER_DANGER,
   isTimeReached,
 } from './missions';
 
+/** 战斗失败丢物品的触发概率（2026-06-09 加：Plan 2） */
+const LOSE_ITEMS_PROBABILITY = 0.5;
+/** 触发后，每个 inventory entry 50% 概率丢 */
+const LOSE_EACH_ENTRY_PROBABILITY = 0.5;
+/** 装备优先保留（不被丢） */
+const PROTECT_EQUIPMENT = true;
+/** 2026-06-09 加：提前返回奖励系数（Plan 4） */
+const EARLY_RETURN_REWARD_RATE = 0.5;
+
 // ============== 派遣完成 / 结算 ==============
 
 /**
- * 派遣完成 → 结算
+ * 派遣完成 / 结算（2026-06-08 拆分自 missions.ts）
+ * 设计：
+ * - 角色死亡（HP=0）→ 任务失败
+ * - 物资 = 派遣期间 encounters 累计获取
+ * - 经验 = BASE_EXP(50) + dangerLevel * 10（**全队平分**）
+ * - HP 损失：dangerLevel * 2（2026-06-09 加：每个队员都扣）
  *
- * MVP 规则（**先不做随机事件**）：
- * - 总是 success（除非角色 HP=0 → reason='character_dead'）
- * - 物品：从 mission.encounters 累计获取（资源点 / 战斗胜）
- * - 经验：50 + dangerLevel * 10
- * - HP 损失：dangerLevel * 2
+ * 2026-06-09 改：多角色队伍
+ * - char 参数改名 party（1-3 人）
+ * - 经验全队平分：splitExpAmongParty
+ * - 物资入 party[0]（主队员）背包
+ * - HP 损失应用到每个队员
+ *
+ * 2026-06-09 加：Plan 4 提前返回
+ * - options.earlyReturn = true：玩家主动返回
+ *   - 经验 × 0.5（奖励 50%）
+ *   - 物资全部带回
+ *   - reason: 'early_return'
+ *   - 状态：'cancelled'（与"主动取消"区分）
  *
  * @param mission 派遣任务（status 必须是 'active'）
- * @param char 派遣角色
+ * @param party 队伍（2026-06-09 改：1-3 人）
  * @param location 派遣地点
+ * @param options 2026-06-09 加：{ earlyReturn?: boolean }
  * @returns 已填入 outcome 的 mission
  */
 export const completeMission = (
   mission: Mission,
-  char: ScavengeCharacter,
+  party: ScavengeCharacter[],
   location: ScavengeLocationItem,
+  options: { earlyReturn?: boolean } = {},
 ): Mission => {
-  // 角色死亡（HP=0）：失败
-  if (char.hp <= 0) {
+  const primary = party[0];
+  const earlyReturn = options.earlyReturn ?? false;
+  // 2026-06-09 加：主队员死亡 → 任务失败（其他队员可能存活，但 mission 算失败）
+  if (primary.hp <= 0) {
+    // 2026-06-09 加：50% 概率丢失物品
+    const lostItems = calculateLostItems(primary);
+    const lostMessage = lostItems.length > 0
+      ? `（丢失 ${lostItems.length} 类物品）`
+      : '';
     return {
       ...mission,
       status: 'failed',
       outcome: {
         success: false,
         reason: 'character_dead',
-        message: '任务失败，角色在派遣途中倒下',
+        message: `任务失败，主队员在派遣途中倒下${lostMessage}`,
         itemsGained: [],
         expGained: 0,
         hpLost: 0,
+        lostItems,
       },
       outcomeShown: false,
     };
@@ -58,27 +90,100 @@ export const completeMission = (
   const itemsGained: InventoryItem[] = (mission.encounters ?? [])
     .flatMap((e) => e.itemsGained ?? []);
 
-  // 经验
-  const expGained = MISSION_BASE_EXP + location.dangerLevel * MISSION_EXP_PER_DANGER;
+  // 经验（2026-06-09 改：全队平分 + 提前返回 50% 系数）
+  const totalExp = MISSION_BASE_EXP + location.dangerLevel * MISSION_EXP_PER_DANGER;
+  const expGained = Math.floor(
+    (totalExp * (earlyReturn ? EARLY_RETURN_REWARD_RATE : 1)) / Math.max(1, party.length),
+  );
 
-  // HP 损失
-  const hpLost = location.dangerLevel * MISSION_HP_LOSS_PER_DANGER;
+  // HP 损失（每个队员都扣 dangerLevel * 2）
+  // 2026-06-09 改：提前返回 → HP 损失减半（不用扣那么多）
+  const hpLost = Math.floor(
+    location.dangerLevel * MISSION_HP_LOSS_PER_DANGER * (earlyReturn ? EARLY_RETURN_REWARD_RATE : 1),
+  );
 
+  // 2026-06-09 改：提前返回 → status='cancelled', reason='early_return'
   return {
     ...mission,
-    status: 'completed',
+    status: earlyReturn ? 'cancelled' : 'completed',
     outcome: {
-      success: true,
-      reason: 'completed',
-      message: itemsGained.length > 0
-        ? `任务完成！从【${location.name}】带回 ${itemsGained.length} 类物资，获得 ${expGained} 经验。`
-        : `任务完成。获得 ${expGained} 经验（未获取物资）。`,
+      success: !earlyReturn,  // 提前返回不算"成功完成"（避免 UI 误显示"任务成功"）
+      reason: earlyReturn ? 'early_return' : 'completed',
+      message: earlyReturn
+        ? itemsGained.length > 0
+          ? `提前返回（${location.name}）。带回 ${itemsGained.length} 类物资，经验 ×50%。`
+          : `提前返回（${location.name}）。经验 ×50%（未获取物资）。`
+        : itemsGained.length > 0
+          ? `任务完成！从【${location.name}】带回 ${itemsGained.length} 类物资，获得 ${expGained} 经验。`
+          : `任务完成。获得 ${expGained} 经验（未获取物资）。`,
       itemsGained,
       expGained,
       hpLost,
     },
     outcomeShown: false,
   };
+};
+
+/**
+ * 战斗失败时计算丢失物品（2026-06-09 加：Plan 2）
+ *
+ * 规则：
+ * - 50% 概率触发（LOSE_ITEMS_PROBABILITY）
+ * - 触发时：从主队员（party[0]）背包随机抽 50% 的 entry
+ *   - 每个 entry 50% 概率丢（LOSE_EACH_ENTRY_PROBABILITY）
+ *   - 丢这个 entry 一半数量（Math.ceil）
+ * - 装备优先保留（PROTECT_EQUIPMENT = true）
+ * - 任务物品（isQuestItem）保留
+ *
+ * @param primary 主队员（party[0]）
+ * @returns 丢失的物品列表（可能为空）
+ */
+export const calculateLostItems = (primary: ScavengeCharacter): LostItem[] => {
+  if (Math.random() >= LOSE_ITEMS_PROBABILITY) return [];
+  const inv = (primary.inventory ?? []).filter((s): s is InventoryItem => s !== null);
+  if (inv.length === 0) return [];
+  const lost: LostItem[] = [];
+  for (const slot of inv) {
+    // 装备优先保留
+    if (PROTECT_EQUIPMENT && (slot.itemId.startsWith('weapon_') || slot.itemId.startsWith('armor_') || slot.itemId.startsWith('tool_'))) {
+      continue;
+    }
+    // 任务物品保留
+    if (slot.itemId.startsWith('quest_')) {
+      continue;
+    }
+    // 每个 entry 50% 概率丢
+    if (Math.random() < LOSE_EACH_ENTRY_PROBABILITY) {
+      const lostCount = Math.max(1, Math.ceil(slot.quantity / 2));
+      lost.push({ item: slot, lostCount });
+    }
+  }
+  return lost;
+};
+
+/**
+ * 构建提前返回的 mission（2026-06-09 加：Plan 4）
+ *
+ * 玩家在派遣中点"提前返回"按钮：
+ * 1. 调 completeMission with earlyReturn=true（奖励 50%）
+ * 2. UI 拿到这个 mission，**自己** applyMissionOutcomeToParty + writeMissions
+ *
+ * 为什么不把整个流程封装成一个函数？
+ * - 避免循环依赖（missionComplete 已 import missions.ts）
+ * - UI 层要刷新 characters 列表（setStageVarAndCommit）
+ * - 让 UI 显式看到每一步（可调试）
+ *
+ * @param mission 当前 active mission
+ * @param party 队伍
+ * @param location 地点
+ * @returns 已填入 outcome 的 mission（status='cancelled', reason='early_return'）
+ */
+export const buildEarlyReturnMission = (
+  mission: Mission,
+  party: ScavengeCharacter[],
+  location: ScavengeLocationItem,
+): Mission => {
+  return completeMission(mission, party, location, { earlyReturn: true });
 };
 
 // ============== 派遣检查（时间推进钩子用） ==============
@@ -113,7 +218,14 @@ export const checkMissionsProgress = (
       continue;
     }
     // 时间到，结算
-    const char = characters.find(c => c.id === m.characterId);
+    // 2026-06-09 改：取整个队伍（partyCharacterIds 优先，回退 characterId）
+    const partyIds = m.partyCharacterIds && m.partyCharacterIds.length > 0
+      ? m.partyCharacterIds
+      : [m.characterId];
+    const party = partyIds
+      .map(id => characters.find(c => c.id === id))
+      .filter((c): c is ScavengeCharacter => Boolean(c));
+    const char = party[0];  // 兼容旧逻辑
     const loc = locations.find(l => l.id === m.locationId);
     if (!char || !loc) {
       active.push({
@@ -131,7 +243,7 @@ export const checkMissionsProgress = (
       });
       continue;
     }
-    const completed = completeMission(m, char, loc);
+    const completed = completeMission(m, party, loc);
     justCompleted.push(completed);
   }
 
@@ -147,47 +259,73 @@ export const checkMissionsProgress = (
  * - HP：扣 hpLost
  * - 状态：isExploring = false, exploringLocationId = undefined
  *         returnDay = undefined, returnPeriodIndex = undefined
+ *
+ * 2026-06-09 改：支持多角色队伍
+ * - 物品入主队员（party[0]）背包
+ * - 经验每个队员都加（平分后）
+ * - HP 每个队员都扣
+ * - 状态字段每个队员都清
+ * - applyAutoTraits 每个队员都跑
+ */
+export const applyMissionOutcomeToParty = (
+  party: ScavengeCharacter[],
+  outcome: MissionOutcome,
+): ScavengeCharacter[] => {
+  return party.map((char, idx) => {
+    let updated: ScavengeCharacter = { ...char };
+
+    // 状态字段清空（每个队员都清）
+    updated = {
+      ...updated,
+      isExploring: false,
+      exploringLocationId: undefined,
+      returnDay: undefined,
+      returnPeriodIndex: undefined,
+    };
+
+    // HP（每个队员都扣）
+    if (outcome.hpLost > 0) {
+      updated.hp = Math.max(0, updated.hp - outcome.hpLost);
+    }
+
+    // 物品进背包（**只入主队员** party[0]）
+    if (idx === 0 && outcome.itemsGained.length > 0) {
+      let inv = [...(updated.inventory ?? [])];
+      for (const item of outcome.itemsGained) {
+        inv = addToInventory(inv, item);
+      }
+      updated.inventory = inv;
+    }
+
+    // 2026-06-09 加：应用丢失物品（**只主队员** party[0] 减背包）
+    if (idx === 0 && outcome.lostItems && outcome.lostItems.length > 0) {
+      for (const lost of outcome.lostItems) {
+        updated.inventory = removeFromInventory(
+          updated.inventory ?? [],
+          lost.item.instanceId,
+          lost.lostCount,
+        );
+      }
+    }
+
+    // 经验（每个队员都加，按平分后的数量）
+    if (outcome.expGained > 0) {
+      updated = gainExp(updated, outcome.expGained);
+    }
+
+    // 自动特性更新（每个队员都跑，独立 HP/特性）
+    updated = applyAutoTraits(updated, 0);
+
+    return updated;
+  });
+};
+
+/**
+ * @deprecated 2026-06-09 改：单角色版本保留兼容，但推荐用 applyMissionOutcomeToParty
  */
 export const applyMissionOutcomeToCharacter = (
   char: ScavengeCharacter,
   outcome: MissionOutcome,
 ): ScavengeCharacter => {
-  let updated: ScavengeCharacter = { ...char };
-
-  // 状态字段清空
-  updated = {
-    ...updated,
-    isExploring: false,
-    exploringLocationId: undefined,
-    returnDay: undefined,
-    returnPeriodIndex: undefined,
-  };
-
-  // HP
-  if (outcome.hpLost > 0) {
-    updated.hp = Math.max(0, updated.hp - outcome.hpLost);
-  }
-
-  // 物品进背包
-  if (outcome.itemsGained.length > 0) {
-    let inv = [...(updated.inventory ?? [])];
-    for (const item of outcome.itemsGained) {
-      inv = addToInventory(inv, item);
-    }
-    updated.inventory = inv;
-  }
-
-  // 经验（可能连升）
-  if (outcome.expGained > 0) {
-    updated = gainExp(updated, outcome.expGained);
-  }
-
-  // 2026-06-09 加：自动特性更新
-  // 战斗/派遣结束后 HP/hunger/thirst/sanity/stamina 都可能变
-  // （HP 减少最多 → 触发重伤/濒死等）
-  // 调 applyAutoTraits 自动添加/移除条件特性
-  // currentDay 传 0：派送内不依赖 day，只看数值条件
-  updated = applyAutoTraits(updated, 0);
-
-  return updated;
+  return applyMissionOutcomeToParty([char], outcome)[0] ?? char;
 };

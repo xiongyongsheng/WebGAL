@@ -32,9 +32,23 @@ export { RESOURCE_TYPE_TO_ITEM } from '../ScavengeMap/locationRefresh';
 
 export type MissionStatus = 'active' | 'completed' | 'cancelled' | 'failed';
 
-export type MissionOutcomeReason = 'completed' | 'cancelled' | 'character_dead';
+export type MissionOutcomeReason = 'completed' | 'cancelled' | 'character_dead' | 'early_return';
+//   - 'completed': 正常完成
+//   - 'cancelled': 玩家主动取消（提前返回，奖励 50%）
+//   - 'character_dead': 角色死亡失败
+//   - 'early_return': 提前返回（2026-06-09 加：Plan 4，等同 cancelled，区分来源）
 
 /** 派遣结算结果 */
+/**
+ * 战斗失败时丢失的物品（2026-06-09 加：Plan 2 - 50% 丢物品）
+ * - item: 原始 inventory slot（含 instanceId）
+ * - lostCount: 丢失的数量
+ */
+export interface LostItem {
+  item: InventoryItem;
+  lostCount: number;
+}
+
 export interface MissionOutcome {
   success: boolean;
   reason: MissionOutcomeReason;
@@ -47,14 +61,35 @@ export interface MissionOutcome {
   hpLost: number;
   /** 瓶盖获得（2026-06-09 加：拾荒每个物品给 1-5 瓶盖） */
   bottlecapsGained?: number;
+  /**
+   * 战斗失败时丢失的物品（2026-06-09 加：Plan 2）
+   * - 50% 概率触发（每次失败独立判定）
+   * - 触发时：从主队员背包随机抽 50% 数量的物品
+   * - 装备优先保留（不被丢）
+   * - 任务失败时记录，UI modal 显示
+   */
+  lostItems?: LostItem[];
 }
 
 /** 派遣任务 */
 export interface Mission {
   /** 唯一 ID */
   id: string;
-  /** 派遣角色（单人；预留 partyMemberIds: string[]） */
+  /**
+   * 派遣角色（**保留兼容**）
+   * - 等于 partyCharacterIds[0]（主派遣角色）
+   * - 老数据（无 partyCharacterIds）兼容：旧 mission 仍能跑（用 characterId 作为单人 party）
+   * @deprecated 2026-06-09 推荐用 partyCharacterIds（多角色队伍）
+   */
   characterId: string;
+  /**
+   * 派遣队伍（2026-06-09 加：多角色队伍）
+   * - 最多 3 人（MAX_PARTY_SIZE = 3）
+   * - 队员状态独立（HP/饥/渴/特性 各自独立）
+   * - 经验全队平分（Math.floor）
+   * - 共享 strategy（队伍级）
+   */
+  partyCharacterIds: string[];
   /** 派遣地点 */
   locationId: string;
   /** 开始：第几天 */
@@ -76,13 +111,16 @@ export interface Mission {
   /** 随机事件占位（暂未启用，**接口预留**） */
   events?: MissionEvent[];
   // ============== 战斗系统扩展 ==============
-  /** 角色 strategy 副本（派遣开始时复制） */
+  /** 队伍 strategy（队伍级，2026-06-09 改：所有队员共享） */
   strategy: 'stealth' | 'combat';
   /** 派遣期间遭遇历史（按时间顺序） */
   encounters: EncounterLog[];
   /** 是否已被玩家手动取消（UI 召回按钮用） */
   cancelled?: boolean;
 }
+
+/** 队伍上限（2026-06-09 加）*/
+export const MAX_PARTY_SIZE = 3;
 
 /** 派遣期间的遭遇记录（被 encounterCheck 追加） */
 export type EncounterKind =
@@ -92,7 +130,8 @@ export type EncounterKind =
   | 'evade_fail_combat_defeat'  // 隐蔽失败 + 战斗败
   | 'combat_victory'           // 直接战斗 + 胜
   | 'combat_defeat'            // 直接战斗 + 败
-  | 'resource';                // 资源点（无敌人）
+  | 'resource'                 // 资源点（无敌人）
+  | 'rest_pending';            // 战斗后弹休整 modal（2026-06-09 加：Plan 3）
 
 export interface EncounterLog {
   id: string;
@@ -109,6 +148,13 @@ export interface EncounterLog {
   hpDelta?: number;
   /** 文字说明（UI 弹窗用） */
   message: string;
+  /**
+   * 休整结果（2026-06-09 加：Plan 3）
+   * - 玩家选"休整" → 'rest'（记录已休整，modal 关闭）
+   * - 玩家选"继续" → 'continue'（继续派遣）
+   * - 未选择 → undefined
+   */
+  restChoice?: 'rest' | 'continue';
   /** 弹窗是否已展示过（点过"确定"后置 true，避免刷新页面重弹） */
   shown?: boolean;
 }
@@ -179,26 +225,37 @@ export const isTimeReached = (
  *   - 活跃：period 1 → period 2（下午，returnTime=2）
  *   - 玩家需推进 2 次才完成：第 1 次（准备完）+ 第 2 次（活跃 1 期 + 结算）
  *
- * @param characterId 派遣角色 ID
+ * @param characterIds 派遣队伍 ID 列表（2026-06-09 改：多角色）
+ *   - 长度限制：1-3 人（MAX_PARTY_SIZE）
+ *   - 第一人是主派遣角色（= characterId 兼容）
  * @param location 派遣地点
  * @param currentDay 当前第几天
  * @param currentPeriodIndex 当前 period
- * @param strategy 派遣策略（从角色 strategy 复制）
+ * @param strategy 派遣策略（队伍级共享）
  * @returns 新 Mission
  */
 export const startMission = (
-  characterId: string,
+  characterIds: string[],
   location: ScavengeLocationItem,
   currentDay: number,
   currentPeriodIndex: number,
   strategy: 'stealth' | 'combat' = 'combat',
 ): Mission => {
+  // 2026-06-09 改：多角色队伍（partyCharacterIds + 兼容 characterId）
+  if (characterIds.length === 0) {
+    throw new Error('startMission: characterIds 不能为空');
+  }
+  if (characterIds.length > MAX_PARTY_SIZE) {
+    throw new Error(`startMission: 队伍人数 ${characterIds.length} 超过上限 ${MAX_PARTY_SIZE}`);
+  }
+  const primaryCharacterId = characterIds[0];
   const duration = Math.max(1, location.explorationTime);
   // 加 1 期作为准备期
   const { day, periodIndex } = calcReturnTime(currentDay, currentPeriodIndex, duration + 1);
   return {
     id: generateInstanceId(),
-    characterId,
+    characterId: primaryCharacterId,  // 兼容字段
+    partyCharacterIds: characterIds,  // 2026-06-09 加
     locationId: location.id,
     startDay: currentDay,
     startPeriodIndex: currentPeriodIndex,
@@ -302,9 +359,12 @@ export const markEncounterShown = (missionId: string, encounterId: string): void
 
 // ============== re-export 详细逻辑（2026-06-08 拆分后） ==============
 
-export { encounterCheck } from './encounterCheck';
+export { encounterCheck, splitExpAmongParty } from './encounterCheck';
 export {
   completeMission,
   checkMissionsProgress,
+  calculateLostItems,
   applyMissionOutcomeToCharacter,
+  applyMissionOutcomeToParty,
+  buildEarlyReturnMission,
 } from './missionComplete';

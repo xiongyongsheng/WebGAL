@@ -13,12 +13,14 @@ import { ScavengeMap } from './ScavengeMap/ScavengeMap';
 import { ScavengeMapDetail } from './ScavengeMap/ScavengeMapDetail';
 import { ScavengeLocationItem } from './ScavengeMap/locations';
 import { ScavengeCharacterPanel } from './ScavengeCharacter/ScavengeCharacterPanel/ScavengeCharacterPanel';
+import { ScavengeCharacter } from './ScavengeCharacter/character';
 import { ScavengeMenuButton } from './ScavengeMenuButton/ScavengeMenuButton';
 import { ScavengeEnemyCodex } from './ScavengeEnemies/ScavengeEnemyCodex/ScavengeEnemyCodex';
 import { ScavengeItemCodex } from './ScavengeItems/ScavengeItemCodex/ScavengeItemCodex';
 import { ScavengeCharacterCodex } from './ScavengeCharacter/ScavengeCharacterCodex/ScavengeCharacterCodex';
 import { readMissions } from './ScavengeMissions/missions';
 import { ScavengeMissionOutcomeModal } from './ScavengeMissionOutcomeModal/ScavengeMissionOutcomeModal';
+import { ScavengeRestModal } from './ScavengeRestModal/ScavengeRestModal';
 import { ScavengeCombatLogModal } from './ScavengeCombatLogModal/ScavengeCombatLogModal';
 import { StoryManager } from './Story/StoryManager';
 import { getLocationHintFromState } from './Story/storyHint';
@@ -136,16 +138,62 @@ const ScavengeContent = () => {
   // 监听 missions 列表：找 status='completed' && !outcomeShown 的最新一个，弹结果窗
   // 派遣结算结果弹窗（监听 missions 变化，弹出未展示的）
   // 2026-06-09 改：失败 mission 不弹 outcome modal（由 encounter modal 单独处理"战斗失败"）
-  // 取消的 mission 也不弹（玩家主动撤回，应该不打扰）
+  // 2026-06-09 加：提前返回（cancelled + reason='early_return'）也弹 outcome modal
+  //   - cancelled + reason='cancelled'：不弹（系统取消，不打扰）
+  //   - cancelled + reason='early_return'：弹（玩家主动，要看结算）
   const pendingOutcomeMission = useMemo(() => {
     const missions = readMissions();
     return missions.find(m =>
-      m.status === 'completed' &&
-      m.outcome &&
-      !m.outcomeShown,
+      m.outcome && !m.outcomeShown && (
+        m.status === 'completed' ||
+        (m.status === 'cancelled' && m.outcome.reason === 'early_return')
+      )
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stageState]);
+
+  // 2026-06-09 加：Plan 3 战斗休整
+  //   监听 GameVar `scavenge_rest_pending` → 弹 ScavengeRestModal
+  //   格式：{ missionId: string, encounterId: string } | null
+  const restPending = useMemo(() => {
+    const raw = stageState.GameVar['scavenge_rest_pending'];
+    if (typeof raw !== 'string' || raw === 'null') return null;
+    try {
+      return JSON.parse(raw) as { missionId: string; encounterId: string };
+    } catch {
+      return null;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageState]);
+
+  // 当前休整 modal 对应的队伍（2026-06-09 加）
+  const restParty = useMemo(() => {
+    if (!restPending) return [];
+    const missions = readMissions();
+    const m = missions.find(x => x.id === restPending.missionId);
+    if (!m) return [];
+    const partyIds = m.partyCharacterIds && m.partyCharacterIds.length > 0
+      ? m.partyCharacterIds
+      : [m.characterId];
+    const raw = stageState.GameVar['scavenge_characters'];
+    if (typeof raw !== 'string') return [];
+    try {
+      const allChars = JSON.parse(raw) as ScavengeCharacter[];
+      return partyIds
+        .map(id => allChars.find(c => c.id === id))
+        .filter((c): c is ScavengeCharacter => Boolean(c));
+    } catch {
+      return [];
+    }
+  }, [restPending, stageState]);
+
+  const closeRestModal = () => {
+    // 清 rest_pending（保险）
+    stageStateManager.setStageVarAndCommit({
+      key: 'scavenge_rest_pending',
+      value: JSON.stringify(null),
+    });
+  };
 
   // 2026-06-09 重写：合并 pending_scene_jump 监听 + current_scene_url 同步
   // 原因：之前只在自己触发 changeScene 时写 current_scene_url
@@ -255,10 +303,28 @@ const ScavengeContent = () => {
         <ScavengeMapDetail location={selectedLocation} onClose={handleCloseLocationDetail} />
       )}
 
-      {/* 角色列表全屏弹框（包含角色详情卡片 + 仓库） */}
-      {showCharacterList && (
-        <ScavengeCharacterPanel onClose={handleCloseCharacterList} />
-      )}
+      {/* 角色列表全屏弹框（包含角色详情卡片 + 仓库）
+          2026-06-09 重构：派遣中"视图不变，限制转移"
+            - restrictTransfer=true：转移 submenu 隐藏非队内 + 仓库
+            - 不 restrictView：仍然显示所有 ally 角色（玩家能给非拾荒角色换装）
+          原因：流程图规定"不能和其他非小队角色交换物品，不能和仓库交换物品"
+            但**只限转移**，**不限显示**（玩家能看其他角色的状态 + 换装） */}
+      {showCharacterList && (() => {
+        const activeMission = readMissions().find(m => m.status === 'active');
+        const isExploring = activeMission !== undefined;
+        const partyIds = isExploring && activeMission
+          ? (activeMission.partyCharacterIds && activeMission.partyCharacterIds.length > 0
+              ? activeMission.partyCharacterIds
+              : [activeMission.characterId])
+          : [];
+        return (
+          <ScavengeCharacterPanel
+            onClose={handleCloseCharacterList}
+            restrictTransfer={isExploring}
+            partyCharacterIds={partyIds}
+          />
+        );
+      })()}
 
       {/* 派遣结算结果弹窗（监听 missions 变化，弹出未展示的） */}
       {pendingOutcomeMission && (
@@ -282,6 +348,15 @@ const ScavengeContent = () => {
 
       {/* 特性百科（2026-06-09 加） */}
       {showTraitCodex && <ScavengeCharacterCodex onClose={handleCloseTraitCodex} />}
+
+      {/* 2026-06-09 加：Plan 3 战斗休整 modal */}
+      {restPending && restParty.length > 0 && (
+        <ScavengeRestModal
+          party={restParty}
+          encounterId={restPending.encounterId}
+          onClose={closeRestModal}
+        />
+      )}
 
       {/* 遭遇结果弹窗（每个派遣期遭遇的资源点/战斗都弹一次） */}
       {pendingEncounter && (
