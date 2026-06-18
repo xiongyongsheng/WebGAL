@@ -48,6 +48,10 @@ import {
 } from '../ScavengeItems/items';
 import { InventoryItem, getItemDurability, getItemMaxDurability, isItemBroken, getItemCurrentStealth } from '../ScavengeItems/inventory';
 import { sumActiveTraitEffects } from './traits';
+// 2026-06-09 改：用统一的 getFinalAttr 拿"基础 + 装备 + 特性"总值
+//   之前在 characterCombat 内部自己算 effectiveStr/Agi（漏装备），导致 UI 和战斗公式不一致
+//   现在所有系统都从这一个函数取
+import { getFinalAttr } from './ScavengeCharacterPanel/ScavengeCharacterPanel.stats';
 
 /** 拳头（无武器）伤害常量 */
 export const FIST_DAMAGE = 2;
@@ -269,9 +273,10 @@ export interface DerivedCombatStats {
  */
 export const computeWeaponExpectedDamage = (char: ScavengeCharacter): number => {
   const weapon = getEquippedWeapon(char);
-  // 2026-06-09 加：特性系统（str 加成由基础 + 装备 + 特性三者求和）
+  // 2026-06-09 改：统一用 getFinalAttr 拿"基础 + 装备 + 特性"总值
+  // 之前 char.str + trait.str 漏装备
   const traitBonus = sumActiveTraitEffects(char);
-  const effectiveStr = char.str + (traitBonus.str ?? 0);
+  const effectiveStr = getFinalAttr(char, 'str');
   if (!weapon || !weapon.def.damageRange) {
     // 无武器 → 拳头
     return Math.floor(FIST_DAMAGE * (1 + Math.sqrt(effectiveStr) / 6));
@@ -305,6 +310,8 @@ export const computeDerivedStats = (char: ScavengeCharacter, isNight: boolean = 
     const def = piece.def.defense ?? 0;
     armorTotal += def * (curDur / maxDur);
   }
+  // 2026-06-09 改：clamp 到 0（防御理论不为负，但兜底）
+  armorTotal = Math.max(0, armorTotal);
 
   // ============== 潜行公式（2026-06-08 第三次改：装备为主×敏捷乘数）==============
   //
@@ -329,17 +336,29 @@ export const computeDerivedStats = (char: ScavengeCharacter, isNight: boolean = 
   //   vs wanderer 25 → 1 - 22/25 = 12%  成功
   //   vs chaser 50   → 1 - 22/50 = 56%  成功
   const equippedStealthSum = getEquippedStealthSum(char);
-  let stealth = equippedStealthSum * (1 + char.agi / 10);
+  // 2026-06-09 改：用 getFinalAttr 拿"基础 + 装备 + 特性"总值
+  // 之前 char.agi 漏装备 + 漏特性
+  let stealth = equippedStealthSum * (1 + getFinalAttr(char, 'agi') / 10);
   if (isNight) stealth = Math.floor(stealth * 1.1);
   stealth = Math.round(stealth);  // 取整，让数字干净
-  stealth = Math.min(100, stealth);  // 上界 100；负值保留（装备太暴露）
+  // 2026-06-09 改：clamp 到 [0, 100]
+  //   之前只 clamp 上界 100（保留负数表示"装备太暴露"）
+  //   按用户要求"所有战斗属性不应该是负数"，clamp 下界 0
+  //   效果：原本"装备太暴露 → 必被发现" 现在变成"装备无潜行 → 100%被发现"（语义一致）
+  stealth = Math.max(0, Math.min(100, stealth));
 
-  // 2026-06-09 加：特性系统 —— 在公式结果上叠加 trait bonus
-  // 基础属性 str/agi/end 是"基础 + 装备 + 特性"，统一用 effectiveXxx
-  // 战斗概率/数值是"公式结果 + trait bonus"，在末尾叠加
+  // 2026-06-09 改：统一用 getFinalAttr（基础 + 装备 + 特性）
+  // 之前自己算 effectiveStr/Agi 漏了装备 bonus，导致 UI 显示和战斗公式不一致
   const traitBonus = sumActiveTraitEffects(char);
-  const effectiveAgi = char.agi + (traitBonus.agi ?? 0);
-  const effectiveStr = char.str + (traitBonus.str ?? 0);
+  const effectiveAgi = getFinalAttr(char, 'agi');
+  const effectiveStr = getFinalAttr(char, 'str');
+
+  // 2026-06-09 改：clamp 到 0 避免 Math.sqrt(负数)=NaN
+  // 特性（如濒死、重伤）可能把 str/agi 减到负数
+  // Math.sqrt(-2) = NaN，会污染攻击伤害/速度/命中
+  // 注意：getFinalAttr 内部已经 clamp 0，这里再 clamp 是冗余但安全
+  const safeAgi = Math.max(0, effectiveAgi);
+  const safeStr = Math.max(0, effectiveStr);
 
   return {
     attackDamage: computeWeaponExpectedDamage(char),
@@ -350,14 +369,18 @@ export const computeDerivedStats = (char: ScavengeCharacter, isNight: boolean = 
     // - 30 级 agi 64 主角 → sqrt(64)*8 = 64 attackSpeed
     // - 30 级 agi 66 露西 → sqrt(66)*8*1.3(fast) ≈ 67 attackSpeed
     // 2026-06-09 加：特性系统 → 基础 agi 已含 trait bonus，attackSpeedBonus 额外叠加
-    attackSpeed: Math.sqrt(effectiveAgi) * 8 * speedMult + weaponAgiBonus + (traitBonus.attackSpeedBonus ?? 0),
+    // 2026-06-09 改：clamp 到 0 防止特性叠加负效果导致负数
+    // 濒死/重伤/脱水 等多个特性同时触发时 attackSpeedBonus 累加可能 < 0
+    // 玩家看到 -65 没意义，显示 0 更友好
+    attackSpeed: Math.max(0, Math.sqrt(safeAgi) * 8 * speedMult + weaponAgiBonus + (traitBonus.attackSpeedBonus ?? 0)),
     armor: armorTotal,
     stealth,
     // 2026-06-09 改：命中/闪避/暴击 全部改平方根公式（加强上限，30 级 agi 64 时能涨到 80-90%）
     // 2026-06-09 加：特性系统 → 公式用 effectiveAgi，末尾叠加 accuracyBonus/evasionBonus/critRateBonus
-    accuracy: clamp01(0.5 + Math.sqrt(effectiveAgi) * 0.04 + (traitBonus.accuracyBonus ?? 0)),
-    evasion:  clamp01(Math.sqrt(effectiveAgi) * 0.04 + (traitBonus.evasionBonus ?? 0)),
-    critRate: clamp01(0.05 + Math.sqrt(effectiveAgi) * 0.015 + (traitBonus.critRateBonus ?? 0)),
+    // clamp01 是 [0,1] 范围，但特性可能让概率 < 0，clamp01 内部应处理
+    accuracy: Math.max(0, clamp01(0.5 + Math.sqrt(safeAgi) * 0.04 + (traitBonus.accuracyBonus ?? 0))),
+    evasion:  Math.max(0, clamp01(Math.sqrt(safeAgi) * 0.04 + (traitBonus.evasionBonus ?? 0))),
+    critRate: Math.max(0, clamp01(0.05 + Math.sqrt(safeAgi) * 0.015 + (traitBonus.critRateBonus ?? 0))),
     // 2026-06-09 加：返回有效 str/agi/end（被面板 / 战斗共用，str/agi 已含 trait bonus）
     _effectiveStr: effectiveStr,
     _effectiveAgi: effectiveAgi,

@@ -17,7 +17,6 @@ import { Icon } from '@iconify/react';
 import { useStageState } from '@/hooks/useStageState';
 import { ScavengeCharacter, getCharacterStatusText } from '../character';
 import { CHARACTER_TEMPLATES } from '../characterRoster';
-import { ScavengeCharacterTraits } from '../ScavengeCharacterTraits/ScavengeCharacterTraits';
 import { getItemName, getItemById } from '../../ScavengeItems/items';
 import { ItemTooltip, ItemTooltipData } from '../../ScavengeItems/ItemTooltip';
 import { ScavengeCharacterHeader } from '../ScavengeCharacterHeader/ScavengeCharacterHeader';
@@ -32,12 +31,12 @@ import {
   getCharacters, getWarehouse,
 } from './ScavengeCharacterPanel.stage';
 import {
-  calculateEquipBonus, getMaxHp, getMaxStamina, getMaxHungerThirst, getMaxCarryWeight,
+  getMaxHp, getMaxStamina, getMaxHungerThirst, getMaxCarryWeight,
   migrateOnStartup,
 } from './ScavengeCharacterPanel.stats';
 import {
   handleUnequipItem, handleApplyPending,
-  handleChangeStrategy, handleAddTrait, handleRemoveTrait, executeItemAction,
+  handleChangeStrategy, executeItemAction,
 } from './ScavengeCharacterPanel.actions';
 import {
   executeTransfer, handleTransferRequest, handleWarehouseItemClick,
@@ -208,10 +207,6 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
                     />
                     <ScavengeCharacterAttributes
                       charData={charData}
-                      strBonus={calculateEquipBonus(charData, 'str')}
-                      agiBonus={calculateEquipBonus(charData, 'agi')}
-                      endBonus={calculateEquipBonus(charData, 'end')}
-                      intBonus={calculateEquipBonus(charData, 'int')}
                       onApplyPending={(pending) => handleApplyPending(charData.id, pending, refresh)}
                       onChangeStrategy={(s) => handleChangeStrategy(charData.id, s, refresh)}
                     />
@@ -241,11 +236,8 @@ export const ScavengeCharacterPanel = ({ onClose }: ScavengeCharacterPanelProps)
                       makeItemHoverProps={makeItemHoverProps}
                       charForReq={charData}
                     />
-                    <ScavengeCharacterTraits
-                      charData={charData}
-                      onAdd={(traitId) => handleAddTrait(charData.id, traitId, refresh)}
-                      onRemove={(traitId) => handleRemoveTrait(charData.id, traitId, refresh)}
-                    />
+                    {/* 2026-06-09 删：特性已移到 ScavengeCharacterStatus 经验条下方
+                        这里是老位置的"特性"组件，会重复显示 */}
                   </div>
                 </div>
               );

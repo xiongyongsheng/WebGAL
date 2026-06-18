@@ -91,6 +91,13 @@ export interface ScavengeCharacter {
    * 支持正面/负面/条件触发（如饥=0 时减益）
    */
   traitIds?: string[];
+  /**
+   * 角色身上的特性实例（2026-06-09 加）
+   * 区别于 traitIds：traitInstances 带 expiresAtDay（自动过期）
+   * traitIds 是从 traitInstances 派生的简化列表（用于 sumActiveTraitEffects）
+   * 注意：玩家不能手动改 traitInstances，只能由 applyAutoTraits/addTrait 系统管理
+   */
+  traitInstances?: { id: string; addedAtDay: number; expiresAtDay?: number }[];
   // ============== 经验/升级系统 ==============
   /** 当前经验值 */
   exp: number;

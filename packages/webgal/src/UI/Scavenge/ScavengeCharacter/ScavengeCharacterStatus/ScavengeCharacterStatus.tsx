@@ -15,6 +15,7 @@ import whatshot from '@iconify-icons/material-symbols/whatshot';
 import { ScavengeCharacter, getStatusBarColor } from '../character';
 import { getExpProgress } from '../characterExperience';
 import { computeDerivedStats } from '../characterCombat';
+import { listAllTraits, getTrait, type Trait } from '../traits';
 import styles from './ScavengeCharacterStatus.module.scss';
 
 interface StatusRingProps {
@@ -124,6 +125,26 @@ export const ScavengeCharacterStatus = ({
           style={{ width: `${expPercent}%` }}
         />
       </div>
+
+      {/* 2026-06-09 加：特性 chips（显示在经验值下方） */}
+      {charData.traitIds && charData.traitIds.length > 0 && (
+        <div className={styles.traitRow}>
+          {charData.traitIds.map((id) => {
+            const trait = getTrait(id);
+            if (!trait) return null;
+            const isCondition = trait.category === 'condition';
+            return (
+              <span
+                key={id}
+                className={`${styles.traitChip} ${isCondition ? styles.traitChipCondition : ''}`}
+                title={trait.description}
+              >
+                {trait.name}
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       {/* 5 个状态圆环（2026-06-09 改：水平条 → 圆环）横排 */}
       <div className={styles.ringRow}>

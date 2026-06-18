@@ -1,0 +1,203 @@
+<mxfile host="Electron">
+  <diagram name="第 1 页" id="SfwfcQj7SgwBcCcCV4A1">
+    <mxGraphModel dx="3395" dy="1395" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" background="none" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-3" edge="1" parent="1" source="s06oxgp7_WzxMqlgrs8T-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="s06oxgp7_WzxMqlgrs8T-2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="选择地点&lt;div&gt;决定敌人种类,数量,物资种类,&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;物资&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;数量&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="760" x="40" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-5" edge="1" parent="1" source="s06oxgp7_WzxMqlgrs8T-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="s06oxgp7_WzxMqlgrs8T-4" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="选择可用角色,创建队伍,选择拾荒策略&lt;br&gt;添加新UI" vertex="1">
+          <mxGeometry height="60" width="760" x="40" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-60" edge="1" parent="1" source="s06oxgp7_WzxMqlgrs8T-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="s06oxgp7_WzxMqlgrs8T-59" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="确认派遣&lt;br&gt;此小队角色进入准备阶段" vertex="1">
+          <mxGeometry height="60" width="760" x="40" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-22" edge="1" parent="1" source="s06oxgp7_WzxMqlgrs8T-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="s06oxgp7_WzxMqlgrs8T-21" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-8" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="点击时间流逝(一个&lt;span style=&quot;text-align: left;&quot;&gt;回合&lt;/span&gt;)&lt;br&gt;(100%遇敌)" vertex="1">
+          <mxGeometry height="60" width="210" x="690" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-20" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="s06oxgp7_WzxMqlgrs8T-19" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="350" y="570" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-63" edge="1" parent="1" source="s06oxgp7_WzxMqlgrs8T-10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="s06oxgp7_WzxMqlgrs8T-8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-10" parent="1" style="rhombus;whiteSpace=wrap;html=1;rounded=0;" value="根据当前队伍的拾荒策略" vertex="1">
+          <mxGeometry height="150" width="160" x="340" y="495" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-14" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="430" y="725" as="sourcePoint" />
+            <mxPoint x="430" y="725" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-15" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="战斗策略" vertex="1">
+          <mxGeometry height="30" width="110" x="540" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-65" edge="1" parent="1" source="s06oxgp7_WzxMqlgrs8T-19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="s06oxgp7_WzxMqlgrs8T-64" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-19" parent="1" style="whiteSpace=wrap;html=1;rounded=0;" value="点击时间流逝&lt;br&gt;(概率遇敌)" vertex="1">
+          <mxGeometry height="60" width="120" x="50" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-24" edge="1" parent="1" source="s06oxgp7_WzxMqlgrs8T-21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="s06oxgp7_WzxMqlgrs8T-26" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="550" y="850" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-33" edge="1" parent="1" source="s06oxgp7_WzxMqlgrs8T-21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="s06oxgp7_WzxMqlgrs8T-34" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="830" y="790" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-21" parent="1" style="rhombus;whiteSpace=wrap;html=1;rounded=0;" value="战斗判定" vertex="1">
+          <mxGeometry height="80" width="120" x="675" y="750" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-25" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="成功" vertex="1">
+          <mxGeometry height="30" width="130" x="650" y="840" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-48" edge="1" parent="1" source="s06oxgp7_WzxMqlgrs8T-26" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="s06oxgp7_WzxMqlgrs8T-44" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-26" parent="1" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="战斗成功" vertex="1">
+          <mxGeometry height="120" width="280" x="595" y="880" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-27" parent="s06oxgp7_WzxMqlgrs8T-26" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" value="&lt;div style=&quot;text-align: center;&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;角色状态变化&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="30" width="280" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-28" parent="s06oxgp7_WzxMqlgrs8T-26" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" value="获取拾荒物资" vertex="1">
+          <mxGeometry height="30" width="280" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-29" parent="s06oxgp7_WzxMqlgrs8T-26" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;text-align: center;&quot;&gt;根据击败敌人类型和数量获得额外资源和经验值&lt;/span&gt;" vertex="1">
+          <mxGeometry height="30" width="280" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-40" edge="1" parent="1" source="s06oxgp7_WzxMqlgrs8T-34" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="s06oxgp7_WzxMqlgrs8T-39" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-34" parent="1" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="战斗失败" vertex="1">
+          <mxGeometry height="90" width="280" x="910" y="745" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-41" parent="s06oxgp7_WzxMqlgrs8T-34" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" value="&lt;div style=&quot;text-align: center;&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;角色状态变化&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="30" width="280" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-35" parent="s06oxgp7_WzxMqlgrs8T-34" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" value="&lt;div style=&quot;text-align: center;&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;50%的概率丢失当前背包中的部分物品&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="30" width="280" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-38" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="失败" vertex="1">
+          <mxGeometry height="30" width="90" x="800" y="760" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-58" edge="1" parent="1" source="s06oxgp7_WzxMqlgrs8T-39" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="s06oxgp7_WzxMqlgrs8T-57" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-39" parent="1" style="whiteSpace=wrap;html=1;fontStyle=0;startSize=30;horizontal=1;" value="&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;点击时间流逝(需要一个&lt;span style=&quot;text-align: left;&quot;&gt;回合,不是像现在直接秒回安全屋)&lt;/span&gt;&lt;/div&gt;&lt;span style=&quot;text-align: left;&quot;&gt;结束拾荒&lt;/span&gt;&lt;br&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="120" width="340" x="880" y="1169" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-44" parent="1" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;points=[[0,0,0,0,0],[0,0.25,0,0,0],[0,0.5,0,0,0],[0,0.75,0,0,0],[0,1,0,0,0],[0.25,0,0,0,0],[0.25,1,0,0,0],[0.5,0,0,0,0],[0.5,1,0,0,0],[0.75,0,0,0,0],[0.75,1,0,0,0],[1,0,0,0,0],[1,0.25,0,0,0],[1,0.5,0,0,0],[1,0.75,0,0,0],[1,1,0,0,0]];" value="战后休整,可选是否继续" vertex="1">
+          <mxGeometry height="140" width="390" x="205" y="1160" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-45" parent="s06oxgp7_WzxMqlgrs8T-44" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" value="&lt;div style=&quot;text-align: center;&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;可以使用当前角色背包里的物品来补充角色状态,更换装备等,不能和其他非小队角色交换物品,不能和仓库交换物品&lt;br&gt;UI复用现有的角色列表UI,只是隐藏非同小队的角色和仓库部分&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="80" width="390" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-46" parent="s06oxgp7_WzxMqlgrs8T-44" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" value="提前返回,结束拾荒" vertex="1">
+          <mxGeometry height="30" width="390" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-51" edge="1" parent="1" source="s06oxgp7_WzxMqlgrs8T-45" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="s06oxgp7_WzxMqlgrs8T-39">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-52" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;span style=&quot;text-align: left;&quot;&gt;选择提前返回&lt;/span&gt;" vertex="1">
+          <mxGeometry height="30" width="180" x="730" y="1000" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-54" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;div style=&quot;text-align: left;&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;继续拾荒&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="30" width="80" x="130" y="1200" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-55" edge="1" parent="1" source="s06oxgp7_WzxMqlgrs8T-45" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="s06oxgp7_WzxMqlgrs8T-10">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="140" y="1230" />
+              <mxPoint x="140" y="1040" />
+              <mxPoint x="420" y="1040" />
+            </Array>
+            <mxPoint x="490" y="680" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-56" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="潜行策略" vertex="1">
+          <mxGeometry height="30" width="110" x="210" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-57" parent="1" style="whiteSpace=wrap;html=1;fontStyle=0;startSize=30;horizontal=1;" value="返回安全屋" vertex="1">
+          <mxGeometry height="60" width="120" x="990" y="1340" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-61" edge="1" parent="1" source="s06oxgp7_WzxMqlgrs8T-59" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="s06oxgp7_WzxMqlgrs8T-10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-59" parent="1" style="whiteSpace=wrap;html=1;rounded=0;" value="点击时间流逝(一个&lt;span style=&quot;text-align: left;&quot;&gt;回合&lt;/span&gt;)&lt;div&gt;此角色进入拾荒阶段&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="320" x="260" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-70" edge="1" parent="1" source="s06oxgp7_WzxMqlgrs8T-64" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="s06oxgp7_WzxMqlgrs8T-66">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-76" edge="1" parent="1" source="s06oxgp7_WzxMqlgrs8T-64" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="s06oxgp7_WzxMqlgrs8T-72">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="260" y="710" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-64" parent="1" style="rhombus;whiteSpace=wrap;html=1;rounded=0;" value="潜行判定" vertex="1">
+          <mxGeometry height="80" width="80" x="70" y="670" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-66" parent="1" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="潜行成功" vertex="1">
+          <mxGeometry height="120" width="220" x="-240" y="650" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-67" parent="s06oxgp7_WzxMqlgrs8T-66" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" value="&lt;div style=&quot;text-align: center;&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;角色状态变化&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="30" width="220" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-68" parent="s06oxgp7_WzxMqlgrs8T-66" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" value="获取拾荒物资" vertex="1">
+          <mxGeometry height="30" width="220" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-69" parent="s06oxgp7_WzxMqlgrs8T-66" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;text-align: center;&quot;&gt;根据敌人类型和数量获得额外经验值&lt;/span&gt;" vertex="1">
+          <mxGeometry height="30" width="220" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-71" edge="1" parent="1" source="s06oxgp7_WzxMqlgrs8T-68" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;" target="s06oxgp7_WzxMqlgrs8T-44">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="-260" y="725" />
+              <mxPoint x="-260" y="1080" />
+              <mxPoint x="400" y="1080" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-80" edge="1" parent="1" source="s06oxgp7_WzxMqlgrs8T-72" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="s06oxgp7_WzxMqlgrs8T-21" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="505" y="800" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-72" parent="1" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;points=[[0,0,0,0,0],[0,0.25,0,0,0],[0,0.5,0,0,0],[0,0.75,0,0,0],[0,1,0,0,0],[0.25,0,0,0,0],[0.25,1,0,0,0],[0.5,0,0,0,0],[0.5,1,0,0,0],[0.75,0,0,0,0],[0.75,1,0,0,0],[1,0,0,0,0],[1,0.25,0,0,0],[1,0.5,0,0,0],[1,0.75,0,0,0],[1,1,0,0,0]];" value="潜行失败,进入战斗" vertex="1">
+          <mxGeometry height="60" width="230" x="140" y="760" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-73" parent="s06oxgp7_WzxMqlgrs8T-72" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" value="&lt;div style=&quot;text-align: center;&quot;&gt;所有敌人的初始攻击条进度从0%提升50%&lt;/div&gt;" vertex="1">
+          <mxGeometry height="30" width="230" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-77" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="成功" vertex="1">
+          <mxGeometry height="30" width="130" x="-40" y="680" as="geometry" />
+        </mxCell>
+        <mxCell id="s06oxgp7_WzxMqlgrs8T-78" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="失败" vertex="1">
+          <mxGeometry height="30" width="90" x="150" y="670" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

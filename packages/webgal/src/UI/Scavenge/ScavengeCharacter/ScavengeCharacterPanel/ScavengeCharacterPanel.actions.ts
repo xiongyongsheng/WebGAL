@@ -48,27 +48,6 @@ export const handleApplyPending = (
   refresh();
 };
 
-// ============== 特性增删 ==============
-
-/** 添加特性（已拥有则跳过） */
-export const handleAddTrait = (charId: string, traitId: string, refresh: () => void) => {
-  const characters = getCharacters();
-  const target = characters.find(c => c.id === charId);
-  if (!target) return;
-  if ((target.traitIds ?? []).includes(traitId)) return;
-  updateCharacter({ ...target, traitIds: [...(target.traitIds ?? []), traitId] });
-  refresh();
-};
-
-/** 移除特性 */
-export const handleRemoveTrait = (charId: string, traitId: string, refresh: () => void) => {
-  const characters = getCharacters();
-  const target = characters.find(c => c.id === charId);
-  if (!target) return;
-  updateCharacter({ ...target, traitIds: (target.traitIds ?? []).filter(t => t !== traitId) });
-  refresh();
-};
-
 // ============== 装备/卸下 ==============
 
 /** 卸下装备到背包 */

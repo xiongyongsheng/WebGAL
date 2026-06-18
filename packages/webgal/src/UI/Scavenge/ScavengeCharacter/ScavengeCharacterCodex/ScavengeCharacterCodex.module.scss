@@ -1,0 +1,185 @@
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  background: linear-gradient(135deg, #1a1f2e 0%, #2a3142 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 20px;
+  font-weight: 600;
+  color: #e0e0e0;
+
+  .titleIcon {
+    font-size: 28px;
+    color: #ffd54f;
+  }
+
+  .count {
+    font-size: 14px;
+    color: #999;
+    font-weight: 400;
+  }
+}
+
+.closeButton {
+  background: transparent;
+  border: none;
+  color: #999;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+}
+
+.body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.categorySection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.categoryTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
+  .categoryIcon {
+    font-size: 20px;
+  }
+
+  .categoryCount {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 400;
+    color: #666;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+}
+
+.traitList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.traitCard {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 12px 16px;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.traitName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+
+  .autoBadge {
+    font-size: 10px;
+    padding: 2px 6px;
+    background: rgba(33, 150, 243, 0.2);
+    color: #64b5f6;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+
+  .durationBadge {
+    font-size: 10px;
+    padding: 2px 6px;
+    background: rgba(255, 152, 0, 0.2);
+    color: #ffb74d;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+}
+
+.traitDesc {
+  font-size: 12px;
+  color: #999;
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+
+.traitEffect {
+  font-size: 12px;
+  color: #c0c0c0;
+  line-height: 1.6;
+  font-family: 'Menlo', 'Monaco', monospace;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 6px 10px;
+  border-radius: 4px;
+  border-left: 2px solid #4caf50;
+}
+
+.traitRecover {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #81c784;
+  margin-top: 6px;
+  padding: 4px 8px;
+  background: rgba(76, 175, 80, 0.08);
+  border-radius: 4px;
+}

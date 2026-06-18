@@ -16,6 +16,7 @@ import {
 } from "./locationRefresh";
 import { ScavengeCharacter, normalizeCharacter, getCharacterStatusText } from '../ScavengeCharacter/character';
 import { CHARACTER_TEMPLATES } from '../ScavengeCharacter/characterRoster';
+import { canDispatch } from '../ScavengeCharacter/traits';
 import { startMission, readMissions, writeMissions } from '../ScavengeMissions/missions';
 import styles from './ScavengeMapDetail.module.scss';
 
@@ -75,11 +76,14 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
   //   - ally（友方/队伍成员）：可派遣
   //   - neutral（中立，如商人）：不可派遣（独立 NPC）
   //   - enemy（敌对）：不可派遣
+  // 2026-06-09 改：用 canDispatch 检查数值（任一项归0 → 不能派遣）
   const dispatchable = characters.filter(c => {
-    if (c.hp <= 0 || c.isExploring || c.stamina < 20) return false;
+    if (c.isExploring) return false;
+    if (c.stamina < 20) return false;
     const template = CHARACTER_TEMPLATES[c.id];
     if (!template) return false;
-    return (template.faction ?? 'ally') === 'ally';
+    if ((template.faction ?? 'ally') !== 'ally') return false;
+    return canDispatch(c).canDispatch;
   });
 
   const handleDispatch = (charId: string) => {

@@ -29,6 +29,10 @@ import {
   getEquippedWeapon, getEquippedArmorPieces, findUsableWeaponInInventory,
   rollWeaponDamage, getItemDurability, isItemBroken,
 } from '../ScavengeCharacter/characterCombat';
+// 2026-06-09 加：统一用 getFinalAttr 拿"基础 + 装备 + 特性"总值
+// 之前 combat.ts 直接用 char.str/char.agi（漏装备 + 漏特性）
+// 实际战斗的伤害/速度 跟 UI 显示不一致
+import { getFinalAttr } from '../ScavengeCharacter/ScavengeCharacterPanel/ScavengeCharacterPanel.stats';
 import { ENEMY_TEMPLATES, EnemyInstance, EnemyType } from '../ScavengeEnemies/enemies';
 import {
   getItemById, getItemName, ArmorSlot, getWeaponSpeedModifier,
@@ -134,7 +138,9 @@ const calcCharacterDamage = (char: ScavengeCharacter, combatant: Combatant, crit
   } else {
     base = rollWeaponDamage(combatant.weaponDef.id);
   }
-  const strMult = 1 + Math.sqrt(char.str) / 6;
+  // 2026-06-09 改：用 getFinalAttr 拿"基础 + 装备 + 特性"总值
+  // 之前 char.str 漏装备/特性，实际战斗伤害跟 UI 显示不一致
+  const strMult = 1 + Math.sqrt(getFinalAttr(char, 'str')) / 6;
   return Math.max(1, Math.floor(base * strMult * critMult));
 };
 
@@ -147,7 +153,8 @@ const computeCharacterAttackSpeed = (char: ScavengeCharacter, combatant: Combata
   // - agi 30 → sqrt(30) * 8 ≈ 43.8
   // - agi 64 → sqrt(64) * 8 = 64
   // 平方根递增：低 agi 提升快，高 agi 提升慢（避免堆 agi 一边倒）
-  const baseSpeed = Math.sqrt(char.agi) * 8;
+  // 2026-06-09 改：用 getFinalAttr 拿"基础 + 装备 + 特性"总值
+  const baseSpeed = Math.sqrt(getFinalAttr(char, 'agi')) * 8;
   if (combatant.isFists || !combatant.weaponDef) {
     return baseSpeed;
   }

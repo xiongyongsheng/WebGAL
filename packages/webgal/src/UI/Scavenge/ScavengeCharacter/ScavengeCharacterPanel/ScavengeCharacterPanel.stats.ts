@@ -42,40 +42,45 @@ export const calculateEquipBonus = (
   return bonus;
 };
 
-/** 角色最终属性 = 基础 + 装备 bonus */
+/** 角色最终属性 = 基础 + 装备 bonus + 特性 bonus（2026-06-09 改：加 trait）*/
 export const getFinalAttr = (charData: ScavengeCharacter, attr: 'str' | 'agi' | 'end' | 'int'): number => {
-  return charData[attr] + calculateEquipBonus(charData, attr);
+  const base = charData[attr] + calculateEquipBonus(charData, attr);
+  const traitBonus = sumActiveTraitEffects(charData);
+  // 2026-06-09 改：clamp 到 0（特性负效果可能让属性降到负数）
+  return Math.max(0, base + (traitBonus[attr] ?? 0));
 };
 
 /**
  * HP 上限（2026-06-09 改：去掉 -5 基准 + 加 trait bonus）
- * 公式：maxHp(100) + (end + equip.end) * 8 + trait.maxHpBonus
+ * 公式：100 + getFinalAttr(end) * 8 + trait.maxHpBonus
+ * 2026-06-09 改：用 getFinalAttr 包含装备 + 特性 bonus（之前漏特性）
  */
 export const getMaxHp = (charData: ScavengeCharacter): number => {
-  const endBonus = getFinalAttr(charData, 'end');
+  const totalEnd = getFinalAttr(charData, 'end');
   const traitBonus = sumActiveTraitEffects(charData);
-  return charData.maxHp + endBonus * 8 + (traitBonus.maxHpBonus ?? 0);
+  return 100 + totalEnd * 8 + (traitBonus.maxHpBonus ?? 0);
 };
 
 /**
  * 体力上限（2026-06-09 加：getMaxStamina + trait bonus）
- * 公式：100 + (end + equip.end) * 8 + trait.maxStaminaBonus
+ * 公式：100 + getFinalAttr(end) * 8 + trait.maxStaminaBonus
  */
 export const getMaxStamina = (charData: ScavengeCharacter): number => {
-  const endBonus = getFinalAttr(charData, 'end');
+  const totalEnd = getFinalAttr(charData, 'end');
   const traitBonus = sumActiveTraitEffects(charData);
-  return 100 + endBonus * 8 + (traitBonus.maxStaminaBonus ?? 0);
+  return 100 + totalEnd * 8 + (traitBonus.maxStaminaBonus ?? 0);
 };
 
 /**
- * 负重上限（2026-06-09 改：×5 系数 + trait weightReduction）
- * 公式：(25 + end*5) * (1 - trait.weightReduction)
+ * 负重上限（2026-06-09 改：×5 系数 + trait weightReduction + trait end bonus）
+ * 公式：(30 + getFinalAttr(end) * 5) * (1 - trait.weightReduction)
+ * 2026-06-09 改：用 getFinalAttr 包含装备 + 特性 end bonus（之前漏特性）
  */
 export const getMaxCarryWeight = (charData: ScavengeCharacter): number => {
-  const totalEnd = charData.end + calculateEquipBonus(charData, 'end');
+  const totalEnd = getFinalAttr(charData, 'end');
   const traitBonus = sumActiveTraitEffects(charData);
   const reduction = traitBonus.weightReduction ?? 0;
-  return (MAX_CARRY_WEIGHT + totalEnd * 5) * (1 - reduction);
+  return Math.max(0, (MAX_CARRY_WEIGHT + totalEnd * 5) * (1 - reduction));
 };
 
 /** 饥/渴上限固定 100（生理上限，2026-06-05 与产品确认） */

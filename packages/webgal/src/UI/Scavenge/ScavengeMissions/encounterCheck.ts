@@ -13,6 +13,7 @@
  */
 
 import { ScavengeCharacter } from '../ScavengeCharacter/character';
+import { applyAutoTraits } from '../ScavengeCharacter/traits';
 import { computeDerivedStats } from '../ScavengeCharacter/characterCombat';
 import { InventoryItem, addToInventory, generateInstanceId } from '../ScavengeItems/inventory';
 import { ScavengeLocationItem } from '../ScavengeMap/locations';
@@ -50,6 +51,14 @@ export const encounterCheck = (
   const encId = generateInstanceId();
   const baseItems: InventoryItem[] = [];
 
+  // 2026-06-09 加：自动特性更新包装
+  //   每次 return 前调 applyAutoTraits，让派遣中的特性立即更新
+  //   （不依赖下一次时间推进）
+  const wrap = (result: { encounter: EncounterLog; updatedChar: ScavengeCharacter; missionOver: boolean }) => ({
+    ...result,
+    updatedChar: applyAutoTraits(result.updatedChar, 0),
+  });
+
   // 2026-06-08 加：取/刷新 location 状态（如果时间过期或 dirty）
   const locState = getOrRefreshLocationState(location, triggerDay);
   // 记录派遣（用于 UI 显示"X 天没人来"）
@@ -57,7 +66,7 @@ export const encounterCheck = (
 
   // 1. 60% 不遭遇（2026-06-09 改：combat 策略 100% 遭遇，跳过此检查）
   if (mission.strategy !== 'combat' && Math.random() >= 0.4) {
-    return {
+    return wrap({
       encounter: {
         id: encId,
         triggerDay,
@@ -67,7 +76,7 @@ export const encounterCheck = (
       },
       updatedChar: character,
       missionOver: false,
-    };
+    });
   }
 
   // 2. 遭遇：80% 丧尸 / 20% 资源点
@@ -93,7 +102,7 @@ export const encounterCheck = (
         inventory: addToInventory(character.inventory ?? [], item),
       };
     }
-    return {
+    return wrap({
       encounter: {
         id: encId,
         triggerDay,
@@ -104,14 +113,14 @@ export const encounterCheck = (
       },
       updatedChar,
       missionOver: false,
-    };
+    });
   }
 
   // 3. 丧尸：从 locationState.enemyCount 抽 1~3 个
   const allEnemies = countToEnemies(locState.enemyCount);
   if (allEnemies.length === 0) {
     // state 没敌人了（已被刷光 / 危险等级 0）
-    return {
+    return wrap({
       encounter: {
         id: encId,
         triggerDay,
@@ -121,7 +130,7 @@ export const encounterCheck = (
       },
       updatedChar: character,
       missionOver: false,
-    };
+    });
   }
   // 抽 1~min(3, allEnemies.length) 个
   const encounterEnemies = pickRandomEncounterEnemies(allEnemies);
@@ -160,7 +169,7 @@ export const encounterCheck = (
   });
   if (encounterEnemies.length > 0 && !detectedFlags.some((d) => d)) {
     // 全部没察觉 → 潜行成功（**不**减敌人，敌人还活着，下次还能遇到）
-    return {
+    return wrap({
       encounter: {
         id: encId,
         triggerDay,
@@ -171,7 +180,7 @@ export const encounterCheck = (
       },
       updatedChar: character,
       missionOver: false,
-    };
+    });
   }
   // 设置被发现敌人的 startAtb = 50（首轮先手）
   for (let i = 0; i < encounterEnemies.length; i++) {
@@ -228,7 +237,7 @@ export const encounterCheck = (
         bonusLootCount = 1;
       }
     }
-    return {
+    return wrap({
       encounter: {
         id: encId,
         triggerDay,
@@ -242,7 +251,7 @@ export const encounterCheck = (
       },
       updatedChar,
       missionOver: false, // 战斗胜不结束 mission，继续探索
-    };
+    });
   }
 
   // 败：扣 state 中所有遇到的敌人（虽然没全部击败，但遇到了就是遇到了）
@@ -253,7 +262,7 @@ export const encounterCheck = (
   deductEnemiesByType(location.id, defeatedCounts);
 
   // 败：mission 失败
-  return {
+  return wrap({
     encounter: {
       id: encId,
       triggerDay,
@@ -266,5 +275,5 @@ export const encounterCheck = (
     },
     updatedChar,
     missionOver: true, // 战斗败 → 立即结束 mission
-  };
+  });
 };

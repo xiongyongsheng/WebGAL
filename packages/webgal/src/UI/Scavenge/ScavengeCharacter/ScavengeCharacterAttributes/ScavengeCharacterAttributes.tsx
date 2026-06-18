@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import { ScavengeCharacter, MainStat, MAIN_STAT_NAMES } from '../character';
 import { getItemById, isEquipment, EquipmentItem } from '../../ScavengeItems/items';
-import { sumActiveTraitEffects } from '../traits';
+// 2026-06-09 改：用统一的 getFinalAttr 拿"基础 + 装备 + 特性"总值
+// 之前用 prop 传装备 bonus + 自己算特性 bonus（3 个不同来源 → 不一致）
+// 现在所有系统都从这一个函数取
+import { getFinalAttr } from '../ScavengeCharacterPanel/ScavengeCharacterPanel.stats';
 import styles from './ScavengeCharacterAttributes.module.scss';
 
 interface ScavengeCharacterAttributesProps {
   charData: ScavengeCharacter;
-  strBonus: number;
-  agiBonus: number;
-  endBonus: number;
-  intBonus: number;
   /** 玩家点"保存加点"时回调：父组件更新 GameVar */
   onApplyPending?: (pending: { str: number; agi: number; end: number; int: number }) => void;
   /** 玩家切换拾荒策略时回调：父组件更新 GameVar */
@@ -21,32 +20,11 @@ const ZERO_PENDING = { str: 0, agi: 0, end: 0, int: 0 };
 
 export const ScavengeCharacterAttributes = ({
   charData,
-  strBonus,
-  agiBonus,
-  endBonus,
-  intBonus,
   onApplyPending,
   onChangeStrategy,
 }: ScavengeCharacterAttributesProps) => {
   // 暂存状态：玩家在 UI 上点 +/- 调整，点"保存加点"才真正提交
   const [pending, setPending] = useState({ ...ZERO_PENDING });
-
-  const bonusMap: Record<MainStat, number> = {
-    str: strBonus,
-    agi: agiBonus,
-    end: endBonus,
-    int: intBonus,
-  };
-
-  // 2026-06-09 改：累加特性 bonus（基础 + 装备 + 特性 + 暂存）
-  // 之前只算 base + pend，bonus（装备 + 特性）没加进去
-  const traitBonus = sumActiveTraitEffects(charData);
-  const traitBonusMap: Record<MainStat, number> = {
-    str: traitBonus.str ?? 0,
-    agi: traitBonus.agi ?? 0,
-    end: traitBonus.end ?? 0,
-    int: traitBonus.int ?? 0,
-  };
 
   const totalPending = pending.str + pending.agi + pending.end + pending.int;
   const remainingPoints = charData.statPoints - totalPending;
@@ -78,13 +56,14 @@ export const ScavengeCharacterAttributes = ({
       <div className={styles.sectionTitle}>角色属性</div>
       <div className={styles.attrList}>
         {STAT_KEYS.map(stat => {
+          // 2026-06-09 改：统一用 getFinalAttr（基础 + 装备 + 特性） + pending（暂存）
+          // 之前 base + bonus + trait + pend 是 4 个字段相加，现在简化为 2 个
+          // 这样保证：UI 显示的"str/agi/end/int" 和 战斗公式用的"str/agi/end/int"完全一致
           const base = charData[stat];
-          const bonus = bonusMap[stat];
-          const trait = traitBonusMap[stat];
+          const finalized = getFinalAttr(charData, stat);
+          const totalBonus = finalized - base;  // 装备 + 特性的总和
           const pend = pending[stat];
-          // 2026-06-09 改：显示 = 基础 + 装备 + 特性 + 暂存
-          // 之前 base + pend 漏掉了装备和特性 bonus
-          const displayValue = base + bonus + trait + pend;
+          const displayValue = Math.max(0, finalized + pend);
           return (
             <div
               key={stat}
@@ -95,8 +74,11 @@ export const ScavengeCharacterAttributes = ({
               </span>
               <span className={styles.attrValue}>
                 {displayValue}
-                {bonus > 0 && (
-                  <span className={styles.attrBonus}>+{bonus}</span>
+                {totalBonus > 0 && (
+                  <span className={styles.attrBonus}>+{totalBonus}</span>
+                )}
+                {totalBonus < 0 && (
+                  <span className={styles.attrBonus}>{totalBonus}</span>
                 )}
                 {pend > 0 && (
                   <span className={styles.attrPendingDelta}>+{pend}</span>

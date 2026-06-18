@@ -15,6 +15,7 @@
 import { ScavengeCharacter } from '../ScavengeCharacter/character';
 import { gainExp } from '../ScavengeCharacter/characterExperience';
 import { CHARACTER_TEMPLATES } from '../ScavengeCharacter/characterRoster';
+import { applyAutoTraits } from '../ScavengeCharacter/traits';
 
 // ============== 调参常量（可改） ==============
 
@@ -146,6 +147,15 @@ export const applyPeriodEffectsToCharacters = (
     // 5) 经验获得（休息 +5, 探索 +8；升级逻辑由 gainExp 内部处理，可能连升 N 级）
     const expAmount = isExploring ? EXP_PER_PERIOD_EXPLORING : EXP_PER_PERIOD_RESTING;
     updated = gainExp(updated, expAmount);
+
+    // 6) 自动特性管理（2026-06-09 加）
+    //   根据数值（HP/hunger/thirst/sanity/stamina）自动添加/移除条件特性
+    //   例如：hunger=0 → "饥肠辘辘"；hunger>10 → 移除
+    //   不能手动加/移除：仅由 applyAutoTraits 系统管理
+    // 注：currentDay 这里没有传，特性会按"未过期"处理（autoDurationDays 暂不生效）
+    //   实际调用方会传 currentDay（在外层 caller）
+    // 这里传 0 占位（特性不依赖 day，只依赖数值）
+    updated = applyAutoTraits(updated, 0);
 
     return updated;
   });

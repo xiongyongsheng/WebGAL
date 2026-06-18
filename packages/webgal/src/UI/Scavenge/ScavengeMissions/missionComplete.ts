@@ -4,6 +4,7 @@
 
 import { ScavengeCharacter } from '../ScavengeCharacter/character';
 import { gainExp } from '../ScavengeCharacter/characterExperience';
+import { applyAutoTraits } from '../ScavengeCharacter/traits';
 import { InventoryItem, addToInventory } from '../ScavengeItems/inventory';
 import { ScavengeLocationItem } from '../ScavengeMap/locations';
 import {
@@ -180,6 +181,13 @@ export const applyMissionOutcomeToCharacter = (
   if (outcome.expGained > 0) {
     updated = gainExp(updated, outcome.expGained);
   }
+
+  // 2026-06-09 加：自动特性更新
+  // 战斗/派遣结束后 HP/hunger/thirst/sanity/stamina 都可能变
+  // （HP 减少最多 → 触发重伤/濒死等）
+  // 调 applyAutoTraits 自动添加/移除条件特性
+  // currentDay 传 0：派送内不依赖 day，只看数值条件
+  updated = applyAutoTraits(updated, 0);
 
   return updated;
 };

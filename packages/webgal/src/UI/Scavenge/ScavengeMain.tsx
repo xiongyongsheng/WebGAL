@@ -16,6 +16,7 @@ import { ScavengeCharacterPanel } from './ScavengeCharacter/ScavengeCharacterPan
 import { ScavengeMenuButton } from './ScavengeMenuButton/ScavengeMenuButton';
 import { ScavengeEnemyCodex } from './ScavengeEnemies/ScavengeEnemyCodex/ScavengeEnemyCodex';
 import { ScavengeItemCodex } from './ScavengeItems/ScavengeItemCodex/ScavengeItemCodex';
+import { ScavengeCharacterCodex } from './ScavengeCharacter/ScavengeCharacterCodex/ScavengeCharacterCodex';
 import { readMissions } from './ScavengeMissions/missions';
 import { ScavengeMissionOutcomeModal } from './ScavengeMissionOutcomeModal/ScavengeMissionOutcomeModal';
 import { ScavengeCombatLogModal } from './ScavengeCombatLogModal/ScavengeCombatLogModal';
@@ -78,6 +79,8 @@ const ScavengeContent = () => {
   const [showCodex, setShowCodex] = useState(false);
   // 2026-06-09 加：物品图鉴
   const [showItemCodex, setShowItemCodex] = useState(false);
+  // 2026-06-09 加：特性百科
+  const [showTraitCodex, setShowTraitCodex] = useState(false);
 
   // 角色面板显示状态
   const handleOpenCharacterList = () => {
@@ -94,6 +97,9 @@ const ScavengeContent = () => {
   // 2026-06-09 加：物品图鉴 toggle
   const handleOpenItemCodex = () => setShowItemCodex(true);
   const handleCloseItemCodex = () => setShowItemCodex(false);
+  // 2026-06-09 加：特性百科 toggle
+  const handleOpenTraitCodex = () => setShowTraitCodex(true);
+  const handleCloseTraitCodex = () => setShowTraitCodex(false);
 
   // 地图操作
   // 2026-06-09 改：jumpScene 优先（不走详情面板，直接切换场景）
@@ -228,6 +234,12 @@ const ScavengeContent = () => {
           label="物品图鉴"
           onClick={handleOpenItemCodex}
         />
+        {/* 2026-06-09 加：特性百科按钮（在物品图鉴下方） */}
+        <ScavengeMenuButton
+          icon="material-symbols:menu-book"
+          label="特性百科"
+          onClick={handleOpenTraitCodex}
+        />
       </div>
 
       {/* 시간控制（一直显示：通用时间条） */}
@@ -267,6 +279,9 @@ const ScavengeContent = () => {
 
       {/* 物品图鉴（2026-06-09 加，浮层覆盖整个屏幕） */}
       {showItemCodex && <ScavengeItemCodex onClose={handleCloseItemCodex} />}
+
+      {/* 特性百科（2026-06-09 加） */}
+      {showTraitCodex && <ScavengeCharacterCodex onClose={handleCloseTraitCodex} />}
 
       {/* 遭遇结果弹窗（每个派遣期遭遇的资源点/战斗都弹一次） */}
       {pendingEncounter && (
