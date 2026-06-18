@@ -123,6 +123,25 @@ const RAW_LOCATIONS: ScavengeLocationItem[] = [
     // 2026-06-09 改：跳到 entrance（入口），不再用 safehouse_main（已拆分为多场景）
     jumpScene: './game/scene/safehouse/entrance.txt',
   },
+  // 2026-06-09 加：市场（独立的交易区，不在安全屋）
+  // 玩家从这里点 → 跳到 market.txt → 跟商人维克斯交易
+  {
+    id: 'market',
+    name: '市场',
+    description: '维克斯的摊位。可以用瓶盖跟他交易物资。',
+    region: 'safe',
+    dangerLevel: 0,
+    distance: 0,
+    explorationTime: 0,
+    timeDisplay: '无危险',
+    lootTypes: [],
+    unlockCondition: '初始解锁',
+    position: { x: 38, y: 60 },  // 贫民窟右上方
+    isUnlocked: true,
+    regionColor: '#a78bfa',  // 紫色（商人色）
+    // 2026-06-09 改：不再跳到 safehouse/market.txt，改为独立场景
+    jumpScene: './game/scene/market/market.txt',
+  },
   {
     id: 'park',
     name: '公园',

@@ -7,7 +7,9 @@ import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { saveGame } from '@/Core/controller/storage/saveGame';
 import { generateInstanceId } from '../ScavengeItems/inventory';
 import { ScavengeCharacter, normalizeCharacter } from '../ScavengeCharacter/character';
+import { CHARACTER_TEMPLATES } from '../ScavengeCharacter/characterRoster';
 import { applyPeriodEffectsToCharacters } from './characterTimeEffects';
+import { checkMerchantRefresh } from '../Merchant/merchantRefresh';
 import {
   readMissions, writeMissions,
   applyMissionOutcomeToCharacter, completeMission,
@@ -83,7 +85,22 @@ export const ScavengeTimeControl = () => {
       return [];
     })();
     if (chars.length > 0) {
-      const updated = applyPeriodEffectsToCharacters(chars, isOvernight);
+      let updated = applyPeriodEffectsToCharacters(chars, isOvernight);
+
+      // 2026-06-09 加：商人刷新（每个商人按自己的 refreshDays 周期）
+      // 每天推进时检查所有商人是否需要刷新
+      for (const c of updated) {
+        const refreshResult = checkMerchantRefresh(c, newDay);
+        if (refreshResult.shouldRefresh) {
+          updated = updated.map(x =>
+            x.id === c.id ? refreshResult.nextMerchant : x,
+          );
+          const template = CHARACTER_TEMPLATES[c.id];
+          console.log(
+            `[商人/刷新] ${c.name} 在第${newDay}天刷新（金币→${template?.initialGold ?? 0}，库存重置）`,
+          );
+        }
+      }
 
       // 派遣系统钩子：合并"遭遇检查" + "时间到点"判定
       // 重要：先 encounterCheck（即使已到 returnTime 也跑最后一次遭遇），再判定是否结算
@@ -232,10 +249,14 @@ export const ScavengeTimeControl = () => {
       });
       writeMissions(resultMissions);
 
-      // 调试输出
-      const exhausted = finalChars.filter(c => c.hunger === 0 || c.thirst === 0).length;
-      const dead = finalChars.filter(c => c.hp <= 0).length;
-      const onMission = finalChars.filter(c => c.isExploring).length;
+      // 调试输出（2026-06-09 改：只统计 ally，过滤中立/敌对）
+      const allyChars = finalChars.filter(c => {
+        const template = CHARACTER_TEMPLATES[c.id];
+        return (template?.faction ?? 'ally') === 'ally';
+      });
+      const exhausted = allyChars.filter(c => c.hunger === 0 || c.thirst === 0).length;
+      const dead = allyChars.filter(c => c.hp <= 0).length;
+      const onMission = allyChars.filter(c => c.isExploring).length;
       const encounterCount = allEncounters.filter(e => e.kind !== 'no_encounter').length;
       console.log(
         `时间推进: 第${newDay}天 ${nextState.period}` +

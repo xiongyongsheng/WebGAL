@@ -15,6 +15,7 @@ import {
   getTotalLootCount,
 } from "./locationRefresh";
 import { ScavengeCharacter, normalizeCharacter, getCharacterStatusText } from '../ScavengeCharacter/character';
+import { CHARACTER_TEMPLATES } from '../ScavengeCharacter/characterRoster';
 import { startMission, readMissions, writeMissions } from '../ScavengeMissions/missions';
 import styles from './ScavengeMapDetail.module.scss';
 
@@ -70,9 +71,16 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
   const currentPeriodIndex = (stageState.GameVar['current_period_index'] as number) ?? 0;
 
   // 可派遣角色：HP>0, !isExploring, 体力>=20
-  const dispatchable = characters.filter(c =>
-    c.hp > 0 && !c.isExploring && c.stamina >= 20,
-  );
+  // 2026-06-09 改：按阵营过滤（只 ally 可派遣）
+  //   - ally（友方/队伍成员）：可派遣
+  //   - neutral（中立，如商人）：不可派遣（独立 NPC）
+  //   - enemy（敌对）：不可派遣
+  const dispatchable = characters.filter(c => {
+    if (c.hp <= 0 || c.isExploring || c.stamina < 20) return false;
+    const template = CHARACTER_TEMPLATES[c.id];
+    if (!template) return false;
+    return (template.faction ?? 'ally') === 'ally';
+  });
 
   const handleDispatch = (charId: string) => {
     setError(null);

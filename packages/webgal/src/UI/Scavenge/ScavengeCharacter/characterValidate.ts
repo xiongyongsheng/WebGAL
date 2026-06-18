@@ -92,12 +92,15 @@ const validateDurability: ItemValidator = (item, path) => {
 
   let dur = item.durability;
   if (typeof dur !== 'number') {
+    // 2026-06-09 改：不自动补满（之前补满是错的，导致卖装备时按满耐久计价）
+    // 保留 durability 字段为 undefined → 价格计算按 0 处理（卖不出钱）
+    // warn 提示开发者修复数据源
     return {
-      item: { ...item, durability: max },
+      item,  // 不修改
       warnings: [{
         category: 'durability_missing',
         path,
-        message: `装备无 durability 字段，已设为满耐久 ${max}`,
+        message: `装备无 durability 字段（按 0 耐久处理：卖给商人时按破损价 0；请用 createEquipmentInstance 添加装备）`,
       }],
     };
   }

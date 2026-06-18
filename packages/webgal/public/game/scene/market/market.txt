@@ -1,0 +1,19 @@
+; ====================================================================
+; 市场（2026-06-09 重构：独立的交易区）
+;
+; 不再属于 safehouse，是地图上独立的"市场"地点
+; 玩家从地图点击"市场" → 跳到这里 → 跟商人维克斯交易
+; ====================================================================
+
+; 关闭拾荒 UI（交易时不显示地图/角色列表）
+setVar:show_scavenge_time_control=true;
+setVar:show_scavenge_map=false;
+setVar:scavenge_show_character_list=false;
+setVar:scavenge_show_warehouse=false;
+setVar:scavenge_show_menu=true;
+
+; 场景 targets：商人（维克斯）
+setVar:scavenge_room_targets=[{kind:"character",id:"merchant_vix"}, {kind:"exit",label:"离开市场","scene":"scavenge/scavenge_main.txt","icon":"material-symbols:logout"}];
+
+; 市场剧情
+你来到了一个破旧的市集，废弃的摊位在风中摇晃。远处，维克斯的摊位上挂着一盏忽明忽暗的灯。;

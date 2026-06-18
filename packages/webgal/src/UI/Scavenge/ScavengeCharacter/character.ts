@@ -122,6 +122,18 @@ export interface ScavengeCharacter {
    *  默认 0（普通客户）。
    */
   merchantAffection?: number;
+  // ============== 商人金币（2026-06-09 加，可选）==============
+  /** 商人当前金币（仅商人有）。
+   *  - 玩家买 → 玩家 -X, 商人 +X（但 ≤ maxGold）
+   *  - 玩家卖 → 玩家 +X, 商人 -X（但 ≥ 0）
+   *  - 玩家不能把商人买空（商人没钱会拒绝）
+   */
+  gold?: number;
+  /** 商人最后刷新时间（day 编号）。
+   *  0 表示从未刷新（首次进入时立即刷新一次）。
+   *  之后每 refreshDays 天刷新一次（金币 → initialGold, inventory → template）。
+   */
+  lastRefreshDay?: number;
 }
 
 /**
@@ -159,6 +171,8 @@ export const DEFAULT_CHARACTER: ScavengeCharacter = {
   affinity: 0,
   completedAffinityStoryLevels: [],
   merchantAffection: 0,
+  gold: 0,             // 默认 0（主角不卖东西，商人有自己初始值）
+  lastRefreshDay: 0,   // 默认 0（首次进入时刷新）
 };
 
 /**

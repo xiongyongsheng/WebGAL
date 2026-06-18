@@ -14,6 +14,7 @@
 
 import { ScavengeCharacter } from '../ScavengeCharacter/character';
 import { gainExp } from '../ScavengeCharacter/characterExperience';
+import { CHARACTER_TEMPLATES } from '../ScavengeCharacter/characterRoster';
 
 // ============== 调参常量（可改） ==============
 
@@ -74,6 +75,11 @@ const maxHpFor = (hpBase: number, end: number): number => hpBase + end * 8;
 /**
  * 对一组角色应用一个 period 的时间效果（**纯函数，不修改入参**）。
  *
+ * 2026-06-09 改：只对 ally（友方/队伍成员）应用时间效果
+ *   - ally：玩家队伍，需要管理体力/饥渴/经验
+ *   - neutral（中立，如商人）：不消耗体力，住在固定位置
+ *   - enemy（敌对）：战斗单位，独立管理
+ *
  * @param characters 角色数组
  * @param isOvernight 是否"过夜"（nextDay > 0，即黑夜→清晨）
  * @returns 新数组
@@ -83,6 +89,13 @@ export const applyPeriodEffectsToCharacters = (
   isOvernight: boolean,
 ): ScavengeCharacter[] => {
   return characters.map((c) => {
+    // 2026-06-09 加：非 ally 角色跳过时间效果
+    const template = CHARACTER_TEMPLATES[c.id];
+    const faction = template?.faction ?? 'ally';
+    if (faction !== 'ally') {
+      return c;  // 中立/敌对角色不受时间流逝影响
+    }
+
     const isExploring = Boolean(c.isExploring);
     const factor = isExploring ? EXPLORING_MULTIPLIER : 1.0;
 

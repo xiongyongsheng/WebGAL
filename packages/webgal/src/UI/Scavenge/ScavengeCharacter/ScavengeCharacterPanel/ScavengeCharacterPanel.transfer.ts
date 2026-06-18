@@ -11,6 +11,7 @@
  */
 
 import { ScavengeCharacter } from '../character';
+import { CHARACTER_TEMPLATES } from '../characterRoster';
 import {
   getItemById, isEquipment, EquipmentItem,
 } from '../../ScavengeItems/items';
@@ -83,12 +84,18 @@ export const executeTransfer = (
   }
 
   // 目标侧容量预检（只对角色背包有意义，仓库永远能放）
+  // 2026-06-09 改：商人（faction='neutral' + isMerchant=true）忽略负重检查
+  //   商人有"无限货架"概念，库存不应该受 30kg 限制
   if (target.kind === 'character') {
     const chars = getCharacters();
     const char = chars.find(c => c.id === target.characterId);
     if (!char) return false;
     const nonNullInv = (char.inventory ?? []).filter((i): i is InventoryItem => i !== null);
-    const check = canAddToInventory(nonNullInv, { ...item, quantity });
+    // 判断目标是否是商人（中立 + isMerchant）→ 跳过重量检查
+    const targetTemplate = CHARACTER_TEMPLATES[char.id];
+    const isMerchant = targetTemplate?.isMerchant === true
+      || (targetTemplate?.faction ?? 'ally') === 'neutral';
+    const check = canAddToInventory(nonNullInv, { ...item, quantity }, isMerchant);
     if (!check.canAdd || check.accepted < quantity) {
       showTransferError(check.reason || '目标无法放下该物品');
       return false;

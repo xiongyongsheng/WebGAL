@@ -126,6 +126,13 @@ export interface CharacterTemplate {
   merchantAffectionLevelNames?: string[];
   /** 商人折扣率（每个等级对应折扣，例如 {0: 1.0, 1: 0.9, 2: 0.8, 3: 0.7}）*/
   merchantDiscountMap?: Record<number, number>;
+  // ============== 商人经济系统（2026-06-09 加，可选）==============
+  /** 商人初始金币（首次创建时 gold 字段的初值）*/
+  initialGold?: number;
+  /** 商人金币上限（不能无限收，防止玩家卖垃圾刷爆商人钱包）*/
+  maxGold?: number;
+  /** 商人刷新周期（每 N 天重置金币到 initialGold + 物品到 template inventory）*/
+  refreshDays?: number;
 }
 
 /**
@@ -288,7 +295,7 @@ export const CHARACTER_TEMPLATES: Record<string, CharacterTemplate> = {
     affinityLevelNames: ['陌生', '熟悉', '亲密', '挚友'],
     giftAccessMap: {},
     chatAccessMap: {},
-    homeRoom: 'market',
+    homeRoom: 'market_stall',  // 2026-06-09 改：商人搬到外面的"市场摊位"（不再是 safehouse 房间）
     // ============== 商人特有配置 ==============
     faction: 'neutral',  // 2026-06-09 加：阵营 = 中立（不进花名册，单独管理）
     isMerchant: true,
@@ -301,6 +308,10 @@ export const CHARACTER_TEMPLATES: Record<string, CharacterTemplate> = {
     merchantAffectionThresholds: [30, 60, 90],
     merchantAffectionLevelNames: ['陌生', '熟客', '老主顾', '至交'],
     merchantDiscountMap: { 0: 1.0, 1: 0.9, 2: 0.8, 3: 0.7 },
+    // ============== 2026-06-09 加：商人经济系统 ==============
+    initialGold: 200,            // 商人初始金币
+    maxGold: 500,               // 商人金币上限（不能无限收）
+    refreshDays: 2,             // 每 2 天刷新一次（金币 + 物品回满）
   },
 };
 
@@ -333,6 +344,9 @@ export function buildCharacterFromTemplate(
     completedAffinityStoryLevels: runtimeState?.completedAffinityStoryLevels ?? [],
     // 商人好感度（独立字段）
     merchantAffection: runtimeState?.merchantAffection ?? template.initialMerchantAffection ?? 0,
+    // 2026-06-09 加：商人金币 + 刷新时间（首次创建时初始化）
+    gold: runtimeState?.gold ?? template.initialGold ?? 0,
+    lastRefreshDay: runtimeState?.lastRefreshDay ?? 0,  // 0 = 首次进入时刷新
   };
   return normalizeCharacter(merged);
 }

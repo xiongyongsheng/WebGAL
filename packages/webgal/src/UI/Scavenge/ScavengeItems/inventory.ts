@@ -277,10 +277,13 @@ export const calculateTotalWeight = (items: (InventoryItem | null)[]): number =>
  *
  * 返回 `accepted` 表示可实际放入的数量（可能 < 请求数），
  * 调用方拿到 `canAdd=false` 或 `accepted < newItem.quantity` 时应给用户提示。
+ *
+ * @param skipWeight 2026-06-09 加：跳过重量检查（商人等"无重量限制"的目标用）
  */
 export const canAddToInventory = (
   items: InventoryItem[],
-  newItem: InventoryItem
+  newItem: InventoryItem,
+  skipWeight: boolean = false,
 ): CanAddResult => {
   const item = getItemById(newItem.itemId);
   if (!item) {
@@ -288,8 +291,8 @@ export const canAddToInventory = (
     return { canAdd: false, accepted: 0, reason: '未登记的物品（请检查 items.ts）' };
   }
 
-  const currentWeight = calculateTotalWeight(items);
-  const remainingCapacity = MAX_CARRY_WEIGHT - currentWeight;
+  const currentWeight = skipWeight ? 0 : calculateTotalWeight(items);
+  const remainingCapacity = skipWeight ? Number.MAX_SAFE_INTEGER : MAX_CARRY_WEIGHT - currentWeight;
 
   // 装备类：每件独立
   if (!item.stackable) {
@@ -310,8 +313,9 @@ export const canAddToInventory = (
 
   // 可堆叠：先按 maxStack 算出最多能叠加多少
   const existing = items.find((i) => i.itemId === newItem.itemId);
+  // 原有数量（合并后）
   const existingQty = existing?.quantity ?? 0;
-  const maxAddableByStack = item.maxStack - existingQty;
+  const maxAddableByStack = (item.maxStack ?? 99) - existingQty;
   if (maxAddableByStack <= 0) {
     return {
       canAdd: false,

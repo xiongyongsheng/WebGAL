@@ -51,27 +51,36 @@ export function getMerchantDiscount(character: ScavengeCharacter): number {
 /**
  * 计算物品实际交易价格（玩家买 = 商人卖价）
  *
- * 公式：
- *   buyPrice = basePrice * discount
- *   sellPrice = basePrice * 0.5 * discount  // 卖给商人是原价的 50% 再乘折扣
- *                                                （BG3 风格：商人不按原价收）
+ * 公式（2026-06-09 改：装备按耐久比例算）：
+ *   buyPrice = basePrice * discount                            （不按耐久，商人卖的是新货）
+ *   sellPrice = basePrice * 0.5 * (1 + (1 - discount) * 0.5)  * durabilityRatio
+ *     - 卖给商人是原价的 50% 起步（商人需要利润空间）
+ *     - 折扣影响：与商人关系好，他愿意多收一点
+ *     - **装备按耐久比例**：满耐久 = 1.0，0 耐久 = 0
+ *     - 0 耐久装备 = 卖不出钱（破损）
+ *     - 非装备 = 1.0（消耗品无耐久概念）
  *
  * @param basePrice 物品基础价（items.ts.price）
  * @param character 商人
  * @param mode 'buy' = 玩家买，'sell' = 玩家卖给商人
+ * @param durabilityRatio 装备耐久比例（0~1），非装备传 1
  */
 export function calculateMerchantPrice(
   basePrice: number,
   character: ScavengeCharacter,
   mode: 'buy' | 'sell',
+  durabilityRatio: number = 1,
 ): number {
   const discount = getMerchantDiscount(character);
   if (mode === 'buy') {
     return Math.round(basePrice * discount);
   } else {
-    // 玩家卖给商人：按物品价值的 50% 收（行业惯例：商人需要利润空间）
-    // 折扣也影响：与商人关系好，他愿意多收一点
-    return Math.round(basePrice * 0.5 * (1 + (1 - discount) * 0.5));
+    // 玩家卖给商人：按耐久比例缩放
+    // 0 耐久 → 0（卖不出钱）
+    // 半耐久 → 0.5 * 50% = 25% 原价
+    // 满耐久 → 50% * 折扣调整（原价一半）
+    const ratio = Math.max(0, Math.min(1, durabilityRatio));
+    return Math.round(basePrice * 0.5 * (1 + (1 - discount) * 0.5) * ratio);
   }
 }
 

@@ -19,7 +19,8 @@ import { useStageState } from '@/hooks/useStageState';
 import { ScavengeCharacter } from '../ScavengeCharacter/character';
 import { CHARACTER_TEMPLATES } from '../ScavengeCharacter/characterRoster';
 import { getItemById, Item } from '../ScavengeItems/items';
-import { InventoryItem } from '../ScavengeItems/inventory';
+import { InventoryItem, createEquipmentInstance, generateInstanceId } from '../ScavengeItems/inventory';
+import { executeTransfer } from '../ScavengeCharacter/ScavengeCharacterPanel/ScavengeCharacterPanel.transfer';
 import {
   computeMerchantLevel,
   getMerchantLevelName,
@@ -82,16 +83,33 @@ export const MerchantTradeMenu = ({ merchant, player, onClose }: Props) => {
   }, [merchant]);
 
   // 玩家物品列表（过滤：玩家背包里有 + 没 lock）
+  // 2026-06-09 改：装备按 durability 比例算 sellPrice
+  //   - 满耐久 → 1.0
+  //   - 0 耐久 → 0（卖不出钱）
+  //   - 没 durability 字段 → 0（按破损价）
   const playerItems = useMemo(() => {
     return (player.inventory ?? [])
       .filter((slot): slot is InventoryItem => slot !== null && slot.quantity > 0)
       .map((slot) => {
         const itemDef = getItemById(slot.itemId);
-        const sellPrice = itemDef?.price !== undefined ? calculateMerchantPrice(itemDef.price, merchant, 'sell') : 0;
+        let durabilityRatio = 1;  // 消耗品默认 1
+        if (itemDef?.type === 'equipment') {
+          const max = itemDef.maxDurability ?? 0;
+          const cur = (slot as InventoryItem).durability;
+          if (typeof cur === 'number' && max > 0) {
+            durabilityRatio = Math.max(0, Math.min(1, cur / max));
+          } else {
+            durabilityRatio = 0;  // 没 durability 字段 = 0（破损价）
+          }
+        }
+        const sellPrice = itemDef?.price !== undefined
+          ? calculateMerchantPrice(itemDef.price, merchant, 'sell', durabilityRatio)
+          : 0;
         return {
           slot,
           item: itemDef,
           sellPrice,
+          durabilityRatio,
           hasPrice: itemDef?.price !== undefined,
         };
       })
@@ -159,94 +177,93 @@ export const MerchantTradeMenu = ({ merchant, player, onClose }: Props) => {
   };
 
   // 确认交易
+  // 2026-06-09 改：复用 executeTransfer（角色 ↔ 角色 转移）
+  //   商人卖东西给玩家 = 商人 character → 玩家 character（直接用 transfer 逻辑）
+  //   玩家卖东西给商人 = 玩家 character → 商人 character（同上）
+  //   跟队友之间转移物品本质上一样：都是"双方背包操作"
+  //   - 装备 instance 转移时 durability 保留（卖→买=同 instance）
+  //   - 好感度门槛、容量检查复用 transfer 的实现
   const handleConfirm = () => {
-    // 2026-06-09 改：复用 totalCost（净额）
-    //   totalCost 负 → 玩家花钱
-    //   totalCost 正 → 玩家得钱
-    //   玩家要花的钱 = -totalCost（如果 totalCost 负）
+    // 0. 玩家瓶盖够不够？
     if (-netChange > bottlecaps) {
       setError(`瓶盖不够！需要 ${-netChange} 瓶盖，当前只有 ${bottlecaps}`);
       return;
     }
 
-    // 1. 更新瓶盖
-    //   交易后瓶盖 = bottlecaps + netChange
-    //   - netChange = -5 → 减 5
-    //   - netChange = +5 → 加 5
+    // 0b. 商人金币上下限保护
+    const merchantCurrentGold = merchant.gold ?? template?.initialGold ?? 0;
+    const merchantMaxGold = template?.maxGold ?? Number.MAX_SAFE_INTEGER;
+    const merchantNetChange = -netChange;  // 正=收，负=付
+    const newMerchantGold = Math.max(0, Math.min(
+      merchantMaxGold,
+      merchantCurrentGold + merchantNetChange,
+    ));
+    if (merchantNetChange > 0 && newMerchantGold < merchantCurrentGold + merchantNetChange) {
+      setError(`商人金币满了！最多收 ${merchantMaxGold}，现在 ${merchantCurrentGold}`);
+      return;
+    }
+    if (merchantNetChange < 0 && newMerchantGold < Math.abs(merchantNetChange)) {
+      setError(`商人金币不够！需要 ${Math.abs(merchantNetChange)} 瓶盖，商人只有 ${merchantCurrentGold}`);
+      return;
+    }
+
+    // 1. 转移物品（用 executeTransfer）
+    //   玩家买 = 商人 → 玩家
+    //   玩家卖 = 玩家 → 商人
+    //   每次转移一个 instance，循环 cartItem.quantity 次
+    //   注意：executeTransfer 内部生成新 instanceId（避免和源冲突），durability 保留
+    for (const cartItem of cart) {
+      for (let i = 0; i < cartItem.quantity; i++) {
+        const sourceId = cartItem.mode === 'buy' ? merchant.id : player.id;
+        const targetId = cartItem.mode === 'buy' ? player.id : merchant.id;
+        // 从源 inventory 找一个匹配 itemId 的 instance
+        const charsRaw = stageStateManager.getCalculationStageState().GameVar['scavenge_characters'];
+        const chars: ScavengeCharacter[] = typeof charsRaw === 'string' ? JSON.parse(charsRaw) : (charsRaw as any);
+        const sourceChar = chars.find(c => c.id === sourceId);
+        if (!sourceChar) {
+          setError('找不到源角色');
+          return;
+        }
+        const sourceInv = (sourceChar.inventory ?? []).filter((s): s is InventoryItem => s !== null);
+        const foundItem = sourceInv.find(s => s.itemId === cartItem.itemId);
+        if (!foundItem) {
+          setError(`物品 ${cartItem.itemId} 不可用（可能已被买空）`);
+          return;
+        }
+        // 转移 1 个（用 foundItem 的 instanceId 和 durability）
+        const ok = executeTransfer(
+          { kind: 'character', characterId: sourceId },
+          { kind: 'character', characterId: targetId },
+          foundItem,
+          1,
+          () => {},  // 不需要 refresh（executeTransfer 内部已写 stage）
+          (msg) => setError(msg),
+        );
+        if (!ok) {
+          return;  // executeTransfer 内部已 setError
+        }
+      }
+    }
+
+    // 2. 更新瓶盖
     const newBottlecaps = bottlecaps + netChange;
     stageStateManager.setStageVarAndCommit({
       key: 'scavenge_bottlecaps',
       value: String(newBottlecaps),
     });
 
-    // 2. 转移物品 + 更新商人/玩家 inventory
-    const newPlayerInv = [...(player.inventory ?? [])];
-    const newMerchantInv = [...(merchant.inventory ?? [])];
-
-    for (const cartItem of cart) {
-      const itemDef = getItemById(cartItem.itemId);
-      if (!itemDef) continue;
-
-      if (cartItem.mode === 'buy') {
-        // 玩家买：从商人库存扣除，加到玩家背包
-        for (let i = 0; i < cartItem.quantity; i++) {
-          // 从商人扣
-          const mIdx = newMerchantInv.findIndex((s) => s !== null && s.itemId === cartItem.itemId);
-          if (mIdx >= 0) {
-            const ms = newMerchantInv[mIdx]!;
-            const newQty = ms.quantity - 1;
-            if (newQty > 0) {
-              newMerchantInv[mIdx] = { ...ms, quantity: newQty };
-            } else {
-              newMerchantInv[mIdx] = null;
-            }
-          }
-          // 给玩家加
-          const pIdx = newPlayerInv.findIndex((s) => s !== null && s.itemId === cartItem.itemId);
-          if (pIdx >= 0) {
-            const ps = newPlayerInv[pIdx]!;
-            newPlayerInv[pIdx] = { ...ps, quantity: ps.quantity + 1 };
-          } else {
-            newPlayerInv.push({ instanceId: `inst_${Date.now()}_${Math.random()}`, itemId: cartItem.itemId, quantity: 1 });
-          }
-        }
-      } else {
-        // 玩家卖：从玩家背包扣除，加到商人库存
-        for (let i = 0; i < cartItem.quantity; i++) {
-          // 从玩家扣
-          const pIdx = newPlayerInv.findIndex((s) => s !== null && s.itemId === cartItem.itemId);
-          if (pIdx >= 0) {
-            const ps = newPlayerInv[pIdx]!;
-            const newQty = ps.quantity - 1;
-            if (newQty > 0) {
-              newPlayerInv[pIdx] = { ...ps, quantity: newQty };
-            } else {
-              newPlayerInv[pIdx] = null;
-            }
-          }
-          // 给商人加
-          const mIdx = newMerchantInv.findIndex((s) => s !== null && s.itemId === cartItem.itemId);
-          if (mIdx >= 0) {
-            const ms = newMerchantInv[mIdx]!;
-            newMerchantInv[mIdx] = { ...ms, quantity: ms.quantity + 1 };
-          } else {
-            newMerchantInv.push({ instanceId: `inst_${Date.now()}_${Math.random()}`, itemId: cartItem.itemId, quantity: 1 });
-          }
-        }
+    // 3. 写回商人金币
+    const charsRaw2 = stageStateManager.getCalculationStageState().GameVar['scavenge_characters'];
+    const chars2: ScavengeCharacter[] = typeof charsRaw2 === 'string' ? JSON.parse(charsRaw2) : (charsRaw2 as any);
+    const newChars2 = chars2.map((c) => {
+      if (c.id === merchant.id) {
+        return { ...c, gold: newMerchantGold };
       }
-    }
-
-    // 3. 写回 stage state
-    const charsRaw = stageStateManager.getCalculationStageState().GameVar['scavenge_characters'];
-    const chars: ScavengeCharacter[] = JSON.parse(charsRaw as string);
-    const newChars = chars.map((c) => {
-      if (c.id === player.id) return { ...c, inventory: newPlayerInv.filter((s) => s !== null) };
-      if (c.id === merchant.id) return { ...c, inventory: newMerchantInv.filter((s) => s !== null) };
       return c;
     });
     stageStateManager.setStageVarAndCommit({
       key: 'scavenge_characters',
-      value: JSON.stringify(newChars),
+      value: JSON.stringify(newChars2),
     });
 
     // 4. 商人好感度变化（买或卖都 +1，累计）
@@ -256,7 +273,9 @@ export const MerchantTradeMenu = ({ merchant, player, onClose }: Props) => {
         ...merchant,
         merchantAffection: Math.min(100, merchantAffection + tradeAmount),
       };
-      const finalChars = (JSON.parse(stageStateManager.getCalculationStageState().GameVar['scavenge_characters'] as string) as ScavengeCharacter[]).map(
+      const charsRaw3 = stageStateManager.getCalculationStageState().GameVar['scavenge_characters'];
+      const chars3: ScavengeCharacter[] = typeof charsRaw3 === 'string' ? JSON.parse(charsRaw3) : (charsRaw3 as any);
+      const finalChars = chars3.map(
         (c) => (c.id === merchant.id ? { ...c, merchantAffection: newMerchant.merchantAffection } : c),
       );
       stageStateManager.setStageVarAndCommit({
@@ -287,8 +306,14 @@ export const MerchantTradeMenu = ({ merchant, player, onClose }: Props) => {
               <span className={styles.discountBadge}>
                 {Math.round(discount * 100)}% 价格
               </span>
-              <span style={{ color: '#fbbf24' }}>
-                <Icon icon="material-symbols:attach-money" /> {bottlecaps}
+              <span style={{ color: '#fbbf24' }} title={`玩家瓶盖`}>
+                <Icon icon="material-symbols:person" /> {bottlecaps}
+              </span>
+              <span style={{ color: '#a78bfa' }} title={`商人金币（上限 ${template?.maxGold ?? '-'})`}>
+                <Icon icon="material-symbols:storefront" /> {merchant.gold ?? template?.initialGold ?? 0}
+              </span>
+              <span style={{ color: '#cbd5e0' }} title={`每 ${template?.refreshDays ?? 2} 天刷新`}>
+                <Icon icon="material-symbols:event-repeat" /> {template?.refreshDays ?? 2}天
               </span>
             </div>
           </div>
@@ -368,6 +393,12 @@ export const MerchantTradeMenu = ({ merchant, player, onClose }: Props) => {
                     <div className={styles.itemName}>{entry.item!.name}</div>
                     <div className={styles.itemMeta}>
                       <span className={styles.itemQty}>×{entry.slot.quantity}</span>
+                      {/* 2026-06-09 加：装备显示当前耐久（满/半/低） */}
+                      {entry.item!.type === 'equipment' && (entry.item! as any).maxDurability && (
+                        <span style={{ color: entry.durabilityRatio > 0.5 ? '#4caf50' : entry.durabilityRatio > 0.2 ? '#fbbf24' : '#f44336' }}>
+                          · 耐久 {Math.round(entry.durabilityRatio * 100)}%
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className={styles.itemPrice}>

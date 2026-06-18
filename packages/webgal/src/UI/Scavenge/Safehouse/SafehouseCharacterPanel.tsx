@@ -108,8 +108,15 @@ export const SafehouseCharacterPanel = () => {
     return characters.find((c) => c.id === 'player_1') ?? null;
   }, [characters]);
 
-  // 不在安全屋 → 不渲染
-  if (!sceneUrl?.includes('safehouse/')) return null;
+  // 2026-06-09 改：渲染条件 = 场景设了 _room_targets
+  //   之前用 `sceneUrl?.includes('safehouse/')` 限制了 safehouse 场景
+  //   现在 market 等其他场景也设了 _room_targets，要支持
+  //   - 任何场景设了 _room_targets → 渲染底部卡片菜单
+  //   - 没设 → 不渲染
+  const hasRoomTargets = useMemo(() => {
+    return parseSceneTargets(stageState.GameVar['scavenge_room_targets']).length > 0;
+  }, [stageState.GameVar['scavenge_room_targets']]);
+  if (!hasRoomTargets) return null;
 
   const sceneLabel = SCENE_NAMES[sceneName] ?? sceneName;
   const totalCount = characterIds.length + roomTargets.length;
