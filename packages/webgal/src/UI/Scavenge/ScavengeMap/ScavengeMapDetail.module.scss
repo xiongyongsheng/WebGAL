@@ -145,6 +145,80 @@
   font-weight: 600;
 }
 
+// 2026-06-09 加：策略选择（组队派遣）
+.strategySection {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.strategyLabel {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 8px;
+}
+
+.strategyOptions {
+  display: flex;
+  gap: 8px;
+}
+
+.strategyOption {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #ccc;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.3);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .iconify {
+    font-size: 20px;
+    color: #999;
+  }
+}
+
+.strategyOptionActive {
+  background: rgba(74, 144, 226, 0.15);
+  border-color: rgba(74, 144, 226, 0.5);
+  color: #fff;
+
+  .iconify {
+    color: #4a90e2;
+  }
+
+  &:hover {
+    background: rgba(74, 144, 226, 0.2);
+  }
+}
+
+.strategyOptionContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.strategyOptionTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: inherit;
+}
+
+.strategyOptionDesc {
+  font-size: 10px;
+  color: #999;
+  margin-top: 2px;
+}
+
 .partyActions {
   display: flex;
   justify-content: center;
@@ -263,6 +337,76 @@
 
 .dangerValue {
   color: #FFD700;
+}
+
+// 2026-06-09 加：Plan 9 派遣预览
+.previewGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.previewItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.previewLabel {
+  font-size: 11px;
+  color: #999;
+}
+
+.previewValue {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.previewValueOk {
+  color: #4caf50;
+}
+
+.previewValueBad {
+  color: #f44336;
+}
+
+.previewUnavailable {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.06);
+}
+
+.previewUnavailableLabel {
+  font-size: 11px;
+  color: #999;
+}
+
+.previewUnavailableItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  background: rgba(244, 67, 54, 0.08);
+  border-left: 2px solid rgba(244, 67, 54, 0.5);
+  border-radius: 2px;
+  font-size: 12px;
+}
+
+.previewUnavailableName {
+  color: #fff;
+  font-weight: 500;
+}
+
+.previewUnavailableReasons {
+  color: #f88;
+  font-size: 11px;
 }
 
 .description {

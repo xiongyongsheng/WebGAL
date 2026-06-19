@@ -37,6 +37,10 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
   const [error, setError] = useState<string | null>(null);
   // 2026-06-09 加：提前返回确认 modal
   const [showReturnConfirm, setShowReturnConfirm] = useState(false);
+  // 2026-06-09 加：组队派遣的 strategy（队伍级共享，不是 character 级）
+  //   - 'stealth'：潜行为主（避开战斗，潜行成功率影响 encounter）
+  //   - 'combat'：战斗为主（直接打）
+  const [missionStrategy, setMissionStrategy] = useState<'stealth' | 'combat'>('combat');
 
   // 派往该地点的角色 ID（从 missions 列表里查）
   const allMissions = readMissions();
@@ -133,8 +137,9 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
         return;
       }
     }
-    // 创建 mission（partyCharacterIds = partyIds）
-    const mission = startMission(partyIds, location, currentDay, currentPeriodIndex);
+    // 创建 mission（partyCharacterIds = partyIds + strategy）
+    // 2026-06-09 改：传 missionStrategy（组队派遣 strategy = 队伍级共享）
+    const mission = startMission(partyIds, location, currentDay, currentPeriodIndex, missionStrategy);
     // 写回 missions
     const allMissions = readMissions();
     writeMissions([...allMissions, mission]);
@@ -323,6 +328,64 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
           <p className={styles.description}>{location.description}</p>
         </div>
 
+        {/* 2026-06-09 加：Plan 9 派遣预览（玩家能派吗？能派多少？） */}
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>派遣预览</div>
+          {(() => {
+            // 1. 可派遣角色（满足条件）
+            const available = characters.filter(c => {
+              if (c.isExploring) return false;
+              if (c.stamina < 20) return false;
+              const template = CHARACTER_TEMPLATES[c.id];
+              if (!template) return false;
+              return (template.faction ?? 'ally') === 'ally';
+            });
+            // 2. 不可派遣角色（具体原因）
+            const unavailable = characters.filter(c => {
+              if (available.includes(c)) return false;
+              const template = CHARACTER_TEMPLATES[c.id];
+              if (!template) return false;
+              if ((template.faction ?? 'ally') !== 'ally') return false;
+              return true;
+            }).slice(0, 3);  // 最多显示 3 个不可派遣的角色
+
+            return (
+              <>
+                <div className={styles.previewGrid}>
+                  <div className={styles.previewItem}>
+                    <span className={styles.previewLabel}>可派往</span>
+                    <span className={`${styles.previewValue} ${available.length > 0 ? styles.previewValueOk : styles.previewValueBad}`}>
+                      {available.length} 人
+                    </span>
+                  </div>
+                  <div className={styles.previewItem}>
+                    <span className={styles.previewLabel}>派遣时长</span>
+                    <span className={styles.previewValue}>
+                      {location.explorationTime + 1} period
+                    </span>
+                  </div>
+                </div>
+                {unavailable.length > 0 && (
+                  <div className={styles.previewUnavailable}>
+                    <span className={styles.previewUnavailableLabel}>不可派遣：</span>
+                    {unavailable.map(c => {
+                      const result = canDispatch(c);
+                      return (
+                        <div key={c.id} className={styles.previewUnavailableItem}>
+                          <span className={styles.previewUnavailableName}>{c.name}</span>
+                          <span className={styles.previewUnavailableReasons}>
+                            {result.reasons[0] ?? '未知'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </div>
+
         {/* 2026-06-08 加：当前敌人（按种类 + 数量） */}
         {(() => {
           const ls = getLocationState(location.id);
@@ -494,6 +557,34 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
                     </div>
                   );
                 })}
+              </div>
+              {/* 2026-06-09 加：策略选择（队伍级共享）
+                  - stealth：潜行为主（潜行成功率高 → 避开战斗）
+                  - combat：战斗为主（遇敌直接打） */}
+              <div className={styles.strategySection}>
+                <div className={styles.strategyLabel}>派遣策略</div>
+                <div className={styles.strategyOptions}>
+                  <button
+                    className={`${styles.strategyOption} ${missionStrategy === 'stealth' ? styles.strategyOptionActive : ''}`}
+                    onClick={() => setMissionStrategy('stealth')}
+                  >
+                    <Icon icon="material-symbols:visibility" />
+                    <div className={styles.strategyOptionContent}>
+                      <div className={styles.strategyOptionTitle}>潜行</div>
+                      <div className={styles.strategyOptionDesc}>避开战斗，遇敌概率降低</div>
+                    </div>
+                  </button>
+                  <button
+                    className={`${styles.strategyOption} ${missionStrategy === 'combat' ? styles.strategyOptionActive : ''}`}
+                    onClick={() => setMissionStrategy('combat')}
+                  >
+                    <Icon icon="material-symbols:swords" />
+                    <div className={styles.strategyOptionContent}>
+                      <div className={styles.strategyOptionTitle}>战斗</div>
+                      <div className={styles.strategyOptionDesc}>遇敌主动战斗（默认）</div>
+                    </div>
+                  </button>
+                </div>
               </div>
               {/* 2026-06-09 加：底部"派遣"按钮（按队伍派遣） */}
               <div className={styles.partyActions}>

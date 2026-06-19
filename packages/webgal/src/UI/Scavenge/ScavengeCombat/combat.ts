@@ -70,6 +70,8 @@ const WEAPON_DURABILITY_PER_HIT = 1; // 每次成功命中扣 1 点
 interface Combatant {
   name: string;
   isCharacter: boolean;
+  /** 2026-06-09 加：仅 character 才有（用于 result 关联 character） */
+  characterId?: string;
   currentHp: number;
   maxHp: number;
   attackSpeed: number;
@@ -309,64 +311,91 @@ const ensureUsableWeapon = (
 export interface CombatResult {
   characterWon: boolean;
   log: CombatLogEntry[];
+  /** @deprecated 2026-06-09 改：单人 → 多人，用 partyFinalHp */
   characterFinalHp: number;
+  /** 2026-06-09 加：每个队员的最终 HP（按 characterId） */
+  partyFinalHp: Record<string, number>;
+  /** 2026-06-09 加：每个队员相对起点的 HP 变化（负=扣） */
+  partyHpDelta: Record<string, number>;
   enemiesFinalHp: number[];
   totalTicks: number;
 }
 
 /**
- * 跑一场 ATB 1vN 战斗
+ * 跑一场 ATB 战斗（2026-06-09 重构：M 角色 vs N 敌人）
+ * 接受**整个队伍**（party）作为参战者
+ *
+ * 设计：
+ * - 每个队员是一个 Combatant
+ * - ATB 循环考虑所有 Combatant
+ * - 敌人**任意**一个 alive → 战斗继续
+ * - 我方**全部** HP ≤ 0 → 失败
+ * - 敌人**全部** HP ≤ 0 → 胜利
+ *
+ * 兼容（2026-06-09 加）：runCombat(character) 单人 → 自动包成 [character] 队伍
  */
 export const runCombat = (
-  character: ScavengeCharacter,
+  characterOrParty: ScavengeCharacter | ScavengeCharacter[],
   enemies: EnemyInstance[],
 ): CombatResult => {
-  // ----- 角色参战者初始化 -----
-  const equippedWeapon = getEquippedWeapon(character);
-  const armorPieces = getEquippedArmorPieces(character);
+  // 2026-06-09 改：兼容单 character 和 party 两种调用
+  const party: ScavengeCharacter[] = Array.isArray(characterOrParty)
+    ? characterOrParty
+    : [characterOrParty];
 
-  let weaponInstance: InventoryItem | null = null;
-  let weaponDef: EquipmentItem | null = null;
-  let isFists = false;
+  // ----- 角色参战者初始化（每个队员一个 Combatant）-----
+  const charCombatants: Combatant[] = party.map(character => {
+    const equippedWeapon = getEquippedWeapon(character);
+    const armorPieces = getEquippedArmorPieces(character);
 
-  if (equippedWeapon) {
-    if (isItemBroken(equippedWeapon.instance)) {
-      // 装备的武器已坏：找背包里其他可用的
-      const replacement = findUsableWeaponInInventory(character, equippedWeapon.instance.instanceId);
-      if (replacement) {
-        weaponInstance = replacement;
-        weaponDef = getItemById(replacement.itemId) as EquipmentItem;
+    let weaponInstance: InventoryItem | null = null;
+    let weaponDef: EquipmentItem | null = null;
+    let isFists = false;
+
+    if (equippedWeapon) {
+      if (isItemBroken(equippedWeapon.instance)) {
+        // 装备的武器已坏：找背包里其他可用的
+        const replacement = findUsableWeaponInInventory(character, equippedWeapon.instance.instanceId);
+        if (replacement) {
+          weaponInstance = replacement;
+          weaponDef = getItemById(replacement.itemId) as EquipmentItem;
+        } else {
+          isFists = true;
+        }
       } else {
-        isFists = true;
+        weaponInstance = equippedWeapon.instance;
+        weaponDef = equippedWeapon.def;
       }
     } else {
-      weaponInstance = equippedWeapon.instance;
-      weaponDef = equippedWeapon.def;
+      isFists = true;
     }
-  } else {
-    isFists = true;
-  }
 
-  const charStats = computeDerivedStats(character);
-  const charCombatant: Combatant = {
-    name: character.name,
-    isCharacter: true,
-    currentHp: character.hp,
-    maxHp: character.hp,
-    attackSpeed: 0, // 下面用 computeCharacterAttackSpeed 算
-    attackDamage: charStats.attackDamage, // UI 显示用
-    armor: charStats.armor, // UI 显示用（=6 slot 耐久总和）
-    accuracy: charStats.accuracy,
-    evasion: charStats.evasion,
-    critRate: charStats.critRate,
-    critMultiplier: 1.5,
-    currentTick: 0,
-    weaponInstance,
-    weaponDef,
-    armorPieces,
-    isFists,
-  };
-  charCombatant.attackSpeed = computeCharacterAttackSpeed(character, charCombatant);
+    const charStats = computeDerivedStats(character);
+    const combatant: Combatant = {
+      name: character.name,
+      isCharacter: true,
+      characterId: character.id,  // 2026-06-09 加：用于 result 关联 character
+      currentHp: character.hp,
+      maxHp: character.hp,
+      attackSpeed: 0, // 下面用 computeCharacterAttackSpeed 算
+      attackDamage: charStats.attackDamage, // UI 显示用
+      armor: charStats.armor, // UI 显示用（=6 slot 耐久总和）
+      accuracy: charStats.accuracy,
+      evasion: charStats.evasion,
+      critRate: charStats.critRate,
+      critMultiplier: 1.5,
+      currentTick: 0,
+      weaponInstance,
+      weaponDef,
+      armorPieces,
+      isFists,
+    };
+    combatant.attackSpeed = computeCharacterAttackSpeed(character, combatant);
+    return combatant;
+  });
+
+  // 兼容旧代码：保留 charCombatant 变量（指向 party[0]）
+  const charCombatant = charCombatants[0];
 
   // ----- 敌人参战者 -----
   const enemyCombatants: Combatant[] = enemies.map((e, idx) => {
@@ -393,8 +422,10 @@ export const runCombat = (
     };
   });
 
-  const all: Combatant[] = [charCombatant, ...enemyCombatants];
+  const all: Combatant[] = [...charCombatants, ...enemyCombatants];
   const aliveEnemies = (): Combatant[] => all.filter(c => !c.isCharacter && c.currentHp > 0);
+  /** 2026-06-09 改：我方有任一队员 alive 即可继续（不是只看主角） */
+  const aliveChars = (): Combatant[] => all.filter(c => c.isCharacter && c.currentHp > 0);
 
   const log: CombatLogEntry[] = [];
 
@@ -403,6 +434,8 @@ export const runCombat = (
       characterWon: true,
       log,
       characterFinalHp: charCombatant.currentHp,
+      partyFinalHp: Object.fromEntries(charCombatants.map(c => [c.characterId!, c.currentHp])),
+      partyHpDelta: Object.fromEntries(party.map(c => [c.id, 0])),
       enemiesFinalHp: [],
       totalTicks: 0,
     };
@@ -417,7 +450,8 @@ export const runCombat = (
       if (c.currentHp > 0) c.currentTick += c.attackSpeed;
     });
 
-    if (charCombatant.currentHp <= 0) break;
+    // 2026-06-09 改：我方**所有**队员死亡才败（不是只看主角）
+    if (aliveChars().length === 0) break;
     if (aliveEnemies().length === 0) break;
 
     // 2. 找 actor
@@ -441,8 +475,12 @@ export const runCombat = (
 
     // 3. 角色行动前确保武器可用
     if (actor.isCharacter) {
-      ensureUsableWeapon(character, actor, log, tick);
-      if (charCombatant.currentHp <= 0) break;
+      // 2026-06-09 改：用 actor.characterId 找对应 character
+      const actorChar = party.find(c => c.id === actor!.characterId);
+      if (actorChar) {
+        ensureUsableWeapon(actorChar, actor, log, tick);
+      }
+      if (aliveChars().length === 0) break;
     }
 
     // 4. 目标选择
@@ -452,8 +490,10 @@ export const runCombat = (
       if (alive.length === 0) break;
       target = alive.reduce((a, b) => (a.currentHp <= b.currentHp ? a : b));
     } else {
-      if (charCombatant.currentHp <= 0) break;
-      target = charCombatant;
+      // 2026-06-09 改：敌人攻击**随机**选一个活着的队员
+      const alive = aliveChars();
+      if (alive.length === 0) break;
+      target = alive[Math.floor(Math.random() * alive.length)];
     }
 
     // 5. 命中判定
@@ -479,7 +519,13 @@ export const runCombat = (
     // 7. 伤害计算
     let damage: number;
     if (actor.isCharacter) {
-      damage = calcCharacterDamage(character, actor, crit ? actor.critMultiplier : 1);
+      // 2026-06-09 改：用 actor 对应的 character 算伤害（不是只算主角）
+      const actorChar = party.find(c => c.id === actor!.characterId);
+      if (actorChar) {
+        damage = calcCharacterDamage(actorChar, actor, crit ? actor.critMultiplier : 1);
+      } else {
+        damage = FIST_DAMAGE;  // 找不到角色 → 拳头
+      }
     } else {
       damage = calcEnemyDamage(actor.attackDamage, crit ? actor.critMultiplier : 1, target.armor);
     }
@@ -494,7 +540,7 @@ export const runCombat = (
       // （armor_absorb 日志已经说"抵消 X 伤害"，再发 hit 反而误导玩家）
       if (excess === 0) {
         // 完全吸收 → 跳过 hit 日志
-        if (charCombatant.currentHp <= 0) break;
+        if (aliveChars().length === 0) break;
         if (aliveEnemies().length === 0) break;
         continue;
       }
@@ -537,7 +583,7 @@ export const runCombat = (
     }
 
     // 12. 结束检查
-    if (charCombatant.currentHp <= 0) break;
+    if (aliveChars().length === 0) break;
     if (aliveEnemies().length === 0) break;
   }
 
@@ -546,10 +592,24 @@ export const runCombat = (
     if (enemyCombatants[idx]) e.currentHp = enemyCombatants[idx].currentHp;
   });
 
+  // 2026-06-09 改：胜 = 我方有任一 alive；败 = 全部死亡
+  const anyCharAlive = aliveChars().length > 0;
+  // 算每个队员的 HP delta
+  const partyFinalHp: Record<string, number> = {};
+  const partyHpDelta: Record<string, number> = {};
+  for (const cc of charCombatants) {
+    const cid = cc.characterId!;
+    partyFinalHp[cid] = Math.max(0, cc.currentHp);
+    const origHp = party.find(c => c.id === cid)?.hp ?? cc.currentHp;
+    partyHpDelta[cid] = partyFinalHp[cid] - origHp;
+  }
+
   return {
-    characterWon: charCombatant.currentHp > 0,
+    characterWon: anyCharAlive,
     log,
-    characterFinalHp: charCombatant.currentHp,
+    characterFinalHp: charCombatant.currentHp,  // 兼容旧代码（指向 party[0]）
+    partyFinalHp,
+    partyHpDelta,
     enemiesFinalHp: enemyCombatants.map(c => c.currentHp),
     totalTicks: tick,
   };

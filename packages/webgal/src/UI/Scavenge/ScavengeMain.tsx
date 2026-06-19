@@ -15,6 +15,7 @@ import { ScavengeLocationItem } from './ScavengeMap/locations';
 import { ScavengeCharacterPanel } from './ScavengeCharacter/ScavengeCharacterPanel/ScavengeCharacterPanel';
 import { ScavengeCharacter } from './ScavengeCharacter/character';
 import { ScavengeMenuButton } from './ScavengeMenuButton/ScavengeMenuButton';
+import { ScavengeMissionHistoryModal } from './ScavengeMissionHistoryModal/ScavengeMissionHistoryModal';
 import { ScavengeEnemyCodex } from './ScavengeEnemies/ScavengeEnemyCodex/ScavengeEnemyCodex';
 import { ScavengeItemCodex } from './ScavengeItems/ScavengeItemCodex/ScavengeItemCodex';
 import { ScavengeCharacterCodex } from './ScavengeCharacter/ScavengeCharacterCodex/ScavengeCharacterCodex';
@@ -22,6 +23,7 @@ import { readMissions } from './ScavengeMissions/missions';
 import { ScavengeMissionOutcomeModal } from './ScavengeMissionOutcomeModal/ScavengeMissionOutcomeModal';
 import { ScavengeRestModal } from './ScavengeRestModal/ScavengeRestModal';
 import { ScavengeCombatLogModal } from './ScavengeCombatLogModal/ScavengeCombatLogModal';
+import { ScavengeEncounterBoardModal } from './ScavengeEncounterBoardModal/ScavengeEncounterBoardModal';
 import { StoryManager } from './Story/StoryManager';
 import { getLocationHintFromState } from './Story/storyHint';
 import { CharacterRosterManager } from './ScavengeCharacter/CharacterRosterManager';
@@ -83,6 +85,8 @@ const ScavengeContent = () => {
   const [showItemCodex, setShowItemCodex] = useState(false);
   // 2026-06-09 加：特性百科
   const [showTraitCodex, setShowTraitCodex] = useState(false);
+  // 2026-06-09 加：Plan 10 派遣记录
+  const [showMissionHistory, setShowMissionHistory] = useState(false);
 
   // 角色面板显示状态
   const handleOpenCharacterList = () => {
@@ -102,6 +106,9 @@ const ScavengeContent = () => {
   // 2026-06-09 加：特性百科 toggle
   const handleOpenTraitCodex = () => setShowTraitCodex(true);
   const handleCloseTraitCodex = () => setShowTraitCodex(false);
+  // 2026-06-09 加：Plan 10 派遣记录 toggle
+  const handleOpenMissionHistory = () => setShowMissionHistory(true);
+  const handleCloseMissionHistory = () => setShowMissionHistory(false);
 
   // 地图操作
   // 2026-06-09 改：jumpScene 优先（不走详情面板，直接切换场景）
@@ -221,23 +228,67 @@ const ScavengeContent = () => {
     return () => clearInterval(interval);
   }, [stageState]);
 
-  // 遭遇结果弹窗（监听 missions 变化，弹最新"未展示的真实遭遇"）
-  // 排除 no_encounter（准备期占位 / 安静路过）和 失败 mission（失败结果由 outcome modal 处理）
-  const pendingEncounter = useMemo(() => {
+  // 遭遇结果弹窗（2026-06-09 改：所有 mission 一起弹，不一个个弹）
+  // 排除 no_encounter（准备期占位 / 安静路过）
+  // 包含：
+  //   - 所有 active mission 中**最新**未展示的真实 encounter
+  //   - 刚完成 mission 中**未展示**的 outcome（status='completed' && !outcomeShown）
+  //   - 刚失败 mission 中**未展示**的 outcome（status='failed' && !outcomeShown）
+  //   - 提前返回（cancelled + early_return）也包含
+  //
+  // 2026-06-09 改：**不**用 useMemo（之前用 useMemo 依赖 [stageState]）
+  //   原因：useMemo 缓存可能导致**不**及时刷新
+  //   改：直接计算（**每次** render 重算）—— 简单可靠
+  const pendingBoardMissions = (() => {
     const missions = readMissions();
-    // 倒序遍历 missions，从最新 mission 开始找
-    for (let i = missions.length - 1; i >= 0; i--) {
-      const m = missions[i];
-      const encounters = m.encounters ?? [];
-      // 倒序遍历 encounters，找最新未展示的真实遭遇
-      for (let j = encounters.length - 1; j >= 0; j--) {
-        const e = encounters[j];
-        if (e.kind === 'no_encounter') continue;
-        if (e.shown) continue;
-        return { missionId: m.id, encounter: e };
-      }
+    // 2026-06-09 加：调试
+    if (missions.length > 0) {
+      console.log(
+        `[看板] 共 ${missions.length} 个 mission:`,
+        missions.map(m => ({
+          id: m.id.slice(0, 6),
+          status: m.status,
+          loc: m.locationId,
+          party: m.partyCharacterIds?.length ?? 1,
+          encCount: m.encounters?.length ?? 0,
+          encKinds: (m.encounters ?? []).map(e => `${e.kind}${e.shown === true ? '(已)' : '(未)'}`).join(','),
+          hasOutcome: !!m.outcome,
+          outcomeShown: m.outcomeShown ?? false,
+        }))
+      );
     }
-    return null;
+    const result = missions.filter(m => {
+      // 2026-06-09 改：active mission 中有未展示 encounter
+      if (m.status === 'active') {
+        const encounters = m.encounters ?? [];
+        return encounters.some(e => e.kind !== 'no_encounter' && e.shown !== true);
+      }
+      // 2026-06-09 加：完成 mission 的 outcome 未展示
+      if (m.status === 'completed' && m.outcome && m.outcomeShown !== true) return true;
+      // 2026-06-09 加：失败 mission 的 outcome 未展示（**修**战斗失败不显示）
+      if (m.status === 'failed' && m.outcome && m.outcomeShown !== true) return true;
+      // 2026-06-09 加：提前返回的 outcome 未展示
+      if (m.status === 'cancelled' && m.outcome && m.outcomeShown !== true && m.outcome.reason === 'early_return') return true;
+      return false;
+    });
+    if (missions.length > 0) {
+      console.log(
+        `[看板/筛选] 入选 ${result.length}/${missions.length}:`,
+        result.map(m => m.id.slice(0, 6) + '@' + m.locationId)
+      );
+    }
+    return result;
+  })();
+
+  // 2026-06-09 加：所有角色（传给 board modal 拿 HP delta）
+  const characters = useMemo(() => {
+    const raw = stageState.GameVar['scavenge_characters'];
+    if (typeof raw !== 'string') return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed as ScavengeCharacter[];
+    } catch { /* ignore */ }
+    return [];
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stageState]);
 
@@ -275,6 +326,12 @@ const ScavengeContent = () => {
           icon="material-symbols:swords"
           label="敌人图鉴"
           onClick={handleOpenCodex}
+        />
+        {/* 2026-06-09 加：Plan 10 派遣记录按钮（在敌人图鉴下方） */}
+        <ScavengeMenuButton
+          icon="material-symbols:history"
+          label="派遣记录"
+          onClick={handleOpenMissionHistory}
         />
         {/* 2026-06-09 加：物品图鉴按钮（在敌人图鉴下方） */}
         <ScavengeMenuButton
@@ -326,6 +383,11 @@ const ScavengeContent = () => {
         );
       })()}
 
+      {/* 2026-06-09 加：Plan 10 派遣记录 modal */}
+      {showMissionHistory && (
+        <ScavengeMissionHistoryModal onClose={handleCloseMissionHistory} />
+      )}
+
       {/* 派遣结算结果弹窗（监听 missions 变化，弹出未展示的） */}
       {pendingOutcomeMission && (
         <ScavengeMissionOutcomeModal
@@ -358,15 +420,19 @@ const ScavengeContent = () => {
         />
       )}
 
-      {/* 遭遇结果弹窗（每个派遣期遭遇的资源点/战斗都弹一次） */}
-      {pendingEncounter && (
-        <ScavengeCombatLogModal
-          missionId={pendingEncounter.missionId}
-          encounter={pendingEncounter.encounter}
+      {/* 2026-06-09 改：多队伍回合看板（替代之前一个个弹的 encounter modal）
+          - 一次性显示**所有**有未展示 encounter / outcome 的 mission
+          - 2026-06-09 改：玩家关闭 modal = **所有** mission 都 mark shown
+          - 玩家**主动**关闭 = 玩家**主动**确认
+          - 关闭后 modal 自动消失（pendingBoardMissions 为空） */}
+      {pendingBoardMissions.length > 0 && (
+        <ScavengeEncounterBoardModal
+          missions={pendingBoardMissions}
+          characters={characters}
           onClose={() => {
-            // modal 内部已 markEncounterShown，强制刷新
+            // 内部已经 mark 完所有未读，强制刷新
             stageStateManager.setStageVarAndCommit({
-              key: '_encounter_dismissed_at',
+              key: '_board_dismissed_at',
               value: Date.now(),
             });
           }}

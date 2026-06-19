@@ -12,8 +12,6 @@ import {
 import { Icon } from '@iconify/react';
 import locationOn from '@iconify-icons/material-symbols/location-on';
 import lock from '@iconify-icons/material-symbols/lock';
-import person from '@iconify-icons/material-symbols/person';
-import schedule from '@iconify-icons/material-symbols/schedule';
 import { readMissions } from '../ScavengeMissions/missions';
 import { ScavengeCharacter, normalizeCharacter } from '../ScavengeCharacter/character';
 import { usePanZoom } from './ScavengeMap.panZoom';
@@ -58,33 +56,29 @@ export const ScavengeMap = ({ onLocationSelect, focusLocationId }: ScavengeMapPr
   };
   const characters = useMemo(getCharacters, [stageState]);
 
-  // 计算派遣中 missions（按 location 分组）
+  // 计算派遣中 missions（按 location 分组，展开成"每个队员一条"）
+  // 2026-06-09 加：Plan 8 重构 — 只显示头像（不显示名字/回合）
+  //   - 每个 mission 展开成 N 个 entry（队伍中每个角色 1 个）
+  //   - marker 上方排成一行头像
   const activeMissionsByLocation = useMemo(() => {
     const missions = readMissions();
     const map = new Map<string, Array<{
       missionId: string;
       characterId: string;
-      characterName: string;
-      phase: 'preparing' | 'active';
-      remainingPeriods: number;
     }>>();
     for (const m of missions) {
       if (m.status !== 'active') continue;
-      const char = characters.find(c => c.id === m.characterId);
-      if (!char) continue;
-      const totalStart = m.startDay * 5 + m.startPeriodIndex;
-      const totalReturn = m.returnDay * 5 + m.returnPeriodIndex;
-      const totalCurrent = currentDay * 5 + currentPeriodIndex;
-      const phase: 'preparing' | 'active' = totalCurrent <= totalStart ? 'preparing' : 'active';
-      const remaining = Math.max(0, totalReturn - totalCurrent);
+      // 2026-06-09 改：用 partyCharacterIds 展开成每个角色一条
+      //   兼容旧 mission（无 partyCharacterIds → 用 characterId）
+      const partyIds = m.partyCharacterIds && m.partyCharacterIds.length > 0
+        ? m.partyCharacterIds
+        : [m.characterId];
       const arr = map.get(m.locationId) ?? [];
-      arr.push({
-        missionId: m.id,
-        characterId: m.characterId,
-        characterName: char.name,
-        phase,
-        remainingPeriods: remaining,
-      });
+      for (const cid of partyIds) {
+        if (characters.find(c => c.id === cid)) {
+          arr.push({ missionId: m.id, characterId: cid });
+        }
+      }
       map.set(m.locationId, arr);
     }
     return map;
@@ -210,22 +204,30 @@ export const ScavengeMap = ({ onLocationSelect, focusLocationId }: ScavengeMapPr
                   )}
                 </div>
 
-                {/* 派遣中：上方显示角色头像 + 还需回合（含"准备中"阶段） */}
+                {/* 派遣中：上方显示角色头像（2026-06-09 重构：只显示头像，不显示名字/回合） */}
                 {isActive && (
                   <div className={styles.dispatchingBar}>
-                    {activeMissions.map((m) => (
-                      <div
-                        key={m.missionId}
-                        className={`${styles.dispatcherChip} ${m.phase === 'preparing' ? styles.dispatcherChipPreparing : ''}`}
-                      >
-                        <Icon icon={person} className={styles.dispatcherAvatar} />
-                        <span className={styles.dispatcherName}>{m.characterName}</span>
-                        <span className={styles.dispatcherRemaining}>
-                          <Icon icon={schedule} className={styles.remainingIcon} />
-                          {m.phase === 'preparing' ? '准备' : m.remainingPeriods}
-                        </span>
-                      </div>
-                    ))}
+                    {activeMissions.map((m) => {
+                      // 2026-06-09 改：每个队员一个圆形 chip
+                      //   - 不显示名字
+                      //   - 不显示回合
+                      //   - 头像圆形 + 主色边框
+                      const char = characters.find(c => c.id === m.characterId);
+                      const initial = char?.name?.[0] ?? '?';
+                      return (
+                        <div
+                          key={m.missionId + m.characterId}
+                          className={styles.avatarChip}
+                          title={char?.name ?? '?'}
+                        >
+                          {char?.avatar ? (
+                            <img src={char.avatar} alt={char.name} />
+                          ) : (
+                            <span className={styles.avatarInitial}>{initial}</span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 

@@ -112,8 +112,15 @@ export const ScavengeTimeControl = () => {
       let failedCount = 0;
       const allEncounters: EncounterLog[] = [];
 
-      for (const m of oldMissions) {
-        if (m.status !== 'active') {
+      // 2026-06-09 加：try/catch 防止单 mission 异常中断整个 tick
+      //   原因：之前**没** try/catch，第一个 mission 抛异常 → 整个循环中断
+      //   后果：所有**其他** mission **不**被处理 → board modal 只显示部分
+      try {
+        for (const m of oldMissions) {
+          console.log(
+            `[ScavengeTimeControl/tick] 处理 mission id=${m.id.slice(0, 6)} status=${m.status} loc=${m.locationId} charId=${m.characterId?.slice(0, 6)} encCount=${m.encounters?.length ?? 0}`
+          );
+          if (m.status !== 'active') {
           resultMissions.push(m);
           continue;
         }
@@ -139,6 +146,9 @@ export const ScavengeTimeControl = () => {
         // 1. 准备期判定：第 1 次推进（m.encounters 还没任何记录）算准备期
         const hasAnyEncounter = (m.encounters ?? []).length > 0;
         const isPreparing = !hasAnyEncounter;
+        console.log(
+          `[ScavengeTimeControl/tick] mission id=${m.id.slice(0, 6)} hasAnyEncounter=${hasAnyEncounter} isPreparing=${isPreparing}`
+        );
 
         // 3. 处理三种状态
         let encounter: EncounterLog | null = null;
@@ -164,21 +174,17 @@ export const ScavengeTimeControl = () => {
           encounter = result.encounter;
           updatedParty = result.updatedParty;
           missionOver = result.missionOver;
-          const restAvailable = result.restAvailable;  // 2026-06-09 加：Plan 3
+          // 2026-06-09 改：删战斗后自动弹休整
+          //   之前：战斗胜 → 写 scavenge_rest_pending → ScavengeMain 自动弹休整
+          //   现在：玩家**主动**点"休整"按钮才弹
+          //   战斗胜 → ScavengeCombatLogModal 显示战斗结果 + 物资 + "休整"按钮（玩家可选）
+          //   location detail modal 也有"休整"按钮
           // 把 updatedParty 的所有队员写回 finalChars
           for (const upd of updatedParty) {
             finalChars = finalChars.map(c => c.id === upd.id ? upd : c);
           }
           allEncounters.push(encounter);
           mWithEncounters = { ...m, encounters: [...m.encounters, encounter] };
-          // 2026-06-09 加：战斗胜利 → 写 GameVar scavenge_rest_pending
-          //   ScavengeMain 监听到弹 ScavengeRestModal
-          if (restAvailable) {
-            stageStateManager.setStageVarAndCommit({
-              key: 'scavenge_rest_pending',
-              value: JSON.stringify({ missionId: m.id, encounterId: encounter.id }),
-            });
-          }
         }
 
         // 3. 判定是否到 returnTime
@@ -209,8 +215,9 @@ export const ScavengeTimeControl = () => {
           };
           resultMissions.push(failed);
           if (failed.outcome) {
-            // 2026-06-09 改：用 applyMissionOutcomeToParty
-            const appliedParty = applyMissionOutcomeToParty(updatedParty, failed.outcome);
+            // 2026-06-09 改：用 applyMissionOutcomeToParty + 传 partyHpDelta
+            // 失败 mission 通常全队都扣血（每个人被随机打）
+            const appliedParty = applyMissionOutcomeToParty(updatedParty, failed.outcome, encounter.partyHpDelta);
             for (const upd of appliedParty) {
               finalChars = finalChars.map(c => c.id === upd.id ? upd : c);
             }
@@ -273,6 +280,15 @@ export const ScavengeTimeControl = () => {
             );
           }
         }
+        }
+      } catch (err) {
+        // 2026-06-09 加：单 mission 异常**不**中断整个 tick
+        //   原因：之前**没** try/catch，一个 mission 抛异常 → 整个循环中断
+        //   后果：所有**其他** mission **不**被处理 → board modal 只显示部分
+        console.error(
+          `[ScavengeTimeControl/tick] mission 处理失败:`,
+          err
+        );
       }
 
       stageStateManager.setStageVarAndCommit({

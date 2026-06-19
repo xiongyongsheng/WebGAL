@@ -45,6 +45,14 @@ import { Mission, EncounterLog } from './missions';
 const POST_COMBAT_BONUS_LOOT_RATE = 0.3;
 
 /**
+ * 2026-06-09 加：潜行成功给物资概率（**不**与战斗胜冲突）
+ * - 潜行成功 (`evade_success`) 时，**额外**抽 1 个物资（**没**有 bonus）
+ * - 设计：潜行成功 = 绕过敌人 + 顺手拿点东西
+ * - 概率 100%（潜行**有**额外奖励）
+ */
+const EVADE_SUCCESS_LOOT_RATE = 1.0;
+
+/**
  * 派遣期间每个 period 调一次：决定是否遭遇 + 触发战斗/资源
  *
  * @param mission 派遣任务
@@ -76,19 +84,25 @@ export const encounterCheck = (
 
   // 2026-06-09 改：每个队员独立跑 applyAutoTraits（不依赖下一次时间推进）
   //   派遣中每个队员的状态都各自更新（HP/饥/渴 变化都可能触发特性）
-  const updateParty = (newMainChar: ScavengeCharacter): ScavengeCharacter[] => {
+  //   战斗用 combatResult.partyHpDelta 算所有队员 HP
+  const updateParty = (newMainChar: ScavengeCharacter, partyHpDelta?: Record<string, number>): ScavengeCharacter[] => {
     return party.map((c) => {
+      // 2026-06-09 改：如果有 partyHpDelta → 用 delta 更新 HP
+      if (partyHpDelta && partyHpDelta[c.id] !== undefined) {
+        const newHp = Math.max(0, c.hp + partyHpDelta[c.id]);
+        return applyAutoTraits({ ...c, hp: newHp }, 0);
+      }
+      // 兼容旧（只有主角被更新）
       if (c.id === newMainChar.id) {
-        // 主队员：使用新的（HP 已更新）
         return applyAutoTraits(newMainChar, 0);
       }
       // 其他队员：仅跑 applyAutoTraits（HP 不变，但特性可能变化）
       return applyAutoTraits(c, 0);
     });
   };
-  const wrap = (result: { encounter: EncounterLog; updatedChar: ScavengeCharacter; missionOver: boolean }) => ({
+  const wrap = (result: { encounter: EncounterLog; updatedChar: ScavengeCharacter; missionOver: boolean; partyHpDelta?: Record<string, number> }) => ({
     encounter: result.encounter,
-    updatedParty: updateParty(result.updatedChar),
+    updatedParty: updateParty(result.updatedChar, result.partyHpDelta),
     missionOver: result.missionOver,
     restAvailable: false,  // 2026-06-09 加：默认不可休整（只有战斗胜才 true）
   });
@@ -99,16 +113,43 @@ export const encounterCheck = (
   touchLocationInteracted(location.id, triggerDay);
 
   // 1. 60% 不遭遇（2026-06-09 改：combat 策略 100% 遭遇，跳过此检查）
+  // 2026-06-09 改：用 'stealth_clear' 区分**准备期**的 no_encounter
+  //   之前 stealth 60% 用 'no_encounter' → 与准备期冲突
+  //   → filter 排除 no_encounter → 潜行 mission **不**进 board modal
+  //   改：stealth 用 'stealth_clear'，filter 显示 stealth_clear
+  // 2026-06-09 加：潜行通过**也**抽 1 个物资（走过地点顺手拿点东西）
   if (mission.strategy !== 'combat' && Math.random() >= 0.4) {
+    // 抽 1 个物资
+    const stealthItems: InventoryItem[] = [];
+    let stealthUpdatedChar: ScavengeCharacter = character;
+    const lootEntries = Object.entries(getOrRefreshLocationState(location, triggerDay).lootCount)
+      .filter(([_, n]) => n > 0);
+    if (lootEntries.length > 0) {
+      const [itemId, _] = lootEntries[Math.floor(Math.random() * lootEntries.length)];
+      const item: InventoryItem = {
+        instanceId: generateInstanceId(),
+        itemId,
+        quantity: 1,
+      };
+      stealthItems.push(item);
+      takeLootByItemId(location.id, [itemId]);
+      stealthUpdatedChar = {
+        ...character,
+        inventory: addToInventory(character.inventory ?? [], item),
+      };
+    }
     return wrap({
       encounter: {
         id: encId,
         triggerDay,
         triggerPeriodIndex,
-        kind: 'no_encounter',
-        message: '这一段路没遇到任何威胁',
+        kind: 'stealth_clear',
+        itemsGained: stealthItems.length > 0 ? stealthItems : undefined,
+        message: stealthItems.length > 0
+          ? '这一段路没遇到任何威胁（顺手拿了点东西）'
+          : '这一段路没遇到任何威胁',
       },
-      updatedChar: character,
+      updatedChar: stealthUpdatedChar,
       missionOver: false,
     });
   }
@@ -183,6 +224,29 @@ export const encounterCheck = (
   });
   if (encounterEnemies.length > 0 && !detectedFlags.some((d) => d)) {
     // 全部没察觉 → 潜行成功（**不**减敌人，敌人还活着，下次还能遇到）
+    // 2026-06-09 加：潜行成功**也**抽 1 个物资（绕过敌人 + 顺手拿点东西）
+    //   之前**只**战斗胜 + resource 给物资，潜行成功**没**给
+    //   现在 4 种来源：1) resource 2) 战斗胜 3) 战斗胜 30% bonus 4) 潜行成功 100%
+    const evadeItems: InventoryItem[] = [];
+    let evadeUpdatedChar: ScavengeCharacter = character;
+    if (Math.random() < EVADE_SUCCESS_LOOT_RATE) {
+      const lootEntries = Object.entries(getOrRefreshLocationState(location, triggerDay).lootCount)
+        .filter(([_, n]) => n > 0);
+      if (lootEntries.length > 0) {
+        const [itemId, _] = lootEntries[Math.floor(Math.random() * lootEntries.length)];
+        const item: InventoryItem = {
+          instanceId: generateInstanceId(),
+          itemId,
+          quantity: 1,
+        };
+        evadeItems.push(item);
+        takeLootByItemId(location.id, [itemId]);
+        evadeUpdatedChar = {
+          ...character,
+          inventory: addToInventory(character.inventory ?? [], item),
+        };
+      }
+    }
     return wrap({
       encounter: {
         id: encId,
@@ -190,9 +254,12 @@ export const encounterCheck = (
         triggerPeriodIndex,
         kind: 'evade_success',
         enemiesEncountered: encounterEnemies.length,
-        message: `遭遇 ${encounterEnemies.length} 个敌人，隐蔽成功！悄悄溜过`,
+        itemsGained: evadeItems.length > 0 ? evadeItems : undefined,  // 2026-06-09 加：潜行成功拿的东西
+        message: evadeItems.length > 0
+          ? `遭遇 ${encounterEnemies.length} 个敌人，隐蔽成功！悄悄溜过（顺手拿了点东西）`
+          : `遭遇 ${encounterEnemies.length} 个敌人，隐蔽成功！悄悄溜过`,
       },
-      updatedChar: character,
+      updatedChar: evadeUpdatedChar,
       missionOver: false,
     });
   }
@@ -203,13 +270,17 @@ export const encounterCheck = (
     }
   }
 
-  // 战斗（2026-06-09 改：主队员 party[0] 参战，其他队员挂机）
-  // 后续可升级为"全队参战"（runCombat 支持 party）
-  const combatResult = runCombat(character, encounterEnemies);
-  const hpDelta = combatResult.characterFinalHp - character.hp;
+  // 战斗（2026-06-09 改：全队 party 参战）
+  //   - 每个队员是一个 Combatant
+  //   - 敌人攻击随机选一个活着的队员
+  //   - 我方有任一 alive 即继续，**全部**死亡才败
+  //   - 兼容 runCombat(character) 单参（自动包成 [character]）
+  const combatResult = runCombat(party, encounterEnemies);
+  const hpDelta = combatResult.partyHpDelta[character.id] ?? 0;  // 主角的 HP delta（兼容旧）
+  // 2026-06-09 改：所有队员的 HP 都被 combat 更新（用 partyHpDelta）
   const updatedChar: ScavengeCharacter = {
     ...character,
-    hp: Math.max(0, combatResult.characterFinalHp),
+    hp: Math.max(0, combatResult.partyFinalHp[character.id] ?? character.hp),
   };
 
   if (combatResult.characterWon) {
@@ -261,9 +332,11 @@ export const encounterCheck = (
         combatLog: combatResult.log,
         itemsGained: baseItems.length > 0 ? baseItems : undefined,
         hpDelta,
+        // 2026-06-09 加：每个队员的 HP delta（用于 outcome modal 显示）
+        partyHpDelta: combatResult.partyHpDelta,
         message: `战胜了 ${encounterEnemies.length} 个敌人！${hpDelta < 0 ? `（扣血 ${-hpDelta}）` : ''}${bonusLootCount > 0 ? '（额外战利品！）' : ''}`,
       },
-      updatedParty: updateParty(updatedChar),
+      updatedParty: updateParty(updatedChar, combatResult.partyHpDelta),
       missionOver: false, // 战斗胜不结束 mission，继续探索
       // 2026-06-09 加：Plan 3 战斗胜利 → 标记可休整
       restAvailable: true,
@@ -287,6 +360,8 @@ export const encounterCheck = (
       enemiesEncountered: encounterEnemies.length,
       combatLog: combatResult.log,
       hpDelta,
+      // 2026-06-09 加：每个队员的 HP delta
+      partyHpDelta: combatResult.partyHpDelta,
       message: `被 ${encounterEnemies.length} 个敌人击败！任务失败，紧急撤退`,
     },
     updatedChar,

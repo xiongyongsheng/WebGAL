@@ -100,6 +100,19 @@ export const ScavengeCombatLogModal = ({ missionId, encounter, onClose }: Scaven
     onClose();
   };
 
+  /**
+   * 战斗胜利 → 玩家主动"休整"（2026-06-09 加：Plan 3 重构）
+   * 玩家**主动**点 → 写 GameVar scavenge_rest_pending → ScavengeMain 弹 ScavengeRestModal
+   * 不点 = 不休整（继续推进）
+   */
+  const handleRest = () => {
+    stageStateManager.setStageVarAndCommit({
+      key: 'scavenge_rest_pending',
+      value: JSON.stringify({ missionId, encounterId: encounter.id }),
+    });
+    handleClose();
+  };
+
   // 状态图标
   const StatusIcon = isDefeat ? cancel : isCombat ? swords : encounter.kind === 'evade_success' ? visibility : inventory;
 
@@ -215,6 +228,15 @@ export const ScavengeCombatLogModal = ({ missionId, encounter, onClose }: Scaven
 
         {/* 底部按钮 */}
         <div className={styles.actions}>
+          {isVictory && (
+            <button
+              className={styles.restButton}
+              onClick={handleRest}
+              title="打开休整面板（用物品恢复状态）"
+            >
+              <Icon icon="material-symbols:hotel" /> 休整
+            </button>
+          )}
           <button className={styles.confirmButton} onClick={handleClose}>
             确定
           </button>

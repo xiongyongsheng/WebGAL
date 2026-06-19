@@ -270,6 +270,9 @@ export const checkMissionsProgress = (
 export const applyMissionOutcomeToParty = (
   party: ScavengeCharacter[],
   outcome: MissionOutcome,
+  /** 2026-06-09 加：组队战斗 — 每个队员的 HP delta
+   *  2026-06-09 改：用 partyHpDelta 替代 outcome.hpLost（每个队员不同） */
+  partyHpDelta?: Record<string, number>,
 ): ScavengeCharacter[] => {
   return party.map((char, idx) => {
     let updated: ScavengeCharacter = { ...char };
@@ -283,8 +286,12 @@ export const applyMissionOutcomeToParty = (
       returnPeriodIndex: undefined,
     };
 
-    // HP（每个队员都扣）
-    if (outcome.hpLost > 0) {
+    // 2026-06-09 改：HP 损耗
+    // 优先用 partyHpDelta（组队战斗，每个队员不同）
+    // 兼容：单独 outcome.hpLost（所有队员统一扣）
+    if (partyHpDelta && partyHpDelta[char.id] !== undefined) {
+      updated.hp = Math.max(0, char.hp + partyHpDelta[char.id]);
+    } else if (outcome.hpLost > 0) {
       updated.hp = Math.max(0, updated.hp - outcome.hpLost);
     }
 

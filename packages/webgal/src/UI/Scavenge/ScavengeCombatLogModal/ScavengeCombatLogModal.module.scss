@@ -281,19 +281,40 @@
   padding: 12px 18px;
   background: rgba(0, 0, 0, 0.2);
   flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+}
+
+.confirmButton,
+.restButton {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  border: 1px solid;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+// 2026-06-09 加：休整按钮（战斗胜利时显示）
+.restButton {
+  background: linear-gradient(135deg, #66bb6a 0%, #2e7d32 100%);
+  border-color: #2e7d32;
+
+  &:hover {
+    background: linear-gradient(135deg, #81c784 0%, #388e3c 100%);
+  }
 }
 
 .confirmButton {
-  width: 100%;
-  padding: 10px 16px;
   background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  border-color: #357abd;
 
   &:hover {
     background: linear-gradient(135deg, #5a9ff2 0%, #4080cc 100%);

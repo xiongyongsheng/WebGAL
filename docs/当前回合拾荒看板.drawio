@@ -1,0 +1,64 @@
+<mxfile host="Electron">
+  <diagram name="第 1 页" id="xG5f1Y-7Sp2hGJMvxhnQ">
+    <mxGraphModel dx="1368" dy="750" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="VZ0q2vgWDajqMiF1HGu1-1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="" vertex="1">
+          <mxGeometry height="520" width="650" x="110" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="VZ0q2vgWDajqMiF1HGu1-2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="" vertex="1">
+          <mxGeometry height="450" width="210" x="130" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="VZ0q2vgWDajqMiF1HGu1-3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;white-space: pre-wrap;&quot;&gt;队伍角色状态变化,背包物资变化&lt;/span&gt;" vertex="1">
+          <mxGeometry height="70" width="190" x="140" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="VZ0q2vgWDajqMiF1HGu1-4" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="队伍1" vertex="1">
+          <mxGeometry height="30" width="60" x="200" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="VZ0q2vgWDajqMiF1HGu1-5" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;white-space: pre-wrap;&quot;&gt;发现额外物资点&lt;br/&gt;(如果有)&lt;/span&gt;" vertex="1">
+          <mxGeometry height="70" width="190" x="140" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="VZ0q2vgWDajqMiF1HGu1-6" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;white-space: pre-wrap;&quot;&gt;战斗记录&lt;/span&gt;&lt;div&gt;&lt;span style=&quot;white-space: pre-wrap;&quot;&gt;(如果有)&lt;/span&gt;&lt;span style=&quot;white-space: pre-wrap;&quot;&gt;&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="70" width="190" x="140" y="280" as="geometry" />
+        </mxCell>
+        <mxCell id="VZ0q2vgWDajqMiF1HGu1-7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;white-space-collapse: preserve;&quot;&gt;拾荒完成&lt;/span&gt;&lt;br&gt;&lt;div&gt;&lt;span style=&quot;white-space: pre-wrap;&quot;&gt;(如果有)&lt;/span&gt;&lt;span style=&quot;white-space: pre-wrap;&quot;&gt;&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="70" width="190" x="140" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="VZ0q2vgWDajqMiF1HGu1-8" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;white-space-collapse: preserve;&quot;&gt;队伍休整按钮&lt;/span&gt;" vertex="1">
+          <mxGeometry height="40" width="80" x="140" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="VZ0q2vgWDajqMiF1HGu1-9" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;white-space-collapse: preserve;&quot;&gt;提前返回&lt;br/&gt;(如果不是最后一回合)&lt;/span&gt;" vertex="1">
+          <mxGeometry height="40" width="80" x="240" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="VZ0q2vgWDajqMiF1HGu1-10" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="" vertex="1">
+          <mxGeometry height="450" width="210" x="360" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="VZ0q2vgWDajqMiF1HGu1-11" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;white-space: pre-wrap;&quot;&gt;队伍角色状态变化,背包物资变化&lt;/span&gt;" vertex="1">
+          <mxGeometry height="70" width="190" x="370" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="VZ0q2vgWDajqMiF1HGu1-12" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="队伍2" vertex="1">
+          <mxGeometry height="30" width="60" x="430" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="VZ0q2vgWDajqMiF1HGu1-13" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;white-space: pre-wrap;&quot;&gt;发现额外物资点&lt;br/&gt;(如果有)&lt;/span&gt;" vertex="1">
+          <mxGeometry height="70" width="190" x="370" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="VZ0q2vgWDajqMiF1HGu1-14" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;white-space: pre-wrap;&quot;&gt;战斗记录&lt;/span&gt;&lt;div&gt;&lt;span style=&quot;white-space: pre-wrap;&quot;&gt;(如果有)&lt;/span&gt;&lt;span style=&quot;white-space: pre-wrap;&quot;&gt;&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="70" width="190" x="370" y="280" as="geometry" />
+        </mxCell>
+        <mxCell id="VZ0q2vgWDajqMiF1HGu1-15" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;white-space-collapse: preserve;&quot;&gt;拾荒完成&lt;/span&gt;&lt;br&gt;&lt;div&gt;&lt;span style=&quot;white-space: pre-wrap;&quot;&gt;(如果有)&lt;/span&gt;&lt;span style=&quot;white-space: pre-wrap;&quot;&gt;&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="70" width="190" x="370" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="VZ0q2vgWDajqMiF1HGu1-16" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;white-space-collapse: preserve;&quot;&gt;队伍休整按钮&lt;/span&gt;" vertex="1">
+          <mxGeometry height="40" width="80" x="370" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="VZ0q2vgWDajqMiF1HGu1-17" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;white-space-collapse: preserve;&quot;&gt;提前返回&lt;br/&gt;(如果不是最后一回合)&lt;/span&gt;" vertex="1">
+          <mxGeometry height="40" width="80" x="470" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="VZ0q2vgWDajqMiF1HGu1-18" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="当前回合拾荒看板" vertex="1">
+          <mxGeometry height="30" width="160" x="390" y="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -7,6 +7,7 @@
 
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { ScavengeCharacter, normalizeCharacter } from '../character';
+import { applyAutoTraits } from '../traits';
 import {
   InventoryItem, migrateInventory, filterUnknownItems,
 } from '../../ScavengeItems/inventory';
@@ -38,12 +39,24 @@ export const setCharacters = (characters: ScavengeCharacter[]) => {
   });
 };
 
-/** 通过 id 找并更新单个角色 */
+/**
+ * 通过 id 找并更新单个角色
+ * 2026-06-09 改：**自动**调 applyAutoTraits
+ *   原因：之前每个 handler（useItem / equip / unequip / applyPending）都要手动调
+ *   现在由 `updateCharacter` 统一调 → 所有改 character 的入口都自动应用 traits
+ *   防止"补血后重伤没消失"等不一致 bug
+ */
 export const updateCharacter = (updated: ScavengeCharacter) => {
   const characters = getCharacters();
   const index = characters.findIndex(c => c.id === updated.id);
   if (index >= 0) {
-    characters[index] = updated;
+    // 2026-06-09 改：写之前**自动** applyAutoTraits
+    //   - 调一次跑所有 autoManaged traits（添加/移除）
+    //   - 同步 traitIds（保留常驻 + autoManaged 实例）
+    //   - currentDay 从 GameVar 读
+    const currentDay = (stageStateManager.getCalculationStageState().GameVar['current_day'] as number) ?? 1;
+    const updatedWithTraits = applyAutoTraits(updated, currentDay);
+    characters[index] = updatedWithTraits;
     setCharacters(characters);
   }
 };

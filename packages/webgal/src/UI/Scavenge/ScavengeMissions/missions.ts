@@ -124,7 +124,8 @@ export const MAX_PARTY_SIZE = 3;
 
 /** 派遣期间的遭遇记录（被 encounterCheck 追加） */
 export type EncounterKind =
-  | 'no_encounter'             // 没遇到任何东西
+  | 'no_encounter'             // 准备期占位（**不**是真实遭遇，**不**显示）
+  | 'stealth_clear'            // 潜行通过（2026-06-09 加：潜行策略 60% 走这条路**不**遇敌，**与**准备期区分）
   | 'evade_success'            // 隐蔽成功
   | 'evade_fail_combat_victory' // 隐蔽失败 + 战斗胜
   | 'evade_fail_combat_defeat'  // 隐蔽失败 + 战斗败
@@ -146,6 +147,12 @@ export interface EncounterLog {
   itemsGained?: InventoryItem[];
   /** 角色 HP 变化（负=扣，正=回，正数实际不发生） */
   hpDelta?: number;
+  /**
+   * 2026-06-09 加：组队战斗 — 每个队员的 HP delta
+   * key = characterId, value = hpDelta
+   * 兼容（hpDelta 保留）：只反映主角（party[0]）
+   */
+  partyHpDelta?: Record<string, number>;
   /** 文字说明（UI 弹窗用） */
   message: string;
   /**

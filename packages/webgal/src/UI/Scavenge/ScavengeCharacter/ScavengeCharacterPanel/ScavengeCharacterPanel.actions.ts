@@ -22,6 +22,9 @@ import {
 import { applyPendingStatPoints } from '../characterExperience';
 import { getCharacters, updateCharacter } from './ScavengeCharacterPanel.stage';
 import { getMaxHp, getMaxHungerThirst } from './ScavengeCharacterPanel.stats';
+// 2026-06-09 改：applyAutoTraits 改在 updateCharacter 内部统一调用（更可靠）
+// import { applyAutoTraits } from '../traits';
+// import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 
 // ============== 角色操作 ==============
 
@@ -44,6 +47,9 @@ export const handleApplyPending = (
   const char = characters.find(c => c.id === charId);
   if (!char) return;
   const updated = applyPendingStatPoints(char, pending);
+
+  // 2026-06-09 改：updateCharacter 内部已自动 applyAutoTraits
+  //   之前每个 handler 都要手动调，现在由 updateCharacter 统一处理
   updateCharacter(updated);
   refresh();
 };
@@ -79,6 +85,8 @@ export const handleUnequipItem = (charId: string, slot: 'weapon' | 'tool' | Armo
   if (updated.hunger > newMaxHunger) updated.hunger = newMaxHunger;
   if (updated.thirst > newMaxHunger) updated.thirst = newMaxHunger;
 
+  // 2026-06-09 改：updateCharacter 内部已自动 applyAutoTraits
+  //   之前每个 handler 都要手动调，现在由 updateCharacter 统一处理
   updateCharacter(updated);
   refresh();
 };
@@ -126,6 +134,8 @@ export const handleEquipItem = (charId: string, invItem: InventoryItem, refresh:
   (updated as any)[slotIdField] = invItem.itemId;
   // 耐久在 invItem.durability 上保持
 
+  // 2026-06-09 改：updateCharacter 内部已自动 applyAutoTraits
+  //   之前每个 handler 都要手动调，现在由 updateCharacter 统一处理
   updateCharacter(updated);
   refresh();
 };
@@ -158,6 +168,9 @@ export const handleUseItem = (charId: string, invItem: InventoryItem, refresh: (
   });
 
   updated.inventory = removeFromInventory(updated.inventory, invItem.instanceId, 1);
+
+  // 2026-06-09 改：updateCharacter 内部已自动 applyAutoTraits
+  //   之前每个 handler 都要手动调，现在由 updateCharacter 统一处理
   updateCharacter(updated);
   refresh();
 };
