@@ -13,7 +13,7 @@ import {
   LostItem,
   MISSION_BASE_EXP,
   MISSION_EXP_PER_DANGER,
-  MISSION_HP_LOSS_PER_DANGER,
+  // MISSION_HP_LOSS_PER_DANGER  // 2026-06-21 移除：取消战斗完成固定扣血
   isTimeReached,
 } from './missions';
 
@@ -96,11 +96,14 @@ export const completeMission = (
     (totalExp * (earlyReturn ? EARLY_RETURN_REWARD_RATE : 1)) / Math.max(1, party.length),
   );
 
-  // HP 损失（每个队员都扣 dangerLevel * 2）
-  // 2026-06-09 改：提前返回 → HP 损失减半（不用扣那么多）
-  const hpLost = Math.floor(
-    location.dangerLevel * MISSION_HP_LOSS_PER_DANGER * (earlyReturn ? EARLY_RETURN_REWARD_RATE : 1),
-  );
+  // HP 损失（2026-06-21 改：取消战斗完成固定扣血）
+  //   - 之前：dangerLevel * MISSION_HP_LOSS_PER_DANGER * （提前返回 0.5）
+  //     → 危险 2 星固定扣 4 HP，危险 5 星固定扣 10 HP
+  //   - 现在：固定 0
+  //     → 战斗中的扣血已在 encounterCheck / runCombat 里通过 encounter.hpDelta / partyHpDelta 算过
+  //     → 任务完成时不再额外扣全队血
+  //   - MISSION_HP_LOSS_PER_DANGER 常量保留在 missions.ts（万一以后要加回来）
+  const hpLost = 0;
 
   // 2026-06-09 改：提前返回 → status='cancelled', reason='early_return'
   return {
@@ -284,6 +287,12 @@ export const applyMissionOutcomeToParty = (
       exploringLocationId: undefined,
       returnDay: undefined,
       returnPeriodIndex: undefined,
+      // 2026-06-19 加：Plan 17 - mission 完成 → 清空 phase
+      missionPhase: null,
+      preparingEndDay: undefined,
+      preparingEndPeriodIndex: undefined,
+      scavengingEndDay: undefined,
+      scavengingEndPeriodIndex: undefined,
     };
 
     // 2026-06-09 改：HP 损耗

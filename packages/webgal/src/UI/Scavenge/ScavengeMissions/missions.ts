@@ -31,14 +31,21 @@ export { RESOURCE_TYPE_TO_ITEM } from '../ScavengeMap/locationRefresh';
 // ============== 数据模型 ==============
 
 export type MissionStatus = 'active' | 'completed' | 'cancelled' | 'failed';
+//   - 'active': 派遣中
+//   - 'completed': 正常完成
+//   - 'cancelled': 玩家主动取消（提前返回，奖励 50%）
+//   - 'failed': 战斗失败
+// （2026-06-19 简化：去掉 'returning' 状态）
 
 export type MissionOutcomeReason = 'completed' | 'cancelled' | 'character_dead' | 'early_return';
 //   - 'completed': 正常完成
 //   - 'cancelled': 玩家主动取消（提前返回，奖励 50%）
 //   - 'character_dead': 角色死亡失败
 //   - 'early_return': 提前返回（2026-06-09 加：Plan 4，等同 cancelled，区分来源）
+// （2026-06-19 简化：去掉 'return_home'）
 
 /** 派遣结算结果 */
+
 /**
  * 战斗失败时丢失的物品（2026-06-09 加：Plan 2 - 50% 丢物品）
  * - item: 原始 inventory slot（含 instanceId）
@@ -117,6 +124,32 @@ export interface Mission {
   encounters: EncounterLog[];
   /** 是否已被玩家手动取消（UI 召回按钮用） */
   cancelled?: boolean;
+  // ============== 2026-06-21 加：M1 队伍共享临时仓库 ==============
+  /**
+   * 队伍共享临时仓库（M1 阶段，2026-06-21 加）
+   *
+   * 设计：
+   * - 拾荒期间物品溢出（所有角色背包都满）→ 进这里
+   * - 容量 = sum(party[].maxCarry - party[].currentUsedWeight)
+   *   也就是队伍剩余负重的总和
+   * - 任务结束 + 分配完成 → 删除整个字段
+   * - 跳过分配 → 全部转入永久仓库（ScavengeWarehouse）
+   * - 战斗失败时也走这个流程（用户要求："只要队伍背包里面有物资就要走分配流程"）
+   *
+   * 不持久化到 saveGame 之外的地方，任务结束自动清理。
+   */
+  tempLoot?: InventoryItem[];
+  /**
+   * 物资分配是否完成（M1 阶段，2026-06-21 加）
+   * - false / undefined = 还没分配（弹 ScavengeLootDistributionModal）
+   * - true = 已完成分配（无论"确认"还是"跳过"都算完成）
+   *
+   * 区分"未分配"和"已分配但 tempLoot 还在"：
+   * 确认分配后，tempLoot 会被清空；
+   * 跳过分配时，tempLoot 会被移到永久仓库后清空；
+   * 两种情况都设 tempLootDistributed=true，触发 modal 时检查这个标志。
+   */
+  tempLootDistributed?: boolean;
 }
 
 /** 队伍上限（2026-06-09 加）*/
@@ -132,7 +165,8 @@ export type EncounterKind =
   | 'combat_victory'           // 直接战斗 + 胜
   | 'combat_defeat'            // 直接战斗 + 败
   | 'resource'                 // 资源点（无敌人）
-  | 'rest_pending';            // 战斗后弹休整 modal（2026-06-09 加：Plan 3）
+  | 'rest_pending'             // 战斗后弹休整 modal（2026-06-09 加：Plan 3）
+  | 'location_cleared';        // 2026-06-21 加：地点已清空（敌人 + 物资都没了，提示玩家）
 
 export interface EncounterLog {
   id: string;
@@ -153,6 +187,14 @@ export interface EncounterLog {
    * 兼容（hpDelta 保留）：只反映主角（party[0]）
    */
   partyHpDelta?: Record<string, number>;
+  /**
+   * 2026-06-19 加：战斗失败丢失的物品（Plan 17）
+   * - 50% 概率触发
+   * - 每个 entry 50% 概率丢一半数量
+   * - 装备和任务物品保留
+   * - UI modal 显示
+   */
+  lostItems?: LostItem[];
   /** 文字说明（UI 弹窗用） */
   message: string;
   /**
@@ -257,7 +299,11 @@ export const startMission = (
   }
   const primaryCharacterId = characterIds[0];
   const duration = Math.max(1, location.explorationTime);
-  // 加 1 期作为准备期
+  // 2026-06-19 改：Plan 17 - preparing(1) + scavenging(duration) + returning(1) = duration + 2
+  //   - 准备 1 个 period
+  //   - 拾荒 duration 个 period
+  //   - 返**回** 1 **个** period（2026-06-19 简化：去掉 returning 阶段，**但** mission **完**成**时**间**仍**然**包**含** "**完**成**结算**"** 这** 1 **回**合**）**
+  // 2026-06-19 简化：preparing(1) + scavenging(duration) = duration + 1
   const { day, periodIndex } = calcReturnTime(currentDay, currentPeriodIndex, duration + 1);
   return {
     id: generateInstanceId(),

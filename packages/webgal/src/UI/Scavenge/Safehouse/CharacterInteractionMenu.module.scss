@@ -1,55 +1,70 @@
 /**
- * 角色交互菜单（2026-06-09 加）
+ * 角色交互菜单（2026-06-19 大改：Drawer 布局）
  *
- * 点右下角角色卡片 → 弹出此菜单
- * 选项：
- *   - 赠送物品（按等级门槛显示可送物品）
- *   - 聊天（基础对话池）
- *   - 查看信息
+ * 风格统一（参考 ScavengeCharacterPanel）：
+ * - 改为右侧 Drawer（侧边栏），不**再**是**中**心**模**态**
+ * - 渐变背景：135deg（与列表一致）
+ * - 圆角：16px（与列表一致）
+ * - 蓝色高亮 rgba(74, 144, 226, ...)
+ * - avatar 80x80（与 IconCard 一致）
  */
 
-.modalOverlay {
+.drawerOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.7);
   z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  // 2026-06-09 修：父容器 SafehouseCharacterPanel 是 pointer-events: none
   pointer-events: auto;
+  display: flex;
+  justify-content: flex-end;  // 2026-06-19 改：右**侧** Drawer
+  animation: fadeIn 0.2s ease;
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
 }
 
-.modal {
-  background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 16px;
-  padding: 24px;
-  width: min(560px, 90vw);
-  max-height: 80vh;
+.drawer {
+  background: linear-gradient(135deg, rgba(40, 45, 55, 0.98) 0%, rgba(30, 35, 45, 0.98) 100%);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px 0 0 16px;  // 2026-06-19 改：仅左**侧**圆**角**
+  width: min(480px, 90vw);
+  height: 100vh;
   overflow-y: auto;
   color: #fff;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.5);
+  animation: slideIn 0.3s ease;
+  position: relative;
+
+  @keyframes slideIn {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
 }
 
-.modalHeader {
+.drawerHeader {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
+  padding: 20px 24px;
+  background: rgba(255, 255, 255, 0.05);  // 2026-06-19 改：与 panelHeader 一**致**
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  backdrop-filter: blur(8px);
 }
 
 .characterAvatar {
-  width: 64px;
-  height: 64px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
   background: linear-gradient(135deg, #4a5568, #2d3748);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  font-size: 32px;
   font-weight: bold;
   flex-shrink: 0;
   border: 2px solid rgba(255, 255, 255, 0.2);
@@ -57,6 +72,7 @@
 
 .characterInfo {
   flex: 1;
+  min-width: 0;
 }
 
 .characterName {
@@ -96,11 +112,8 @@
 }
 
 .closeButton {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.1);
   border: none;
@@ -110,11 +123,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s;
+  transition: all 0.2s;
+  flex-shrink: 0;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(244, 67, 54, 0.3);  // 2026-06-19 改：红**色**悬**停**（危险操**作**）
   }
+}
+
+.content {
+  padding: 16px 24px 24px;
 }
 
 .actions {
@@ -138,9 +156,10 @@
   text-align: left;
   width: 100%;
 
+  // 2026-06-19 改：蓝色高亮（与 ScavengeCharacterPanel 一致）
   &:hover {
-    background: rgba(255, 215, 0, 0.1);
-    border-color: rgba(255, 215, 0, 0.3);
+    background: rgba(74, 144, 226, 0.2);
+    border-color: rgba(74, 144, 226, 0.4);
   }
 
   &:disabled {
@@ -176,8 +195,9 @@
   cursor: pointer;
   transition: background 0.2s;
 
+  // 2026-06-19 改：蓝色高亮
   &:hover {
-    background: rgba(255, 215, 0, 0.15);
+    background: rgba(74, 144, 226, 0.2);
   }
 
   &:disabled {
@@ -221,8 +241,9 @@
   cursor: pointer;
   transition: all 0.2s;
 
+  // 2026-06-19 改：蓝色高亮
   &:hover {
-    background: rgba(255, 215, 0, 0.1);
+    background: rgba(74, 144, 226, 0.2);
   }
 
   &:disabled {
@@ -280,9 +301,9 @@
 .responseBubble {
   margin-top: 16px;
   padding: 16px;
-  background: rgba(99, 102, 241, 0.15);
-  border-left: 3px solid #818cf8;
-  border-radius: 4px;
+  background: rgba(74, 144, 226, 0.18);  // 2026-06-19 改：蓝色气泡（与列表一致）
+  border-left: 3px solid rgba(74, 144, 226, 0.6);
+  border-radius: 6px;
   font-size: 15px;
   line-height: 1.6;
   color: #e0e7ff;
@@ -300,6 +321,6 @@
   font-size: 14px;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(74, 144, 226, 0.3);  // 2026-06-19 改：蓝色高亮
   }
 }

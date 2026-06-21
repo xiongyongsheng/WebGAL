@@ -8,7 +8,7 @@ setVar:scavenge_show_character_list=false;
 setVar:scavenge_show_warehouse=false;
 setVar:scavenge_show_menu=true;
 
-setVar:scavenge_room_targets=[{kind:"room",id:"corridor",label:"出走廊",scene:"safehouse/corridor.txt",icon:"material-symbols:door-back"}, {kind:"room",id:"bedroom_main",label:"去主卧",scene:"safehouse/bedroom_main.txt",icon:"material-symbols:bed"}, {kind:"room",id:"living_room",label:"下客厅",scene:"safehouse/living_room.txt",icon:"material-symbols:stairs-down"}, {kind:"room",id:"entrance",label:"退到门口",scene:"safehouse/entrance.txt",icon:"material-symbols:exit-to-app"}, {kind:"exit",label:"离开安全屋",scene:"scavenge/scavenge_main.txt",icon:"material-symbols:logout"}];
+setVar:scavenge_room_targets=[{kind:"room",id:"corridor",label:"出走廊",scene:"safehouse/corridor.txt",icon:"material-symbols:door-back"}, {kind:"room",id:"bedroom_main",label:"去主卧",scene:"safehouse/bedroom_main.txt",icon:"material-symbols:bed"}, {kind:"room",id:"living_room",label:"下客厅",scene:"safehouse/living_room.txt",icon:"material-symbols:stairs-down"}, {kind:"room",id:"entrance",label:"退到门口",scene:"safehouse/entrance.txt",icon:"material-symbols:logout"}, {kind:"exit",label:"离开安全屋",scene:"scavenge/scavenge_main.txt",icon:"material-symbols:logout"}];
 
 次卧里空荡荡的，只有一张没铺的床架。看起来像是很久没人住了。;
 

@@ -24,6 +24,7 @@ import { ScavengeMissionOutcomeModal } from './ScavengeMissionOutcomeModal/Scave
 import { ScavengeRestModal } from './ScavengeRestModal/ScavengeRestModal';
 import { ScavengeCombatLogModal } from './ScavengeCombatLogModal/ScavengeCombatLogModal';
 import { ScavengeEncounterBoardModal } from './ScavengeEncounterBoardModal/ScavengeEncounterBoardModal';
+import { ScavengeLootDistributionModal } from './ScavengeLootDistributionModal/ScavengeLootDistributionModal';
 import { StoryManager } from './Story/StoryManager';
 import { getLocationHintFromState } from './Story/storyHint';
 import { CharacterRosterManager } from './ScavengeCharacter/CharacterRosterManager';
@@ -158,6 +159,38 @@ const ScavengeContent = () => {
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stageState]);
+
+  // 2026-06-21 加：M1 阶段 - 战利品分配 modal 触发
+  //   - 条件：mission 状态为 completed/failed/cancelled + 有 tempLoot + !tempLootDistributed
+  //   - 顺序：在 outcome modal **之后**（玩家先看结算结果，再分配物品）
+  //   - 注：战斗失败也走这个流程（用户要求"只要队伍背包里面有物资就要走分配流程"）
+  const pendingLootMission = useMemo(() => {
+    const missions = readMissions();
+    return missions.find(m =>
+      (m.status === 'completed' || m.status === 'failed' || m.status === 'cancelled') &&
+      m.tempLoot && m.tempLoot.length > 0 &&
+      !m.tempLootDistributed
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageState, pendingOutcomeMission]);
+
+  // 当前分配 modal 对应的队伍（2026-06-21 加）
+  const pendingLootParty = useMemo(() => {
+    if (!pendingLootMission) return [];
+    const partyIds = pendingLootMission.partyCharacterIds && pendingLootMission.partyCharacterIds.length > 0
+      ? pendingLootMission.partyCharacterIds
+      : [pendingLootMission.characterId];
+    const raw = stageState.GameVar['scavenge_characters'];
+    if (typeof raw !== 'string') return [];
+    try {
+      const allChars = JSON.parse(raw) as ScavengeCharacter[];
+      return partyIds
+        .map(id => allChars.find(c => c.id === id))
+        .filter((c): c is ScavengeCharacter => Boolean(c));
+    } catch {
+      return [];
+    }
+  }, [pendingLootMission, stageState]);
 
   // 2026-06-09 加：Plan 3 战斗休整
   //   监听 GameVar `scavenge_rest_pending` → 弹 ScavengeRestModal
@@ -396,6 +429,21 @@ const ScavengeContent = () => {
             // modal 内部已 markMissionOutcomeShown，强制刷新以重新计算 pending
             stageStateManager.setStageVarAndCommit({
               key: '_mission_outcome_dismissed_at',
+              value: Date.now(),
+            });
+          }}
+        />
+      )}
+
+      {/* 2026-06-21 加：M1 阶段 - 战利品分配 modal（在 outcome modal 之后弹） */}
+      {!pendingOutcomeMission && pendingLootMission && pendingLootParty.length > 0 && (
+        <ScavengeLootDistributionModal
+          mission={pendingLootMission}
+          party={pendingLootParty}
+          onClose={() => {
+            // 强制刷新（modal 内部已写回 mission.tempLootDistributed）
+            stageStateManager.setStageVarAndCommit({
+              key: '_loot_dismissed_at',
               value: Date.now(),
             });
           }}

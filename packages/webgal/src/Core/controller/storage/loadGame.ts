@@ -59,6 +59,11 @@ export function loadGameFromStageData(stageData: ISaveData) {
   newStageState.isRead = true;
   const dispatch = webgalStore.dispatch;
   stageStateManager.replaceCalculationStageState(newStageState);
+  // 2026-06-19 加：触发 React 重新渲染（useStageState 订阅 notify）
+  //   - 之前 readGame 不调 commit/notify，UI 不刷新
+  //   - 这也是为什么"刷新浏览器后读档"正常 —— React 初始化时重新读取 stageState
+  stageStateManager.commit({ syncPixiStage: false, applyPixiEffects: false });
+  console.log('%c [ stageStateManager ]-66', 'font-size:13px; background:pink; color:#bf2c9f;', stageStateManager)
 
   // 恢复演出
   setTimeout(restorePerform, 0);

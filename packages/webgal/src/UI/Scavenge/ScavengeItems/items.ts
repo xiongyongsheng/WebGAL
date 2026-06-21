@@ -29,7 +29,7 @@ export type ArmorSlot = 'helmet' | 'chest' | 'arms' | 'gloves' | 'legs' | 'boots
 export type WeaponSpeedModifier = 'fast' | 'normal' | 'slow';
 
 /** 消耗品效果类型 */
-export type EffectType = 'hp' | 'hunger' | 'thirst' | 'sanity';
+export type EffectType = 'hp' | 'hunger' | 'thirst' | 'sanity' | 'repair_equipment';  // 2026-06-19 加：修复装备耐久（Plan 19）
 
 /** 消耗品效果 */
 export interface ConsumableEffect {
@@ -432,6 +432,20 @@ export const CONSUMABLE_ITEMS: ConsumableItem[] = [
     weight: 0.3,
     icon: 'material-symbols:card-giftcard-outline',
     effects: [{ type: 'sanity', value: 40 }],
+  },
+  // Plan 19: 2026-06-19 加 - 修理套装（修复装备耐久度）
+  {
+    id: 'tool_repair_kit',
+    name: '修理套装',
+    type: 'consumable',
+    rarity: 'rare',
+    description: '包含扳手、螺丝刀、润滑油等工具，可修复装备耐久度。',
+    stackable: true,
+    maxStack: 99,
+    price: 30,
+    weight: 0.8,
+    icon: 'material-symbols:build-outline',
+    effects: [{ type: 'repair_equipment', value: 1 }],  // 修复 1 件装备
   },
 ];
 

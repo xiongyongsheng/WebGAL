@@ -10,7 +10,7 @@ setVar:scavenge_show_character_list=false;
 setVar:scavenge_show_warehouse=false;
 setVar:scavenge_show_menu=true;
 
-setVar:scavenge_room_targets=[{kind:"room",id:"bedroom_main",label:"去主卧",scene:"safehouse/bedroom_main.txt",icon:"material-symbols:bed"}, {kind:"room",id:"bedroom_second",label:"去次卧",scene:"safehouse/bedroom_second.txt",icon:"material-symbols:bed-outline"}, {kind:"room",id:"living_room",label:"下楼（客厅）",scene:"safehouse/living_room.txt",icon:"material-symbols:stairs-down"}, {kind:"room",id:"entrance",label:"退到门口",scene:"safehouse/entrance.txt",icon:"material-symbols:exit-to-app"}, {kind:"exit",label:"离开安全屋",scene:"scavenge/scavenge_main.txt",icon:"material-symbols:logout"}];
+setVar:scavenge_room_targets=[{kind:"room",id:"bedroom_main",label:"去主卧",scene:"safehouse/bedroom_main.txt",icon:"material-symbols:bed"}, {kind:"room",id:"bedroom_second",label:"去次卧",scene:"safehouse/bedroom_second.txt",icon:"material-symbols:bed-outline"}, {kind:"room",id:"living_room",label:"下楼（客厅）",scene:"safehouse/living_room.txt",icon:"material-symbols:stairs-down"}, {kind:"room",id:"entrance",label:"退到门口",scene:"safehouse/entrance.txt",icon:"material-symbols:logout"}, {kind:"exit",label:"离开安全屋",scene:"scavenge/scavenge_main.txt",icon:"material-symbols:logout"}];
 
 二楼走廊狭窄而安静。走廊尽头能听到楼上偶尔传来的声响。两侧分别是主卧和次卧的门。;
 

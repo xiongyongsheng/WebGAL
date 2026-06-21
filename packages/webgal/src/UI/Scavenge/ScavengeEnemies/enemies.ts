@@ -233,6 +233,27 @@ export const spawnEnemiesFromPool = (pool: EnemyPoolEntry[]): EnemyInstance[] =>
   return enemies;
 };
 
+/**
+ * 2026-06-21 加：准备阶段抽象游荡者（不依赖 locationState）
+ *
+ * 设计：
+ * - 准备阶段队伍正在前往目标地点，沿途遭遇的游荡者不是地点驻扎敌人
+ * - 不消耗 locationState.enemyCount（独立计算）
+ * - 数量 1~2（比 scavenging 阶段的 2~5 少，体现"路途骚扰"）
+ *
+ * 与 spawnFromTemplate 的区别：
+ * - 相同：行为、HP、攻击完全相同
+ * - 不同：实例不被持久化（不计入任何 locationState）
+ */
+export const createAbstractWanderers = (): EnemyInstance[] => {
+  const count = randInt(1, 2);
+  const result: EnemyInstance[] = [];
+  for (let i = 0; i < count; i++) {
+    result.push(spawnFromTemplate('wanderer'));
+  }
+  return result;
+};
+
 /** 遭遇时随机挑 N 个敌人（2026-06-09 改：2-5 个，更具挑战性）
  *
  * 旧：1-3 个 → 玩家 1v 1 都能轻松过

@@ -86,6 +86,24 @@ export interface ScavengeCharacter {
   /** 派遣/探索结束时间：哪个 period（0=清晨, 1=上午, 2=下午, 3=半晚, 4=黑夜） */
   returnPeriodIndex?: number;
   /**
+   * 2026-06-19 加：Plan 17 - 派遣阶段
+   * - 'preparing': 准备阶段（1 回合，**前**往**地**点**路**上**时**间**）—— **会**遇**敌** / **扣**属**性**
+   * - 'scavenging': 拾**荒**中**阶**段**（N 回**合**）—— **会**遇**敌** / **扣**属**性**
+   * - 'returning': 返**回**阶**段**（1 回**合**）—— **不**遇**敌** / **扣**属**性**
+   * - null: 空**闲**（**不**在**派**遣**中**）**
+   */
+  missionPhase?: 'preparing' | 'scavenging' | 'returning' | null;
+  /**
+   * 2026-06-19 加：Plan 17 - 准**备**阶**段**结**束**时**间**（下一**个** advance 触**发** phase → 'scavenging'）**
+   */
+  preparingEndDay?: number;
+  preparingEndPeriodIndex?: number;
+  /**
+   * 2026-06-19 加：Plan 17 - 拾**荒**阶**段**结**束**时**间**（下一**个** advance 触**发** phase → 'returning'）**
+   */
+  scavengingEndDay?: number;
+  scavengingEndPeriodIndex?: number;
+  /**
    * 角色持有的特性 ID 列表（2026-06-09 加，引用 traits.ts 里定义）
    * 效果在 computeDerivedStats 实时累加到基础属性/战斗公式上
    * 支持正面/负面/条件触发（如饥=0 时减益）
@@ -167,6 +185,7 @@ export const DEFAULT_CHARACTER: ScavengeCharacter = {
   stamina: 100,
   maxStamina: 100,
   isExploring: false,
+  missionPhase: null,        // 2026-06-19 加：Plan 17 阶段（null = 空闲）
   exp: 0,
   level: 1,
   expToNext: 100,
@@ -186,6 +205,13 @@ export const DEFAULT_CHARACTER: ScavengeCharacter = {
  * 角色状态显示辅助函数
  */
 export const getCharacterStatusText = (character: ScavengeCharacter): string => {
+  // 2026-06-19 改：Plan 17 - 阶段显示
+  if (character.missionPhase === 'preparing') {
+    return '准备中';
+  }
+  if (character.missionPhase === 'scavenging') {
+    return '拾荒中';
+  }
   if (character.isExploring) {
     return '派遣中';
   }

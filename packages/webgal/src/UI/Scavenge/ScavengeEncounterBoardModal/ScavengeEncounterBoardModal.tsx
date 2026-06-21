@@ -48,6 +48,7 @@ const ENCOUNTER_TITLES: Record<string, string> = {
   evade_fail_combat_victory: '隐蔽失败 / 战斗胜利',
   combat_defeat: '战斗失败',
   evade_fail_combat_defeat: '隐蔽失败 / 战斗失败',
+  location_cleared: '地点已清空',
 };
 
 const ENCOUNTER_COLORS: Record<string, string> = {
@@ -58,6 +59,7 @@ const ENCOUNTER_COLORS: Record<string, string> = {
   evade_fail_combat_victory: '#ffa726',
   combat_defeat: '#f44336',
   evade_fail_combat_defeat: '#f44336',
+  location_cleared: '#9e9e9e',
 };
 
 const COMBAT_KIND_INFO: Record<string, { color: string; label: string; icon: any }> = {
@@ -85,6 +87,8 @@ export const ScavengeEncounterBoardModal = ({ onClose, missions, characters }: S
 
   /**
    * 玩家关闭 modal = **所有** mission 都 mark shown
+   * 2026-06-21 改：不再过滤 location_cleared / stealth_clear 等真实遭遇
+   *   只过滤旧版"准备期占位" no_encounter（防止旧存档把占位也展示给玩家）
    */
   const handleClose = () => {
     missions.forEach(m => {
@@ -178,10 +182,17 @@ const MissionColumn = ({
     .filter((c): c is ScavengeCharacter => Boolean(c));
 
   // 最新未展示 encounter
+  // 2026-06-21 改：保留 no_encounter filter（防止旧存档里准备期占位污染看板）
+  //   location_cleared / stealth_clear / evade_success / combat_* / resource 都会展示
   const latestUnshown = (mission.encounters ?? [])
     .slice()
     .reverse()
     .find(e => e.kind !== 'no_encounter' && !e.shown);
+
+  // 2026-06-21 加：判断当前是准备阶段还是拾荒阶段（用于 badge + 准备期标识）
+  //   优先看主队员（party[0]）的 missionPhase，因为 MissionSystem 用它来判断 phase
+  const mainChar = party[0];
+  const isPrepPhase = mainChar?.missionPhase === 'preparing';
 
   // 状态
   const hasUnshownOutcome = mission.outcome && !mission.outcomeShown;
@@ -211,6 +222,7 @@ const MissionColumn = ({
     statusTitle = ENCOUNTER_TITLES[latestUnshown.kind] ?? latestUnshown.kind;
     statusColor = ENCOUNTER_COLORS[latestUnshown.kind] ?? '#999';
     if (latestUnshown.kind === 'resource') StatusIcon = inventory;
+    else if (latestUnshown.kind === 'location_cleared') StatusIcon = 'material-symbols:inventory';
     else if (latestUnshown.kind === 'evade_success' || latestUnshown.kind === 'stealth_clear') StatusIcon = visibility;
     else StatusIcon = swords;
   } else {
@@ -240,6 +252,13 @@ const MissionColumn = ({
       <div className={styles.columnHeader}>
         <Icon icon={locationOn} className={styles.columnHeaderIcon} style={{ color: statusColor }} />
         <div className={styles.columnHeaderTitle}>{loc?.name ?? '?'}</div>
+        {/* 2026-06-21 加：准备阶段徽章（蓝色，区别于拾荒） */}
+        {!isCompleted && isPrepPhase && (
+          <div className={styles.phaseBadge} title="队伍正在前往目标地点，途中可能遭遇游荡者">
+            <Icon icon="material-symbols:directions-walk" />
+            <span>准备阶段</span>
+          </div>
+        )}
         <div className={styles.statusBadge} style={{ color: statusColor, borderColor: statusColor }}>
           <Icon icon={StatusIcon} />
           <span>{statusTitle}</span>
@@ -337,6 +356,22 @@ const MissionColumn = ({
                 {latestUnshown.kind === 'stealth_clear'
                   ? '这一段路没遇到任何威胁，悄悄溜过'
                   : `遭遇 ${latestUnshown.enemiesEncountered ?? 0} 个敌人，悄悄溜过`}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============ 地点已清空（2026-06-21 加）============ */}
+      {/* 敌人 + 物资都被清理，提示玩家"扑空了" */}
+      {latestUnshown?.kind === 'location_cleared' && (
+        <div className={styles.section}>
+          <div className={styles.evadeSuccessHint}>
+            <Icon icon="material-symbols:inventory" className={styles.evadeSuccessIcon} />
+            <div className={styles.evadeSuccessContent}>
+              <div className={styles.evadeSuccessTitle}>地点已清空</div>
+              <div className={styles.evadeSuccessDesc}>
+                该地点的敌人和物资都已被清理，队伍空手而归
               </div>
             </div>
           </div>

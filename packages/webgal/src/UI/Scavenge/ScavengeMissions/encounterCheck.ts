@@ -23,7 +23,7 @@
 import { ScavengeCharacter } from '../ScavengeCharacter/character';
 import { applyAutoTraits } from '../ScavengeCharacter/traits';
 import { computeDerivedStats } from '../ScavengeCharacter/characterCombat';
-import { InventoryItem, addToInventory, generateInstanceId } from '../ScavengeItems/inventory';
+import { InventoryItem, removeFromInventory, generateInstanceId } from '../ScavengeItems/inventory';
 import { ScavengeLocationItem } from '../ScavengeMap/locations';
 import {
   getOrRefreshLocationState,
@@ -32,9 +32,10 @@ import {
   countToEnemies,
   touchLocationInteracted,
 } from '../ScavengeMap/locationRefresh';
-import { pickRandomEncounterEnemies } from '../ScavengeEnemies/enemies';
+import { pickRandomEncounterEnemies, createAbstractWanderers } from '../ScavengeEnemies/enemies';
 import { runCombat } from '../ScavengeCombat/combat';
 import { Mission, EncounterLog } from './missions';
+import { calculateLostItems } from './missionComplete';
 
 /**
  * 胜仗后额外抽 1 个物资的概率（2026-06-09 加）
@@ -61,6 +62,8 @@ const EVADE_SUCCESS_LOOT_RATE = 1.0;
  * @param location 派遣地点
  * @param triggerDay 当前 day
  * @param triggerPeriodIndex 当前 period
+ * @param phase 2026-06-21 加：'prep' = 准备阶段（路上，只遇游荡者，不消耗 locationState.enemyCount）
+ *                     'scavenge' = 拾荒阶段（地点内，完整流程）
  * @returns { encounter, updatedParty, missionOver, restAvailable }
  *   - encounter 记录
  *   - updatedParty 队伍中所有角色更新后的副本（每个角色都跑 applyAutoTraits）
@@ -73,6 +76,7 @@ export const encounterCheck = (
   location: ScavengeLocationItem,
   triggerDay: number,
   triggerPeriodIndex: number,
+  phase: 'prep' | 'scavenge' = 'scavenge',
 ): { encounter: EncounterLog; updatedParty: ScavengeCharacter[]; missionOver: boolean; restAvailable: boolean } => {
   if (party.length === 0) {
     throw new Error('encounterCheck: party 不能为空');
@@ -112,6 +116,45 @@ export const encounterCheck = (
   // 记录派遣（用于 UI 显示"X 天没人来"）
   touchLocationInteracted(location.id, triggerDay);
 
+  // ========== 2026-06-21 加：准备阶段专有逻辑 ==========
+  if (phase === 'prep') {
+    return runPrepPhase({
+      encId, triggerDay, triggerPeriodIndex, character, party, location, locState, updateParty, wrap,
+    });
+  }
+
+  // ========== 2026-06-21 加：拾荒阶段「敌人被清光」短路 ==========
+  //   - 之前：allEnemies.length === 0 → 返回 no_encounter（被看板 filter 掉，玩家看不到）
+  //   - 现在：先看 loot
+  //     - 没敌人 + 没物资 → location_cleared（提示玩家"地点已清空"）
+  //     - 没敌人 + 有物资 → 100% 给物资（跳过 60% 潜行检查，直接走 resource 路径）
+  const allEnemies = countToEnemies(locState.enemyCount);
+  const lootEntries = Object.entries(locState.lootCount).filter(([_, n]) => n > 0);
+  if (allEnemies.length === 0) {
+    if (lootEntries.length === 0) {
+      return wrap({
+        encounter: {
+          id: encId,
+          triggerDay,
+          triggerPeriodIndex,
+          kind: 'location_cleared',
+          message: '该地点的敌人和物资都已被清理，队伍空手而归',
+        },
+        updatedChar: character,
+        missionOver: false,
+      });
+    }
+    // 强制给物资（跳过潜行 60% 判定）
+    //   这里复用下方 isResource 分支的逻辑（直接 return resource）
+    //   不下推到 isResource 路径是因为语义不同：
+    //     - 正常 resource = 80% 敌人中的 20% 资源点（玩家是"找"到的）
+    //     - 这里 resource = 敌人清光后的必给（玩家是"收"剩下的）
+    //   但 encounter.kind 保持 'resource' 即可，message 区分
+    return giveForcedLoot({
+      encId, triggerDay, triggerPeriodIndex, character, location, lootEntries, wrap,
+    });
+  }
+
   // 1. 60% 不遭遇（2026-06-09 改：combat 策略 100% 遭遇，跳过此检查）
   // 2026-06-09 改：用 'stealth_clear' 区分**准备期**的 no_encounter
   //   之前 stealth 60% 用 'no_encounter' → 与准备期冲突
@@ -121,11 +164,10 @@ export const encounterCheck = (
   if (mission.strategy !== 'combat' && Math.random() >= 0.4) {
     // 抽 1 个物资
     const stealthItems: InventoryItem[] = [];
-    let stealthUpdatedChar: ScavengeCharacter = character;
-    const lootEntries = Object.entries(getOrRefreshLocationState(location, triggerDay).lootCount)
+    const stealthLootEntries = Object.entries(getOrRefreshLocationState(location, triggerDay).lootCount)
       .filter(([_, n]) => n > 0);
-    if (lootEntries.length > 0) {
-      const [itemId, _] = lootEntries[Math.floor(Math.random() * lootEntries.length)];
+    if (stealthLootEntries.length > 0) {
+      const [itemId, _] = stealthLootEntries[Math.floor(Math.random() * stealthLootEntries.length)];
       const item: InventoryItem = {
         instanceId: generateInstanceId(),
         itemId,
@@ -133,10 +175,8 @@ export const encounterCheck = (
       };
       stealthItems.push(item);
       takeLootByItemId(location.id, [itemId]);
-      stealthUpdatedChar = {
-        ...character,
-        inventory: addToInventory(character.inventory ?? [], item),
-      };
+      // 2026-06-21 改：不再直接 addToInventory(character.inventory)
+      //   物品分配交给 MissionSystem.onPeriodChange 调 tryAddToParty 处理
     }
     return wrap({
       encounter: {
@@ -149,7 +189,7 @@ export const encounterCheck = (
           ? '这一段路没遇到任何威胁（顺手拿了点东西）'
           : '这一段路没遇到任何威胁',
       },
-      updatedChar: stealthUpdatedChar,
+      updatedChar: character,
       missionOver: false,
     });
   }
@@ -158,11 +198,10 @@ export const encounterCheck = (
   const isResource = Math.random() < 0.2;
   if (isResource) {
     // 2026-06-08 改：从 locationState.lootCount 抽（state 没东西就 no_encounter）
-    const lootEntries = Object.entries(locState.lootCount).filter(([_, n]) => n > 0);
-    let updatedChar: ScavengeCharacter = character;
-    if (lootEntries.length > 0) {
+    const resLootEntries = Object.entries(locState.lootCount).filter(([_, n]) => n > 0);
+    if (resLootEntries.length > 0) {
       // 选一个
-      const [itemId, _] = lootEntries[Math.floor(Math.random() * lootEntries.length)];
+      const [itemId, _] = resLootEntries[Math.floor(Math.random() * resLootEntries.length)];
       const item: InventoryItem = {
         instanceId: generateInstanceId(),
         itemId,
@@ -171,11 +210,8 @@ export const encounterCheck = (
       baseItems.push(item);
       // 减 state
       takeLootByItemId(location.id, [itemId]);
-      // 加到主队员背包
-      updatedChar = {
-        ...character,
-        inventory: addToInventory(character.inventory ?? [], item),
-      };
+      // 2026-06-21 改：不再 addToInventory(character.inventory)
+      //   物品分配交给 MissionSystem.onPeriodChange 调 tryAddToParty
     }
     return wrap({
       encounter: {
@@ -186,27 +222,13 @@ export const encounterCheck = (
         itemsGained: baseItems,
         message: baseItems.length > 0 ? '发现了一处资源点！' : '看上去像资源点，但已经被人搜刮过了',
       },
-      updatedChar,
-      missionOver: false,
-    });
-  }
-
-  // 3. 丧尸：从 locationState.enemyCount 抽 1~3 个
-  const allEnemies = countToEnemies(locState.enemyCount);
-  if (allEnemies.length === 0) {
-    // state 没敌人了（已被刷光 / 危险等级 0）
-    return wrap({
-      encounter: {
-        id: encId,
-        triggerDay,
-        triggerPeriodIndex,
-        kind: 'no_encounter',
-        message: '没有发现敌人',
-      },
       updatedChar: character,
       missionOver: false,
     });
   }
+
+  // 3. 丧尸：从 locationState.enemyCount 抽 1~min(3, allEnemies.length) 个
+  // 注：上面已检查 allEnemies.length === 0 → 这里 length > 0
   // 抽 1~min(3, allEnemies.length) 个
   const encounterEnemies = pickRandomEncounterEnemies(allEnemies);
 
@@ -228,7 +250,6 @@ export const encounterCheck = (
     //   之前**只**战斗胜 + resource 给物资，潜行成功**没**给
     //   现在 4 种来源：1) resource 2) 战斗胜 3) 战斗胜 30% bonus 4) 潜行成功 100%
     const evadeItems: InventoryItem[] = [];
-    let evadeUpdatedChar: ScavengeCharacter = character;
     if (Math.random() < EVADE_SUCCESS_LOOT_RATE) {
       const lootEntries = Object.entries(getOrRefreshLocationState(location, triggerDay).lootCount)
         .filter(([_, n]) => n > 0);
@@ -241,10 +262,7 @@ export const encounterCheck = (
         };
         evadeItems.push(item);
         takeLootByItemId(location.id, [itemId]);
-        evadeUpdatedChar = {
-          ...character,
-          inventory: addToInventory(character.inventory ?? [], item),
-        };
+        // 2026-06-21 改：不再 addToInventory(character.inventory)
       }
     }
     return wrap({
@@ -259,7 +277,7 @@ export const encounterCheck = (
           ? `遭遇 ${encounterEnemies.length} 个敌人，隐蔽成功！悄悄溜过（顺手拿了点东西）`
           : `遭遇 ${encounterEnemies.length} 个敌人，隐蔽成功！悄悄溜过`,
       },
-      updatedChar: evadeUpdatedChar,
+      updatedChar: character,
       missionOver: false,
     });
   }
@@ -302,7 +320,7 @@ export const encounterCheck = (
       };
       baseItems.push(item);
       takeLootByItemId(location.id, [itemId]);
-      updatedChar.inventory = addToInventory(updatedChar.inventory ?? [], item);
+      // 2026-06-21 改：不再 updatedChar.inventory = addToInventory(...)
     }
     // 2026-06-09 加：胜仗 30% 概率额外抽 1 个物资（bonus loot）
     let bonusLootCount = 0;
@@ -318,7 +336,7 @@ export const encounterCheck = (
         };
         baseItems.push(item);
         takeLootByItemId(location.id, [itemId]);
-        updatedChar.inventory = addToInventory(updatedChar.inventory ?? [], item);
+        // 2026-06-21 改：不再 updatedChar.inventory = addToInventory(...)
         bonusLootCount = 1;
       }
     }
@@ -350,6 +368,19 @@ export const encounterCheck = (
   }
   deductEnemiesByType(location.id, defeatedCounts);
 
+  // 2026-06-19 加：战斗失败丢物品（Plan 17）
+  //   - 50% 概率触发
+  //   - 装备/任务物品保留
+  //   - 扣物品到 updatedChar.inventory
+  const lostItems = calculateLostItems(updatedChar);
+  if (lostItems.length > 0) {
+    let newInv = updatedChar.inventory ?? [];
+    for (const lost of lostItems) {
+      newInv = removeFromInventory(newInv, lost.item.itemId, lost.lostCount);
+    }
+    updatedChar.inventory = newInv;
+  }
+
   // 败：mission 失败
   return wrap({
     encounter: {
@@ -362,7 +393,11 @@ export const encounterCheck = (
       hpDelta,
       // 2026-06-09 加：每个队员的 HP delta
       partyHpDelta: combatResult.partyHpDelta,
-      message: `被 ${encounterEnemies.length} 个敌人击败！任务失败，紧急撤退`,
+      // 2026-06-19 加：丢失物品（Plan 17）
+      lostItems,
+      message: lostItems.length > 0
+        ? `被 ${encounterEnemies.length} 个敌人击败！任务失败，紧急撤退（丢失 ${lostItems.length} 类物品）`
+        : `被 ${encounterEnemies.length} 个敌人击败！任务失败，紧急撤退`,
     },
     updatedChar,
     missionOver: true, // 战斗败 → 立即结束 mission
@@ -378,4 +413,211 @@ export const encounterCheck = (
 export const splitExpAmongParty = (totalExp: number, partySize: number): number => {
   if (partySize <= 0) return 0;
   return Math.floor(totalExp / partySize);
+};
+
+// ============================================================
+// 2026-06-21 加：准备阶段 + 「敌人被清光」短路
+//   - runPrepPhase：抽 1-2 个抽象游荡者，60% 潜行 / 40% 战斗
+//     （不消耗 locationState.enemyCount，因为游荡者不是地点驻扎的）
+//   - giveForcedLoot：敌人被清光后 100% 给物资（跳过 60% 潜行检查）
+// ============================================================
+
+/**
+ * 准备阶段遭遇（2026-06-21 加）
+ *
+ * 设计：
+ * - 只生成 1-2 个抽象游荡者（不消耗 locationState）
+ * - 60% 潜行通过（可拿路边的物资）
+ * - 40% 战斗游荡者
+ *   - 警觉判定失败 → 战斗（不扣 locationState，败也不丢物品）
+ *   - 警觉判定成功 → 潜行成功（不拿物资，因为没到地点）
+ *
+ * 资源来源：locationState.lootCount（路上能捡到场所里的东西，逻辑上可以理解为 "周围环境"）
+ */
+const runPrepPhase = (ctx: {
+  encId: string;
+  triggerDay: number;
+  triggerPeriodIndex: number;
+  character: ScavengeCharacter;
+  party: ScavengeCharacter[];
+  location: ScavengeLocationItem;
+  locState: ReturnType<typeof getOrRefreshLocationState>;
+  // 复用主函数的 updateParty / runCombat
+  updateParty: (newMainChar: ScavengeCharacter, partyHpDelta?: Record<string, number>) => ScavengeCharacter[];
+  wrap: (result: { encounter: EncounterLog; updatedChar: ScavengeCharacter; missionOver: boolean; partyHpDelta?: Record<string, number> }) => {
+    encounter: EncounterLog;
+    updatedParty: ScavengeCharacter[];
+    missionOver: boolean;
+    restAvailable: boolean;
+  };
+}): {
+  encounter: EncounterLog;
+  updatedParty: ScavengeCharacter[];
+  missionOver: boolean;
+  restAvailable: boolean;
+} => {
+  const { encId, triggerDay, triggerPeriodIndex, character, party, location, locState, updateParty, wrap } = ctx;
+
+  // 60% 潜行通过（与 scavenge 阶段一致）
+  if (Math.random() >= 0.4) {
+    const stealthItems: InventoryItem[] = [];
+    const lootEntries = Object.entries(locState.lootCount).filter(([_, n]) => n > 0);
+    if (lootEntries.length > 0) {
+      const [itemId, _] = lootEntries[Math.floor(Math.random() * lootEntries.length)];
+      const item: InventoryItem = {
+        instanceId: generateInstanceId(),
+        itemId,
+        quantity: 1,
+      };
+      stealthItems.push(item);
+      takeLootByItemId(location.id, [itemId]);
+      // 2026-06-21 改：不再 addToInventory
+    }
+    return wrap({
+      encounter: {
+        id: encId,
+        triggerDay,
+        triggerPeriodIndex,
+        kind: 'stealth_clear',
+        itemsGained: stealthItems.length > 0 ? stealthItems : undefined,
+        message: stealthItems.length > 0
+          ? '路上没遇到游荡者（顺手捡了点东西）'
+          : '路上没遇到游荡者，队伍顺利前进',
+      },
+      updatedChar: character,
+      missionOver: false,
+    });
+  }
+
+  // 40% 遇游荡者（抽 1-2 个抽象实例）
+  const wanderers = createAbstractWanderers();
+
+  // 警觉判定
+  const isNight = triggerPeriodIndex === 4;
+  const stats = computeDerivedStats(character, isNight);
+  const charStealth = stats.stealth;
+  const isTooExposed = charStealth <= 0;
+  const detectedFlags: boolean[] = wanderers.map((e) => {
+    if (isTooExposed) return true;
+    if (e.detection <= 0) return false;
+    const success = charStealth / (charStealth + e.detection);
+    return Math.random() >= success;
+  });
+
+  if (!detectedFlags.some((d) => d)) {
+    // 全部没察觉 → 潜行成功（不扣 locationState）
+    //   准备阶段不抽物资（路上没什么好拿的）
+    return wrap({
+      encounter: {
+        id: encId,
+        triggerDay,
+        triggerPeriodIndex,
+        kind: 'evade_success',
+        enemiesEncountered: wanderers.length,
+        message: `路上遇到 ${wanderers.length} 个游荡者，隐蔽成功！悄悄溜过`,
+      },
+      updatedChar: character,
+      missionOver: false,
+    });
+  }
+
+  // 战斗（游荡者 = 抽象，不扣 locationState.enemyCount）
+  for (let i = 0; i < wanderers.length; i++) {
+    if (detectedFlags[i]) {
+      wanderers[i].startAtb = 50;
+    }
+  }
+  const combatResult = runCombat(party, wanderers);
+  const hpDelta = combatResult.partyHpDelta[character.id] ?? 0;
+  const updatedChar: ScavengeCharacter = {
+    ...character,
+    hp: Math.max(0, combatResult.partyFinalHp[character.id] ?? character.hp),
+  };
+
+  if (combatResult.characterWon) {
+    return {
+      encounter: {
+        id: encId,
+        triggerDay,
+        triggerPeriodIndex,
+        kind: 'combat_victory',
+        enemiesEncountered: wanderers.length,
+        combatLog: combatResult.log,
+        hpDelta,
+        partyHpDelta: combatResult.partyHpDelta,
+        message: `击退了 ${wanderers.length} 个游荡者！${hpDelta < 0 ? `（扣血 ${-hpDelta}）` : ''}`,
+      },
+      updatedParty: updateParty(updatedChar, combatResult.partyHpDelta),
+      missionOver: false,
+      restAvailable: false,  // 准备阶段战斗不触发休整 modal
+    };
+  }
+
+  // 败：抽象游荡者战斗失败（不扣 locationState，不丢物品 —— 路上没东西可丢）
+  return wrap({
+    encounter: {
+      id: encId,
+      triggerDay,
+      triggerPeriodIndex,
+      kind: 'combat_defeat',
+      enemiesEncountered: wanderers.length,
+      combatLog: combatResult.log,
+      hpDelta,
+      partyHpDelta: combatResult.partyHpDelta,
+      message: `被 ${wanderers.length} 个游荡者击退，队伍受伤撤退`,
+    },
+    updatedChar,
+    missionOver: true,  // 准备阶段失败 → 立即结束 mission
+  });
+};
+
+/**
+ * 强制给物资（2026-06-21 加）
+ *
+ * 场景：拾荒阶段 allEnemies.length === 0 但 lootEntries.length > 0
+ *   - 玩家已经把敌人清光了，下次再进入就只剩物资
+ *   - 不希望"扑空"，所以 100% 给物资（跳过 60% 潜行检查）
+ */
+const giveForcedLoot = (ctx: {
+  encId: string;
+  triggerDay: number;
+  triggerPeriodIndex: number;
+  character: ScavengeCharacter;
+  location: ScavengeLocationItem;
+  lootEntries: Array<[string, number]>;
+  wrap: (result: { encounter: EncounterLog; updatedChar: ScavengeCharacter; missionOver: boolean; partyHpDelta?: Record<string, number> }) => {
+    encounter: EncounterLog;
+    updatedParty: ScavengeCharacter[];
+    missionOver: boolean;
+    restAvailable: boolean;
+  };
+}): {
+  encounter: EncounterLog;
+  updatedParty: ScavengeCharacter[];
+  missionOver: boolean;
+  restAvailable: boolean;
+} => {
+  const { encId, triggerDay, triggerPeriodIndex, character, location, lootEntries, wrap } = ctx;
+
+  const [itemId, _] = lootEntries[Math.floor(Math.random() * lootEntries.length)];
+  const item: InventoryItem = {
+    instanceId: generateInstanceId(),
+    itemId,
+    quantity: 1,
+  };
+  takeLootByItemId(location.id, [itemId]);
+  // 2026-06-21 改：不再 addToInventory，物品分配交给 MissionSystem
+
+  return wrap({
+    encounter: {
+      id: encId,
+      triggerDay,
+      triggerPeriodIndex,
+      kind: 'resource',
+      itemsGained: [item],
+      message: '该地点已被清空，队伍收拾了一些残余物资',
+    },
+    updatedChar: character,
+    missionOver: false,
+  });
 };

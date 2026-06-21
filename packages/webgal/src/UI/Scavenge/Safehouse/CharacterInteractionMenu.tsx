@@ -29,6 +29,7 @@ import {
 } from '../ScavengeCharacter/affinityUtils';
 import { getItemById, AffinityValue } from '../ScavengeItems/items';
 import { ChatTopic, getAvailableTopics } from './chatTopics';
+import { ListSection, ListItemContent } from '@/UI/Common/ListSection';
 import styles from './CharacterInteractionMenu.module.scss';
 
 interface Props {
@@ -197,12 +198,10 @@ export const CharacterInteractionMenu = ({ character, onClose }: Props) => {
 
   // ============== 渲染 ==============
   return (
-    <div className={styles.modalOverlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <button className={styles.closeButton} onClick={onClose}>×</button>
-
-        {/* 头部 */}
-        <div className={styles.modalHeader}>
+    <div className={styles.drawerOverlay} onClick={onClose}>
+      <div className={styles.drawer} onClick={(e) => e.stopPropagation()}>
+        {/* 头部（粘性定位）*/}
+        <div className={styles.drawerHeader}>
           <div className={styles.characterAvatar}>{character.name.charAt(0)}</div>
           <div className={styles.characterInfo}>
             <div className={styles.characterName}>{character.name}</div>
@@ -225,16 +224,17 @@ export const CharacterInteractionMenu = ({ character, onClose }: Props) => {
               />
             </div>
           </div>
+          <button className={styles.closeButton} onClick={onClose} title="关闭">×</button>
         </div>
 
-        {/* 错误提示 */}
-        {errorMsg && (
-          <div style={{ padding: 10, background: 'rgba(248,113,113,0.2)', borderRadius: 6, marginBottom: 12, color: '#fecaca' }}>
-            {errorMsg}
-          </div>
-        )}
-
         {/* 主体 */}
+        <div className={styles.content}>
+          {/* 错误提示 */}
+          {errorMsg && (
+            <div style={{ padding: 10, background: 'rgba(248,113,113,0.2)', borderRadius: 6, marginBottom: 12, color: '#fecaca' }}>
+              {errorMsg}
+            </div>
+          )}
         {mode === 'main' && (
           <div className={styles.actions}>
             {/* 升阶剧情触发（好感度满但剧情未完成时显示） */}
@@ -292,68 +292,46 @@ export const CharacterInteractionMenu = ({ character, onClose }: Props) => {
         )}
 
         {mode === 'gift' && (
-          <>
-            <h3 style={{ marginTop: 16, marginBottom: 8, color: '#cbd5e0' }}>选择物品赠送</h3>
-            <div className={styles.giftList}>
-              {giftableItems.length === 0 ? (
-                <div style={{ padding: 20, color: '#94a3b8', textAlign: 'center' }}>
-                  背包里没有可赠送的物品
-                </div>
-              ) : (
-                giftableItems.map((entry) => (
-                  <button
-                    key={entry.slot.itemId}
-                    className={styles.giftItem}
-                    onClick={() => handleGift(entry.slot.itemId, entry.affinityValue!)}
-                    disabled={!entry.canGift}
-                  >
-                    <div className={styles.giftInfo}>
-                      <div className={styles.giftName}>{entry.item?.name ?? entry.slot.itemId}</div>
-                      <div className={styles.giftValue}>
-                        数量: {entry.slot.quantity} · 档次: {entry.affinityValue}
-                      </div>
-                    </div>
-                    {!entry.canGift && (
-                      <span className={styles.giftLocked}>
-                        🔒 需要{entry.affinityValue === 'normal' ? '熟悉' : '亲密'}
-                      </span>
-                    )}
-                  </button>
-                ))
-              )}
-            </div>
-            <button className={styles.backButton} onClick={() => setMode('main')}>← 返回</button>
-          </>
+          <ListSection
+            title="选择物品赠送"
+            items={giftableItems}
+            keyOf={(entry) => entry.slot.itemId}
+            emptyText="背包里没有可赠送的物品"
+            emptyIcon="🎁"
+            actions={
+              <button className={styles.backButton} onClick={() => setMode('main')}>← 返回</button>
+            }
+            renderItem={(entry) => (
+              <ListItemContent
+                title={entry.item?.name ?? entry.slot.itemId}
+                subtitle={`数量: ${entry.slot.quantity} · 档次: ${entry.affinityValue}`}
+                disabled={!entry.canGift}
+                locked={!entry.canGift}
+                onClick={() => handleGift(entry.slot.itemId, entry.affinityValue!)}
+                action={!entry.canGift ? `需要${entry.affinityValue === 'normal' ? '熟悉' : '亲密'}` : undefined}
+              />
+            )}
+          />
         )}
 
         {mode === 'chat' && (
-          <>
-            <h3 style={{ marginTop: 16, marginBottom: 8, color: '#cbd5e0' }}>聊点什么</h3>
-            <div className={styles.chatList}>
-              {availableTopics.length === 0 ? (
-                <div style={{ padding: 20, color: '#94a3b8', textAlign: 'center' }}>
-                  暂时没有可以聊的话题
-                </div>
-              ) : (
-                availableTopics.map((topic) => (
-                  <button
-                    key={topic.id}
-                    className={styles.chatTopic}
-                    onClick={() => handleChat(topic)}
-                  >
-                    <div className={styles.topicText}>{topic.text}</div>
-                    <div className={styles.topicMeta}>
-                      <span>{topic.level === 'casual' ? '日常' : topic.level === 'personal' ? '私人' : '秘密'}</span>
-                      {topic.affinityChange > 0 && (
-                        <span style={{ color: '#4ade80' }}>+{topic.affinityChange} 好感</span>
-                      )}
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-            <button className={styles.backButton} onClick={() => setMode('main')}>← 返回</button>
-          </>
+          <ListSection
+            title="聊点什么"
+            items={availableTopics}
+            keyOf={(topic) => topic.id}
+            emptyText="暂时没有可以聊的话题"
+            emptyIcon="💬"
+            actions={
+              <button className={styles.backButton} onClick={() => setMode('main')}>← 返回</button>
+            }
+            renderItem={(topic) => (
+              <ListItemContent
+                title={topic.text}
+                subtitle={`${topic.level === 'casual' ? '日常' : topic.level === 'personal' ? '私人' : '秘密'}${topic.affinityChange > 0 ? ` · +${topic.affinityChange} 好感` : ''}`}
+                onClick={() => handleChat(topic)}
+              />
+            )}
+          />
         )}
 
         {mode === 'chat_response' && response && (
@@ -371,56 +349,34 @@ export const CharacterInteractionMenu = ({ character, onClose }: Props) => {
         )}
 
         {mode === 'info' && (
-          <>
-            <div className={styles.infoPanel}>
-              <div className={styles.infoRow}>
-                <span className={styles.infoLabel}>力量 (str)</span>
-                <span className={styles.infoValue}>{character.str}</span>
-              </div>
-              <div className={styles.infoRow}>
-                <span className={styles.infoLabel}>敏捷 (agi)</span>
-                <span className={styles.infoValue}>{character.agi}</span>
-              </div>
-              <div className={styles.infoRow}>
-                <span className={styles.infoLabel}>耐力 (end)</span>
-                <span className={styles.infoValue}>{character.end}</span>
-              </div>
-              <div className={styles.infoRow}>
-                <span className={styles.infoLabel}>智力 (int)</span>
-                <span className={styles.infoValue}>{character.int}</span>
-              </div>
-              <div className={styles.infoRow}>
-                <span className={styles.infoLabel}>HP / 最大</span>
-                <span className={styles.infoValue}>{character.hp} / {character.maxHp}</span>
-              </div>
-              <div className={styles.infoRow}>
-                <span className={styles.infoLabel}>饥饿</span>
-                <span className={styles.infoValue}>{character.hunger} / {character.maxHunger}</span>
-              </div>
-              <div className={styles.infoRow}>
-                <span className={styles.infoLabel}>口渴</span>
-                <span className={styles.infoValue}>{character.thirst} / {character.maxThirst}</span>
-              </div>
-              <div className={styles.infoRow}>
-                <span className={styles.infoLabel}>精神</span>
-                <span className={styles.infoValue}>{character.sanity} / {character.maxSanity}</span>
-              </div>
-              <div className={styles.infoRow}>
-                <span className={styles.infoLabel}>等级 / 经验</span>
-                <span className={styles.infoValue}>Lv.{character.level} ({character.exp}/{character.expToNext})</span>
-              </div>
-              <div className={styles.infoRow}>
-                <span className={styles.infoLabel}>特性</span>
-                <span className={styles.infoValue}>{character.traitIds?.join(', ') || '无'}</span>
-              </div>
-              <div className={styles.infoRow}>
-                <span className={styles.infoLabel}>背包物品</span>
-                <span className={styles.infoValue}>{(character.inventory ?? []).filter((s) => s !== null).length} 件</span>
-              </div>
-            </div>
-            <button className={styles.backButton} onClick={() => setMode('main')}>← 返回</button>
-          </>
+          <ListSection
+            title="角色属性"
+            items={[
+              { label: '力量 (str)', value: String(character.str) },
+              { label: '敏捷 (agi)', value: String(character.agi) },
+              { label: '耐力 (end)', value: String(character.end) },
+              { label: '智力 (int)', value: String(character.int) },
+              { label: 'HP / 最大', value: `${character.hp} / ${character.maxHp}` },
+              { label: '饥饿', value: `${character.hunger} / ${character.maxHunger}` },
+              { label: '口渴', value: `${character.thirst} / ${character.maxThirst}` },
+              { label: '精神', value: `${character.sanity} / ${character.maxSanity}` },
+              { label: '等级 / 经验', value: `Lv.${character.level} (${character.exp}/${character.expToNext})` },
+              { label: '特性', value: character.traitIds?.join(', ') || '无' },
+              { label: '背包物品', value: `${(character.inventory ?? []).filter((s) => s !== null).length} 件` },
+            ]}
+            keyOf={(row) => row.label}
+            actions={
+              <button className={styles.backButton} onClick={() => setMode('main')}>← 返回</button>
+            }
+            renderItem={(row) => (
+              <ListItemContent
+                title={row.label}
+                action={row.value}
+              />
+            )}
+          />
         )}
+        </div>{/* 关闭 content */}
       </div>
     </div>
   );

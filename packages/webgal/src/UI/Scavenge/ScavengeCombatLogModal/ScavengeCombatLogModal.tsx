@@ -42,6 +42,9 @@ const ENCOUNTER_TITLES: Record<EncounterKind, string> = {
   evade_fail_combat_defeat: '隐蔽失败 / 战斗失败',
   combat_victory: '战斗胜利',
   combat_defeat: '战斗失败',
+  stealth_clear: '潜行通过',
+  location_cleared: '地点已清空',
+  rest_pending: '休整中',
   // 兼容旧值（不应该再出现，但保留兜底）
   // @ts-expect-error
   evade_fail_combat: '隐蔽失败',
@@ -55,6 +58,9 @@ const ENCOUNTER_ACCENTS: Record<string, string> = {
   combat_defeat: '#F44336',
   evade_fail_combat_defeat: '#F44336',
   no_encounter: '#a0a0a0',
+  location_cleared: '#9e9e9e',
+  rest_pending: '#ffa726',
+  stealth_clear: '#4CAF50',
 };
 
 export const ScavengeCombatLogModal = ({ missionId, encounter, onClose }: ScavengeCombatLogModalProps) => {

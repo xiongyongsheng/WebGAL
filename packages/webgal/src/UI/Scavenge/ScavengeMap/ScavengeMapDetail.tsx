@@ -19,7 +19,7 @@ import {
 import { ScavengeCharacter, normalizeCharacter, getCharacterStatusText } from '../ScavengeCharacter/character';
 import { CHARACTER_TEMPLATES } from '../ScavengeCharacter/characterRoster';
 import { canDispatch } from '../ScavengeCharacter/traits';
-import { startMission, readMissions, writeMissions, MAX_PARTY_SIZE, buildEarlyReturnMission, applyMissionOutcomeToParty } from '../ScavengeMissions/missions';
+import { startMission, readMissions, writeMissions, MAX_PARTY_SIZE, applyMissionOutcomeToParty, calcReturnTime, buildEarlyReturnMission } from '../ScavengeMissions/missions';
 import { SCAVENGE_LOCATIONS } from '../ScavengeMap/locations';
 import { ScavengeConfirmModal } from '../ScavengeConfirm/ScavengeConfirmModal';
 import styles from './ScavengeMapDetail.module.scss';
@@ -140,10 +140,30 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
     // 创建 mission（partyCharacterIds = partyIds + strategy）
     // 2026-06-09 改：传 missionStrategy（组队派遣 strategy = 队伍级共享）
     const mission = startMission(partyIds, location, currentDay, currentPeriodIndex, missionStrategy);
+    console.log(
+      `%c [ScavengeMapDetail/startMission] mission id=${mission.id.slice(0, 6)} loc=${location.id} duration=${location.explorationTime} returnDay=(${mission.returnDay},${mission.returnPeriodIndex})`,
+      'font-size:13px; background:lightgreen; color:green;',
+    );
     // 写回 missions
     const allMissions = readMissions();
     writeMissions([...allMissions, mission]);
-    // 更新所有队员：isExploring=true, exploringLocationId, returnDay, returnPeriodIndex
+    // 2026-06-19 加：Plan 17 - 计算阶段时间
+    //   - preparingEnd：下一个 advance（preparing 1 回合）
+    //   - scavengingEnd：start + duration - 1（duration - 1 回合，**因**为**有** preparing **占**了** 1 回**合**）
+    //   - mission.returnDay 已**是** start + duration（**包**含** preparing）
+    // 算**法**：
+    // 2026-06-19 修：scavenging 阶**段**是** duration 个 advance，**所**以** scavengingEnd = start + duration
+    //   - duration=2 → scavengingEnd = (1, 0) + 2 = (1, 2)
+    //   - advance 1: preparing → scavenging
+    //   - advance 2: scavenging 继**续**（** ctx.next = (1, 2) ≥ scavengingEnd (1, 2) → 'scavenging' → null）
+    //   错**误**！** advance 2 触**发** 'scavenging' → null，**这**意**味**着** scavenging 只**有** 1 **个** advance
+    //   正**确**：scavengingEnd = start + duration = (1, 2) 而**是** start + duration + 1 = (1, 3)
+    //   advance 2: ctx.next = (1, 2) < (1, 3) → 仍**然** 'scavenging'
+    //   advance 3: ctx.next = (1, 3) ≥ (1, 3) → 'scavenging' → null（** mission **结**算**）
+    // 2026-06-19 修：calcReturnTime(..., duration + 1)
+    const preparingEnd = calcReturnTime(currentDay, currentPeriodIndex, 1);
+    const scavengingEnd = calcReturnTime(currentDay, currentPeriodIndex, location.explorationTime + 1);
+    // 更新所有队员：isExploring=true, missionPhase='preparing', 阶段时间
     const partySet = new Set(partyIds);
     const updatedChars = characters.map(c => {
       if (!partySet.has(c.id)) return c;
@@ -153,6 +173,12 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
         exploringLocationId: location.id,
         returnDay: mission.returnDay,
         returnPeriodIndex: mission.returnPeriodIndex,
+        // 2026-06-19 加：Plan 17 阶段
+        missionPhase: 'preparing' as const,
+        preparingEndDay: preparingEnd.day,
+        preparingEndPeriodIndex: preparingEnd.periodIndex,
+        scavengingEndDay: scavengingEnd.day,
+        scavengingEndPeriodIndex: scavengingEnd.periodIndex,
       };
     });
     stageStateManager.setStageVarAndCommit({
@@ -183,18 +209,22 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
   };
 
   /**
-   * 提前返回（2026-06-09 加：Plan 4）
-   * 玩家主动放弃剩余派遣时间，立即结算（奖励 50%）
+   * 中断派遣（2026-06-19 简化：去掉"返回阶段"）
+   * 玩家在派遣中点"中断"按钮（任务未完成 + 未战败）：
+   * 1. 立即结算（无"返回阶段"）
+   * 2. 奖励：保留之前获取到的物品，但 mission 完**成**奖**励**减**少**（**目**前** buildEarlyReturnMission 是** 50%**）
    *
-   * 流程（2026-06-09 改）：
-   * 1. 显示 ScavengeConfirmModal 确认（不直接弹原生 confirm）
-   * 2. 用户确认 → 调 buildEarlyReturnMission
-   * 3. 应用 outcome
-   * 4. 写回 GameVar
-   * 5. 关闭 location detail modal
-   * 6. **ScavengeMain 监听 missions 变化自动弹 outcome modal**（提前返回的结算）
+   * 流程：
+   * 1. 显示 ScavengeConfirmModal 确认
+   * 2. 用户确认 → 调 buildEarlyReturnMission（**立**即**结**算**）
+   * 3. applyMissionOutcomeToParty（**结**算** + 清**空** phase**）
+   * 4. ScavengeMain 监听 missions 变化，自**动**弹** outcome modal
    */
-  const doReturnEarly = (mission: ReturnType<typeof readMissions>[number]) => {
+  const doReturnHome = (mission: ReturnType<typeof readMissions>[number]) => {
+    console.log(
+      `%c [ScavengeMapDetail/doReturnHome] mission id=${mission.id.slice(0, 6)} status=${mission.status}`,
+      'font-size:13px; background:yellow; color:orange;',
+    );
     // 找队伍
     const partyIds = mission.partyCharacterIds && mission.partyCharacterIds.length > 0
       ? mission.partyCharacterIds
@@ -207,7 +237,7 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
       return;
     }
 
-    // 算 outcome（提前返回模式）
+    // 立即结算（Plan 4 提前返回：奖励 50%）
     const updatedMission = buildEarlyReturnMission(mission, party, location);
 
     // 应用 outcome（更新所有队员）
@@ -225,11 +255,10 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
       value: JSON.stringify(newChars),
     });
 
-    // 关 location detail modal
+    // 关**闭** location detail modal
     setShowCharPicker(false);
     setShowReturnConfirm(false);
     onClose();
-    // 注意：ScavengeMain 监听 missions 变化，会自动弹 outcome modal
   };
 
   const handleReturnEarlyClick = () => {
@@ -504,9 +533,9 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
               <button
                 className={styles.secondaryButton}
                 onClick={handleReturnEarlyClick}
-                title="立即返回（经验 ×50%）"
+                title="回家（需要一个回合，经验 ×50%）"
               >
-                提前返回
+                回家
               </button>
             </div>
           )}
@@ -600,19 +629,20 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
           </div>
         )}
 
-        {/* 2026-06-09 加：提前返回确认 modal（替代 window.confirm） */}
+        {/* 2026-06-19 改：回家确认 modal（需要一个回合） */}
         {activeMissionsAtLocation.length > 0 && (
           <ScavengeConfirmModal
             open={showReturnConfirm}
-            title="提前返回"
+            title="回家"
             message={[
-              `确定立即从【${location.name}】返回安全屋？`,
+              `确定从【${location.name}】返回安全屋？`,
+              '需要**一个回合**才**能**到**达**安**全**屋**',
               '经验 ×50% 折扣（已获得物资全部带回）',
             ]}
-            confirmText="提前返回"
+            confirmText="回家"
             cancelText="继续派遣"
             variant="warning"
-            onConfirm={() => doReturnEarly(activeMissionsAtLocation[0])}
+            onConfirm={() => doReturnHome(activeMissionsAtLocation[0])}
             onCancel={() => setShowReturnConfirm(false)}
           />
         )}

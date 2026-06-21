@@ -165,6 +165,20 @@ export const isItemBroken = (item: InventoryItem): boolean => {
   return item.durability <= 0;
 };
 
+/**
+ * 修复装备耐久度（Plan 19：2026-06-19 加）
+ * @param item 要修复的装备
+ * @returns 实际恢复量
+ */
+export const repairItem = (item: InventoryItem): number => {
+  if (item.durability === undefined) return 0;
+  const max = getItemMaxDurability(item);
+  if (max === 0) return 0;
+  const before = item.durability;
+  item.durability = max;  // 一次性回满
+  return item.durability - before;
+};
+
 // ============== 未知物品清理（2026-06-07 新增）==============
 
 /**

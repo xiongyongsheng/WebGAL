@@ -18,7 +18,6 @@
 import { useMemo, useState } from 'react';
 import { useStageState } from '@/hooks/useStageState';
 import { WebGAL } from '@/Core/WebGAL';
-import { Icon } from '@iconify/react';
 import {
   computeDisplayLevel,
   getAffinityLevelName,
@@ -27,6 +26,7 @@ import {
   AffinityLevelIndex,
   canLevelUp,
 } from '../ScavengeCharacter/affinityUtils';
+import { IconCard } from '@/UI/Common/IconCard';
 import { ScavengeCharacter } from '../ScavengeCharacter/character';
 import { CHARACTER_TEMPLATES } from '../ScavengeCharacter/characterRoster';
 import { CharacterInteractionMenu } from './CharacterInteractionMenu';
@@ -44,17 +44,7 @@ import {
 import { getRoomFromSceneUrl } from './roomFromScene';
 import styles from './SafehouseCharacterPanel.module.scss';
 
-/** 场景名（用于房间标题）*/
-const SCENE_NAMES: Record<string, string> = {
-  entrance: '安全屋门口',
-  living_room: '客厅',
-  kitchen: '厨房',
-  bathroom: '卫生间',
-  corridor: '二楼走廊',
-  bedroom_main: '主卧',
-  bedroom_second: '次卧',
-  market: '市场',
-};
+// 2026-06-19 删：SCENE_NAMES 改为内部 SCENE_LABELS（移到 ScavengeMain 共用）
 
 /** 解析 characters 列表（容错）*/
 function parseCharacters(raw: unknown): ScavengeCharacter[] {
@@ -74,7 +64,6 @@ export const SafehouseCharacterPanel = () => {
 
   // 每次渲染时直接读 sceneManager（不缓存，确保拿到最新 sceneUrl）
   const sceneUrl = WebGAL.sceneManager?.sceneData?.currentScene?.sceneUrl;
-  const sceneName = sceneUrl?.match(/safehouse[/\\]+(\w+)\.txt$/)?.[1] ?? '';
   const currentRoom = getRoomFromSceneUrl(sceneUrl);
 
   // 读角色数据
@@ -108,28 +97,17 @@ export const SafehouseCharacterPanel = () => {
     return characters.find((c) => c.id === 'player_1') ?? null;
   }, [characters]);
 
-  // 2026-06-09 改：渲染条件 = 场景设了 _room_targets
-  //   之前用 `sceneUrl?.includes('safehouse/')` 限制了 safehouse 场景
-  //   现在 market 等其他场景也设了 _room_targets，要支持
-  //   - 任何场景设了 _room_targets → 渲染底部卡片菜单
-  //   - 没设 → 不渲染
-  const hasRoomTargets = useMemo(() => {
-    return parseSceneTargets(stageState.GameVar['scavenge_room_targets']).length > 0;
-  }, [stageState.GameVar['scavenge_room_targets']]);
-  if (!hasRoomTargets) return null;
+  // 2026-06-19 改：渲染条件 = 当前场景是 known room（safehouse/* 或 market/*）
+  //   之前用 `scavenge_room_targets.length > 0` 但**不**清**零**，**所**以**从** market **切**到** scavenge_main **时** UI **还**在**（**因**为** GameVar **还**是** market **设**置**的**值**）
+  //   现在根**据** sceneUrl **判**断**是**否** render**（**更**准**确**）
+  const currentRoomId = getRoomFromSceneUrl(sceneUrl);
+  if (currentRoomId === null) return null;
 
-  const sceneLabel = SCENE_NAMES[sceneName] ?? sceneName;
   const totalCount = characterIds.length + roomTargets.length;
 
   return (
     <div className={styles.safehousePanel}>
-      {/* 房间标题 */}
-      <div className={styles.roomIndicator}>
-        📍 {sceneLabel}
-        <span className={styles.roomBadge}>
-          {totalCount}项
-        </span>
-      </div>
+      {/* 2026-06-19 改：去掉上方场景名称框，直接横排卡片 */}
 
       {/* 角色卡片（friend / npc） */}
       {charactersInScene.map((char) => {
@@ -140,10 +118,27 @@ export const SafehouseCharacterPanel = () => {
         const levelColor = getAffinityLevelColor(level);
         const levelIcon = getAffinityLevelIcon(level);
 
+        // 2026-06-19 重构：用 IconCard 统一角色卡片样式
         return (
-          <div
+          <IconCard
             key={char.id}
-            className={styles.characterCard}
+            char={char.name.charAt(0)}
+            title={char.name}
+            subtitle={
+              template.isMerchant ? (
+                <span style={{ background: 'rgba(251,191,36,0.2)', color: '#fbbf24', padding: '2px 8px', borderRadius: '10px' }}>
+                  商人
+                </span>
+              ) : (
+                <>
+                  <span style={{ color: levelColor }}>{levelIcon}</span>
+                  <span style={{ background: `${levelColor}30`, color: levelColor, padding: '2px 8px', borderRadius: '10px' }}>
+                    {levelName}
+                  </span>
+                  {canLevelUp(char) && <span style={{ color: '#fbbf24' }} title="可升阶">⚠</span>}
+                </>
+              )
+            }
             onClick={() => {
               if (template.isMerchant) {
                 setMerchantOpened(char);
@@ -151,40 +146,21 @@ export const SafehouseCharacterPanel = () => {
                 setOpenedCharacter(char);
               }
             }}
-            title={template.isMerchant
+            hint={template.isMerchant
               ? `${char.name} · 商人（点此交易）`
               : `${char.name} · 好感等级：${levelName}`}
-          >
-            <div className={`${styles.avatar} ${styles.avatarPlaceholder}`}>
-              {char.name.charAt(0)}
-            </div>
-            <div className={styles.name}>{char.name}</div>
-            <div className={styles.affinityRow}>
-              {template.isMerchant ? (
-                <span className={styles.affinityLevel} style={{ background: 'rgba(251,191,36,0.2)', color: '#fbbf24' }}>
-                  商人
-                </span>
-              ) : (
-                <>
-                  <span style={{ color: levelColor }}>{levelIcon}</span>
-                  <span className={styles.affinityLevel} style={{ background: `${levelColor}30`, color: levelColor }}>
-                    {levelName}
-                  </span>
-                  {canLevelUp(char) && <span style={{ color: '#fbbf24' }} title="可升阶">⚠</span>}
-                </>
-              )}
-            </div>
-          </div>
+          />
         );
       })}
 
       {/* 房间入口卡片（去 XX / 离开） */}
       {roomTargets.map((room, idx) => (
-        <div
+        <IconCard
           key={`${room.kind}-${room.id ?? idx}`}
-          className={`${styles.roomEntryCard} ${room.kind === 'exit' ? styles.exitCard : ''}`}
+          variant={room.kind === 'exit' ? 'exit' : 'default'}
+          icon={room.icon ?? (room.kind === 'exit' ? 'material-symbols:logout' : 'material-symbols:door-back')}
+          title={room.label}
           onClick={() => {
-            // 切换场景（2026-06-09 修：加 ./game/scene/ 前缀，否则 fetch 拿到 HTML fallback）
             const sceneUrl = room.scene.startsWith('./game/scene/') ? room.scene : `./game/scene/${room.scene}`;
             const changeSceneMod = (window as any).__changeScene__;
             if (changeSceneMod) {
@@ -195,13 +171,7 @@ export const SafehouseCharacterPanel = () => {
               });
             }
           }}
-          title={room.label}
-        >
-          <div className={styles.roomEntryIcon}>
-            <Icon icon={room.icon ?? (room.kind === 'exit' ? 'material-symbols:logout' : 'material-symbols:door-open')} />
-          </div>
-          <div className={styles.roomEntryLabel}>{room.label}</div>
-        </div>
+        />
       ))}
 
       {/* 空状态 */}

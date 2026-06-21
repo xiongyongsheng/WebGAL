@@ -49,6 +49,19 @@ import checkCircleOutline from '@iconify-icons/material-symbols/check-circle-out
 import build from '@iconify-icons/material-symbols/build';
 import deleteOutline from '@iconify-icons/material-symbols/delete-outline';
 import questionMark from '@iconify-icons/material-symbols/question-mark';
+import kingBed from '@iconify-icons/material-symbols/king-bed';
+import bed from '@iconify-icons/material-symbols/bed';
+import kitchen from '@iconify-icons/material-symbols/kitchen';
+import bathOutdoor from '@iconify-icons/material-symbols/bath-outdoor';
+import chair from '@iconify-icons/material-symbols/chair';
+import stairs from '@iconify-icons/material-symbols/stairs';
+import doorBack from '@iconify-icons/material-symbols/door-back';
+import logout from '@iconify-icons/material-symbols/logout';
+import exitToApp from '@iconify-icons/material-symbols/exit-to-app';
+import doorFront from '@iconify-icons/material-symbols/door-front';
+import home from '@iconify-icons/material-symbols/home';
+import bathroom from '@iconify-icons/material-symbols/bathroom';
+import bedOutline from '@iconify-icons/material-symbols/bed-outline';
 
 // 地图/仓库/时间控件图标
 import locationOn from '@iconify-icons/material-symbols/location-on';
@@ -103,6 +116,19 @@ const materialSymbolsCollection = {
     'check-circle-outline': checkCircleOutline,
     'delete-outline': deleteOutline,
     'question-mark': questionMark,
+    'king-bed': kingBed,
+    'bed': bed,
+    'bed-outline': bedOutline,
+    'kitchen': kitchen,
+    'bathroom': bathroom,
+    'bath-outdoor': bathOutdoor,
+    'chair': chair,
+    'home': home,
+    'stairs': stairs,
+    'door-back': doorBack,
+    'door-front': doorFront,
+    'logout': logout,
+    'exit-to-app': exitToApp,
     'location-on': locationOn,
     'inventory': inventory,
     'schedule': schedule,

@@ -115,6 +115,18 @@ export interface CharacterTemplate {
    *  例：'living_room' / 'bedroom_main' / 'corridor'
    */
   homeRoom: string;
+  // ============== 物品偏好系统（M2 阶段，2026-06-21 加）==============
+  /**
+   * 角色对物品分类的偏好权重（M2 阶段用于推荐分配）
+   * - key: ItemCategory（'food' | 'medicine' | 'weapon' | 'armor' | ...）
+   * - value: 权重（0 = 无感；正数 = 偏好；负数 = 不喜欢）
+   *
+   * 注：
+   * - 这里是**基础**偏好，反映角色性格（如医生喜欢医疗、战士喜欢武器）
+   * - 不随状态变化（"当前需求"是另一套机制，由 computeCharacterNeeds 算）
+   * - 缺省 = 0（中性）
+   */
+  preferences?: Partial<Record<'food' | 'drink' | 'medicine' | 'sanity' | 'weapon' | 'armor' | 'tool' | 'material' | 'quest' | 'other', number>>;
   // ============== 商人系统（2026-06-09 加，可选）==============
   /** 是否是商人（true = 该角色是商人，可交易）*/
   isMerchant?: boolean;
@@ -194,6 +206,14 @@ export const CHARACTER_TEMPLATES: Record<string, CharacterTemplate> = {
     chatAccessMap: {},
     homeRoom: 'living_room',
     faction: 'ally',  // 2026-06-09 加：主角是友方
+    // 2026-06-21 加：M2 偏好（主角偏好战斗 + 实用工具）
+    preferences: {
+      weapon: 5,  // 主角喜欢武器
+      armor: 4,   // 护甲也喜欢
+      tool: 3,    // 工具还行
+      food: 1,    // 食物不讨厌
+      medicine: 1,
+    },
   },
 
   // ============== 露西（剧情获得）==============
@@ -243,6 +263,15 @@ export const CHARACTER_TEMPLATES: Record<string, CharacterTemplate> = {
     chatAccessMap: { casual: 0, personal: 1, secret: 2 },
     homeRoom: 'living_room',  // 露西住在客厅
     faction: 'ally',  // 2026-06-09 加：露西是友方（剧情加入队伍）
+    // 2026-06-21 加：M2 偏好（露西偏好潜行/医疗）
+    preferences: {
+      tool: 5,        // 工具（撬锁、医疗工具等）
+      medicine: 4,    // 医疗
+      food: 2,        // 食物
+      drink: 2,       // 饮水
+      weapon: -2,     // 不太喜欢重武器（潜行流）
+      armor: -1,      // 不喜欢重甲（影响潜行）
+    },
   },
 
   // ============== 商人：维克斯（中立角色，2026-06-09 加）==============
