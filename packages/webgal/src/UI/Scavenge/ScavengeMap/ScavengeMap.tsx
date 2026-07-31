@@ -187,7 +187,7 @@ export const ScavengeMap = ({ onLocationSelect, focusLocationId }: ScavengeMapPr
               style={{
                 left: `${screenX}px`,
                 top: `${screenY}px`,
-                '--region-color': location.regionColor,
+                '--region-color': location.categoryColor,
               } as React.CSSProperties}
               onClick={() => handleLocationClick(location)}
               // 2026-06-09 加：阻止 marker 上的 pointerdown 冒泡到 container（避免拖动冲突）

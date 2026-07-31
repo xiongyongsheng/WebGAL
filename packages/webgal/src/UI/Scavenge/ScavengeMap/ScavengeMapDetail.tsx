@@ -7,7 +7,7 @@ import locationOn from '@iconify-icons/material-symbols/location-on';
 import inventory from '@iconify-icons/material-symbols/inventory';
 import checkBox from '@iconify-icons/material-symbols/check-box-outline';
 import checkBoxOutlineBlank from '@iconify-icons/material-symbols/check-box-outline-blank';
-import { ScavengeLocationItem, getRegionDisplayName, getDangerStars } from "./locations";
+import { ScavengeLocationItem, getCategoryDisplayName, getDangerStars } from "./locations";
 import { getItemName } from "../ScavengeItems/items";
 import { ENEMY_TEMPLATES } from "../ScavengeEnemies/enemies";
 import {
@@ -16,7 +16,7 @@ import {
   getTotalEnemyCount,
   getTotalLootCount,
 } from "./locationRefresh";
-import { ScavengeCharacter, normalizeCharacter, getCharacterStatusText } from '../ScavengeCharacter/character';
+import { ScavengeCharacter, normalizeCharacter, getCharacterStatusText, isCharacterDispatchable } from '../ScavengeCharacter/character';
 import { CHARACTER_TEMPLATES } from '../ScavengeCharacter/characterRoster';
 import { canDispatch } from '../ScavengeCharacter/traits';
 import { startMission, readMissions, writeMissions, MAX_PARTY_SIZE, applyMissionOutcomeToParty, calcReturnTime, buildEarlyReturnMission } from '../ScavengeMissions/missions';
@@ -88,14 +88,13 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
   const currentDay = (stageState.GameVar['current_day'] as number) ?? 1;
   const currentPeriodIndex = (stageState.GameVar['current_period_index'] as number) ?? 0;
 
-  // 可派遣角色：HP>0, !isExploring, 体力>=20
-  // 2026-06-09 改：按阵营过滤（只 ally 可派遣）
-  //   - ally（友方/队伍成员）：可派遣
-  //   - neutral（中立，如商人）：不可派遣（独立 NPC）
-  //   - enemy（敌对）：不可派遣
-  // 2026-06-09 改：用 canDispatch 检查数值（任一项归0 → 不能派遣）
+  // 可派遣角色：HP>0, 体力>=20, missionPhase === null
+  // 2026-06-21 改：调 isCharacterDispatchable（**系**统**单**一**真**相**源**）
+  //   - missionPhase !== null → **工**作**相**斥**（**建**造**/**修**补**/**拾**荒**都**不**能**同**时**做**）
+  //   - 阵营 ally 才**可**派**遣**（**商**人**等**中**立**不**算**）
+  //   - canDispatch 检**查**数**值**（HP/饱**食**/**饮**水**/**精**神**/**体**力** **任**一**归**零** **不**能**派**遣**）
   const dispatchable = characters.filter(c => {
-    if (c.isExploring) return false;
+    if (!isCharacterDispatchable(c).canDispatch) return false;
     if (c.stamina < 20) return false;
     const template = CHARACTER_TEMPLATES[c.id];
     if (!template) return false;
@@ -117,15 +116,19 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
       setError(`队伍上限 ${MAX_PARTY_SIZE} 人`);
       return;
     }
-    // 检查每个角色
+    // 检查每个角色（系统层最终防线，2026-06-21 加）
     for (const id of partyIds) {
       const char = characters.find(c => c.id === id);
       if (!char) {
         setError(`角色 ${id} 不存在`);
         return;
       }
-      if (char.isExploring) {
-        setError(`${char.name} 正在执行其他任务`);
+      // 2026-06-21 加：isCharacterDispatchable 系统层硬约束（**工**作**相**斥**）
+      //   - 即便 UI 列表漏过滤，这里也会阻**止**
+      //   - 防止玩家绕过 UI 直接调 startMission
+      const dispatchableCheck = isCharacterDispatchable(char);
+      if (!dispatchableCheck.canDispatch) {
+        setError(`${char.name}：${dispatchableCheck.reason}`);
         return;
       }
       if (char.hp <= 0) {
@@ -296,7 +299,7 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
           <div className={styles.titleGroup}>
             <Icon
               icon={locationOn}
-              style={{ color: location.regionColor }}
+              style={{ color: location.categoryColor }}
               className={styles.titleIcon}
             />
             <h2 className={styles.title}>{location.name}</h2>
@@ -331,8 +334,8 @@ export const ScavengeMapDetail = ({ location, onClose }: ScavengeMapDetailProps)
           <div className={styles.sectionTitle}>基本信息</div>
           <div className={styles.infoGrid}>
             <div className={styles.infoItem}>
-              <span className={styles.infoLabel}>区域</span>
-              <span className={styles.infoValue}>{getRegionDisplayName(location.region)}</span>
+              <span className={styles.infoLabel}>类型</span>
+              <span className={styles.infoValue}>{getCategoryDisplayName(location.category)}</span>
             </div>
             <div className={styles.infoItem}>
               <span className={styles.infoLabel}>危险等级</span>

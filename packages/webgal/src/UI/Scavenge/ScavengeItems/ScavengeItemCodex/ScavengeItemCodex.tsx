@@ -13,9 +13,11 @@ import {
   ALL_ITEMS, Item, ItemType, ItemRarity,
   ConsumableItem, EquipmentItem, MaterialItem, QuestItem,
   RARITY_COLORS, RARITY_NAMES,
-  getItemIcon, getItemName,
+  getItemIcon, getItemName, getItemById,
 } from '../items';
-import { InventoryItem } from '../inventory';
+import { InventoryItem, addToInventory, generateInstanceId } from '../inventory';
+import { getWarehouse, setWarehouse } from '../../ScavengeCharacter/ScavengeCharacterPanel/ScavengeCharacterPanel.stage';
+import { WORKBENCH_BLUEPRINTS, CRAFT_BLUEPRINTS } from '../../ScavengeCrafting/blueprints';
 import styles from './ScavengeItemCodex.module.scss';
 
 /** 类型标签 */
@@ -124,18 +126,54 @@ const ConsumableDetails = ({ item }: { item: ConsumableItem }) => (
 
 export const ScavengeItemCodex = ({ onClose }: ScavengeItemCodexProps) => {
   const [tab, setTab] = useState<'all' | ItemType>('all');
+  // 2026-06-21 加：添加成功的 toast 列表（itemId + 数量）
+  const [addedToast, setAddedToast] = useState<{ itemId: string; name: string } | null>(null);
+
+  // 2026-06-21 加：点 + 按钮 → 加 1 个到仓库
+  //   - 蓝图**也**当**普**通物**品** addToInventory（**不**消耗，可买卖）
+  const handleAddToWarehouse = (item: Item) => {
+    const warehouse = getWarehouse();
+    const newItem: InventoryItem = {
+      itemId: item.id,
+      quantity: 1,
+      instanceId: generateInstanceId(),
+    };
+    // 仓库的 addToInventory 可能返回 (InventoryItem | null)[]，但仓库是 InventoryItem[]
+    const newWarehouse = addToInventory(warehouse, newItem).filter((i): i is InventoryItem => i !== null);
+    setWarehouse(newWarehouse);
+    setAddedToast({ itemId: item.id, name: getItemName(item.id) });
+    setTimeout(() => setAddedToast(null), 1500);
+  };
+
+  // 2026-06-21 加：合并蓝图（**作**为材料类伪 Item 显**示**）
+  //   - 蓝图**不**在 ALL_ITEMS_MAP 里（**避**免**与** craftingStore **循环**）
+  //   - 这**里**调 getItemById 走 items.ts 的伪 Item **工**厂
+  const allBlueprintItems = useMemo(() => {
+    const ids = [
+      ...Object.values(WORKBENCH_BLUEPRINTS).map(bp => bp.id),
+      ...Object.values(CRAFT_BLUEPRINTS).map(bp => bp.id),
+    ];
+    return ids
+      .map(id => getItemById(id))
+      .filter((i): i is Item => i !== undefined);
+  }, []);
+
+  // 2026-06-21 加：合并显**示**（**所**有物品 + 蓝图）
+  const allDisplayItems = useMemo(() => {
+    return [...ALL_ITEMS, ...allBlueprintItems];
+  }, [allBlueprintItems]);
 
   const filtered = useMemo(
-    () => tab === 'all' ? ALL_ITEMS : ALL_ITEMS.filter(i => i.type === tab),
-    [tab],
+    () => tab === 'all' ? allDisplayItems : allDisplayItems.filter(i => i.type === tab),
+    [tab, allDisplayItems],
   );
 
-  // 类型统计
+  // 2026-06-21 改：统**计**包**含**蓝图
   const counts: Record<'all' | ItemType, number> = useMemo(() => {
-    const result = { all: ALL_ITEMS.length, consumable: 0, material: 0, equipment: 0, quest: 0 };
-    for (const i of ALL_ITEMS) result[i.type] += 1;
+    const result = { all: allDisplayItems.length, consumable: 0, material: 0, equipment: 0, quest: 0 };
+    for (const i of allDisplayItems) result[i.type] += 1;
     return result;
-  }, []);
+  }, [allDisplayItems]);
 
   return (
     <div className={styles.overlay} onClick={onClose}>
@@ -146,7 +184,7 @@ export const ScavengeItemCodex = ({ onClose }: ScavengeItemCodexProps) => {
             <Icon icon={inventory} className={styles.titleIcon} />
             物品图鉴
           </h2>
-          <span className={styles.codexHint}>共 {ALL_ITEMS.length} 种物品</span>
+          <span className={styles.codexHint}>共 {allDisplayItems.length} 种物品（含 {allBlueprintItems.length} 个图纸）</span>
           <button className={styles.closeBtn} onClick={onClose} title="关闭">
             <Icon icon="material-symbols:close" />
           </button>
@@ -168,6 +206,13 @@ export const ScavengeItemCodex = ({ onClose }: ScavengeItemCodexProps) => {
 
         {/* 物品卡片网格 */}
         <div className={styles.itemGrid}>
+          {/* 2026-06-21 加：添加成功 toast */}
+          {addedToast && (
+            <div className={styles.toast}>
+              <Icon icon="material-symbols:check-circle" />
+              <span>已添加 1 个 {addedToast.name} 到仓库</span>
+            </div>
+          )}
           {filtered.map((item: Item) => {
             const rarityColor = RARITY_COLORS[item.rarity];
             return (
@@ -190,6 +235,17 @@ export const ScavengeItemCodex = ({ onClose }: ScavengeItemCodexProps) => {
                     >
                       {RARITY_NAMES[item.rarity]}
                     </span>
+                    {/* 2026-06-21 加：+ 按钮（点击加 1 个到仓库） */}
+                    <button
+                      className={styles.addBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddToWarehouse(item);
+                      }}
+                      title="加 1 个到仓库"
+                    >
+                      <Icon icon="material-symbols:add" />
+                    </button>
                   </div>
                 </div>
 

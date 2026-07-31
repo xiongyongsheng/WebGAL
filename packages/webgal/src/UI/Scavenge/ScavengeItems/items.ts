@@ -539,6 +539,31 @@ export const MATERIAL_ITEMS: MaterialItem[] = [
     weight: 0.8,
     icon: 'material-symbols:park-outline',
   },
+  // 2026-06-21 加：建造系统材料（之前蓝图需要但没注册）
+  {
+    id: 'material_screws',
+    name: '螺丝',
+    type: 'material',
+    rarity: 'common',
+    description: '金属螺丝，连接固定用。',
+    stackable: true,
+    maxStack: 999,
+    price: 5,
+    weight: 0.05,
+    icon: 'material-symbols:hardware',
+  },
+  {
+    id: 'material_brick',
+    name: '砖块',
+    type: 'material',
+    rarity: 'common',
+    description: '建筑用砖块。',
+    stackable: true,
+    maxStack: 999,
+    price: 2,
+    weight: 1.5,
+    icon: 'material-symbols:brick-outline',
+  },
   {
     id: 'material_fuel',
     name: '燃料',
@@ -1314,7 +1339,46 @@ export const ALL_ITEMS: Item[] = Object.values(ALL_ITEMS_MAP);
  * @returns 物品数据，如果不存在返回 undefined
  */
 export const getItemById = (itemId: string): Item | undefined => {
+  // 2026-06-21 加：蓝图（**不**在 ALL_ITEMS_MAP 里，**但** getItemById **要**返**回**一个伪 Item 让 UI 能显示）
+  if (itemId.startsWith('bp_') || itemId.startsWith('craft_')) {
+    return getBlueprintAsItem(itemId);
+  }
   return ALL_ITEMS_MAP[itemId];
+};
+
+/**
+ * 蓝图 → 伪 Item（2026-06-21 加）
+ *   - 蓝图**不**进 ALL_ITEMS_MAP（**避**免**与** craftingStore **循环**依**赖**）
+ *   - 但**为**了 getItemById / getItemName / getItemIcon **能**返**回**合理值，构**造**伪 Item
+ */
+const getBlueprintAsItem = (itemId: string): Item | undefined => {
+  // 蓝图名**表**（与 blueprints.ts **同**步，**不** import craftingStore **避**免**循环**）
+  const BLUEPRINT_NAMES: Record<string, string> = {
+    bp_melee_workbench: '近战武器工作台（蓝图）',
+    bp_armor_workbench: '护甲工作台（蓝图）',
+    bp_cooking_workbench: '烹饪工作台（蓝图）',
+    craft_machete: '砍刀（制作图）',
+    craft_baseball_bat: '棒球棍（制作图）',
+    craft_dagger: '匕首（制作图）',
+    craft_leather_armor: '皮甲（制作图）',
+    craft_vest: '防刺背心（制作图）',
+    craft_roasted_meat: '烤肉（配方）',
+    craft_stew: '炖汤（配方）',
+    craft_bandage: '绷带（配方）',
+  };
+  const name = BLUEPRINT_NAMES[itemId];
+  if (!name) return undefined;
+  return {
+    id: itemId,
+    name,
+    description: '建造/制作图纸，可重复使用。',
+    icon: itemId.startsWith('bp_') ? 'material-symbols:carpenter' : 'material-symbols:handyman',
+    type: 'material',  // 借**用** material（**不**需要 effects 字段）
+    rarity: 'rare',
+    weight: 0.1,
+    stackable: true,
+    maxStack: 99,
+  };
 };
 
 /**
@@ -1323,6 +1387,9 @@ export const getItemById = (itemId: string): Item | undefined => {
  * @returns 图标名称
  */
 export const getItemIcon = (itemId: string): string => {
+  // 2026-06-21 加：蓝图快捷
+  if (itemId.startsWith('bp_')) return 'material-symbols:carpenter';
+  if (itemId.startsWith('craft_')) return 'material-symbols:handyman';
   const item = getItemById(itemId);
   return item?.icon ?? 'material-symbols:question-mark';
 };
@@ -1333,6 +1400,11 @@ export const getItemIcon = (itemId: string): string => {
  * @returns 物品名称
  */
 export const getItemName = (itemId: string): string => {
+  // 2026-06-21 加：蓝图快捷
+  if (itemId.startsWith('bp_') || itemId.startsWith('craft_')) {
+    const bpItem = getBlueprintAsItem(itemId);
+    return bpItem?.name ?? '未知蓝图';
+  }
   const item = getItemById(itemId);
   return item?.name ?? '未知物品';
 };

@@ -47,7 +47,7 @@ import {
 import { ScavengeCharacter, normalizeCharacter } from '../../../UI/Scavenge/ScavengeCharacter/character';
 import { advanceMissionPhaseOfChars } from '../../../UI/Scavenge/ScavengeCharacter/missionPhase';
 import { generateInstanceId, addToInventory, InventoryItem } from '../../../UI/Scavenge/ScavengeItems/inventory';
-// 2026-06-21 改：不再调 tryAddItemsToParty（物品全部入 tempLoot，让玩家 modal 分配）
+import { tryAddToTempLoot } from '../../../UI/Scavenge/ScavengeMissions/partyLoot';
 
 export class MissionSystem implements ISystem {
   readonly id = 'mission';
@@ -178,18 +178,23 @@ export class MissionSystem implements ISystem {
         missionOver = result.missionOver;
         // 2026-06-21 改：所有拾荒获得的物品**全部**入 tempLoot，**不**直接进角色背包
         //   - 设计：玩家自主分配（任务完成后弹 modal 手动选）
-        //   - 拾荒期间不再"满了换人"自动入队，避免 modal 永远不弹
-        //   - 注：addToInventory 返回 (InventoryItem | null)[]，这里用宽类型累加
-        let updatedTempLoot: (InventoryItem | null)[] = m.tempLoot ?? [];
+        //   - 2026-06-21 加：**超重直接丢弃**（基于队伍总负重，详见 partyLoot.ts tryAddToTempLoot）
+        let updatedTempLoot: InventoryItem[] = m.tempLoot ?? [];
         if (encounter.itemsGained && encounter.itemsGained.length > 0) {
           for (const item of encounter.itemsGained) {
-            updatedTempLoot = addToInventory(updatedTempLoot, item);
+            const result2 = tryAddToTempLoot(updatedParty, updatedTempLoot, item);
+            updatedTempLoot = result2.updatedBackpack;
+            if (result2.dropped.length > 0) {
+              logger.info(
+                `[派遣/丢弃] ${result2.dropped.map(i => i.itemId).join(', ')} 超重（队伍总负重不足），直接丢弃`,
+              );
+            }
           }
         }
         mWithEncounters = {
           ...m,
           encounters: [...(m.encounters ?? []), encounter],
-          tempLoot: updatedTempLoot.filter((i): i is InventoryItem => i !== null),
+          tempLoot: updatedTempLoot,
         };
         for (const upd of updatedParty) {
           finalChars = finalChars.map(c => c.id === upd.id ? upd : c);
@@ -201,10 +206,17 @@ export class MissionSystem implements ISystem {
         updatedParty = result.updatedParty;
         missionOver = result.missionOver;
         // 2026-06-21 改：所有物品入 tempLoot（不直接进角色背包）
-        let updatedTempLoot: (InventoryItem | null)[] = m.tempLoot ?? [];
+        // 2026-06-21 加：超重直接丢弃
+        let updatedTempLoot: InventoryItem[] = m.tempLoot ?? [];
         if (encounter.itemsGained && encounter.itemsGained.length > 0) {
           for (const item of encounter.itemsGained) {
-            updatedTempLoot = addToInventory(updatedTempLoot, item);
+            const result2 = tryAddToTempLoot(updatedParty, updatedTempLoot, item);
+            updatedTempLoot = result2.updatedBackpack;
+            if (result2.dropped.length > 0) {
+              logger.info(
+                `[派遣/丢弃] ${result2.dropped.map(i => i.itemId).join(', ')} 超重（队伍总负重不足），直接丢弃`,
+              );
+            }
           }
         }
         // 把 updatedParty 的所有队员写回 finalChars
@@ -215,7 +227,7 @@ export class MissionSystem implements ISystem {
         mWithEncounters = {
           ...m,
           encounters: [...m.encounters, encounter],
-          tempLoot: updatedTempLoot.filter((i): i is InventoryItem => i !== null),
+          tempLoot: updatedTempLoot,
         };
       }
 

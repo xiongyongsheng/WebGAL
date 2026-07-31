@@ -22,6 +22,7 @@ import type { TimeHookContext } from '../time/timeEvents';
 import { ScavengeCharacter } from '../../../UI/Scavenge/ScavengeCharacter/character';
 import { advanceMissionPhaseOfChars } from '../../../UI/Scavenge/ScavengeCharacter/missionPhase';
 import { applyPeriodEffectsToCharacters } from '../../../UI/Scavenge/ScavengeTimeControl/characterTimeEffects';
+import { applyCraftingResults, applyDailyStructureDamage } from '../../../UI/Scavenge/ScavengeCrafting/craftingActions';
 
 export class CharacterSystem implements ISystem {
   readonly id = 'character';

@@ -1,12 +1,24 @@
 /**
  * 拾荒系统 - 角色管理模块
  * 角色数据定义和操作
+ *
+ * ⚠️ 重要约定（2026-06-21 加）：
+ * - 加新 `missionPhase` 状态时，必须**同时**更新：
+ *   1. `ScavengeCharacter.missionPhase` 的类型联合
+ *   2. `getCharacterStatusText()` 函数（漏了 = UI 显示"待命"bug）
+ *   3. `getCharacterStatusDetail()` 函数（剩余回合等详情）
+ *   4. `missionPhase.ts` 的 `advanceMissionPhaseOfChars` 推进逻辑
+ * - 状态完整列表：null / preparing / scavenging / crafting / repairing
+ *
+ * 经验教训：2026-06-21 加 crafting/repairing 状态时漏改 getCharacterStatusText，
+ *   导致角色建造工作台后面板仍显示"空闲"，用户多次反馈后才定位。
  */
 
 import { InventoryItem, migrateInventory, compactInventorySlots, filterUnknownItems } from '../ScavengeItems/inventory';
 import { getItemById, ArmorSlot } from '../ScavengeItems/items';
 import { validateCharacter, formatWarnings } from './characterValidate';
 import { logger } from '@/Core/util/logger';
+import { WORKBENCH_BLUEPRINTS, CRAFT_BLUEPRINTS } from '../ScavengeCrafting/blueprints';
 
 /** 主属性（升级时自动 +2 的属性） */
 export type MainStat = 'str' | 'agi' | 'end' | 'int';
@@ -92,7 +104,7 @@ export interface ScavengeCharacter {
    * - 'returning': 返**回**阶**段**（1 回**合**）—— **不**遇**敌** / **扣**属**性**
    * - null: 空**闲**（**不**在**派**遣**中**）**
    */
-  missionPhase?: 'preparing' | 'scavenging' | 'returning' | null;
+  missionPhase?: 'preparing' | 'scavenging' | 'returning' | 'crafting' | 'repairing' | null;
   /**
    * 2026-06-19 加：Plan 17 - 准**备**阶**段**结**束**时**间**（下一**个** advance 触**发** phase → 'scavenging'）**
    */
@@ -103,6 +115,22 @@ export interface ScavengeCharacter {
    */
   scavengingEndDay?: number;
   scavengingEndPeriodIndex?: number;
+  /**
+   * 2026-06-21 加：工作台制作结**束**时**间**（下一**个** advance 触**发** phase → null + 产出物品）**
+   */
+  craftingEndDay?: number;
+  craftingEndPeriodIndex?: number;
+  /** 2026-06-21 加：制作的工作台 ID（crafing 阶段用）*/
+  craftingWorkbenchId?: string;
+  /** 2026-06-21 加：正在制作的蓝图 ID */
+  craftingBlueprintId?: string;
+  /**
+   * 2026-06-21 加：门窗修补结**束**时**间**（下一**个** advance 触**发** phase → null + HP 恢复）**
+   */
+  repairingEndDay?: number;
+  repairingEndPeriodIndex?: number;
+  /** 2026-06-21 加：修补的**目**标**（'door' | 'window'）*/
+  repairingTarget?: 'door' | 'window';
   /**
    * 角色持有的特性 ID 列表（2026-06-09 加，引用 traits.ts 里定义）
    * 效果在 computeDerivedStats 实时累加到基础属性/战斗公式上
@@ -203,6 +231,7 @@ export const DEFAULT_CHARACTER: ScavengeCharacter = {
 
 /**
  * 角色状态显示辅助函数
+ * 2026-06-21 改：加 crafting/repairing 显示
  */
 export const getCharacterStatusText = (character: ScavengeCharacter): string => {
   // 2026-06-19 改：Plan 17 - 阶段显示
@@ -211,6 +240,12 @@ export const getCharacterStatusText = (character: ScavengeCharacter): string => 
   }
   if (character.missionPhase === 'scavenging') {
     return '拾荒中';
+  }
+  if (character.missionPhase === 'crafting') {
+    return '建造/制作中';
+  }
+  if (character.missionPhase === 'repairing') {
+    return '修补中';
   }
   if (character.isExploring) {
     return '派遣中';
@@ -226,6 +261,74 @@ export const getCharacterStatusText = (character: ScavengeCharacter): string => 
     return '需要物资';
   }
   return '待命';
+};
+
+/**
+ * 检查角色是否可派遣（系统层硬约束，2026-06-21 加）
+ *
+ * 规则（**工**作**相**斥**）**：
+ * - missionPhase 必须为 null（**没**在做别**的**事**）
+ *   - preparing / scavenging / crafting / repairing 都**阻**止
+ *   - 这是**系**统**层**面**硬**约**束**，**不**能**被** UI **绕**过**
+ * - **不**在 exploring 状**态**（老**字**段**兼**容**）
+ *
+ * **这**是系**统**单**一**真**相**源**（single source of truth）
+ * - UI **显**示**用**这**个**判**断**（**不**要**自**己**重**复**写**判**断**）
+ * - **派**遣**创**建** mission **前**也**用**这**个**判**断**（**最**终**防**线**）
+ */
+export const isCharacterDispatchable = (
+  character: ScavengeCharacter,
+): { canDispatch: boolean; reason?: string } => {
+  // 工作相斥：任何 missionPhase 都阻**止**派**遣**
+  if (character.missionPhase !== null && character.missionPhase !== undefined) {
+    const phaseText: Record<NonNullable<ScavengeCharacter['missionPhase']>, string> = {
+      preparing: '准备中',
+      scavenging: '拾荒中',
+      crafting: '建造/制作中',
+      repairing: '修补中',
+      returning: '返回中',
+    };
+    return {
+      canDispatch: false,
+      reason: `角色正**在**${phaseText[character.missionPhase]}，**不**可**派**遣`,
+    };
+  }
+  // 老**字**段**兼**容**
+  if (character.isExploring) {
+    return { canDispatch: false, reason: '角色正**在**派**遣**中' };
+  }
+  return { canDispatch: true };
+};
+
+/**
+ * 获取角色状态详细信息（2026-06-21 加）
+ * - 例如"建造中：近战武器工作台（剩 1 回合）"
+ * - null = **没**有**详**细**信**息（用 statusText 即**可**）
+ */
+export const getCharacterStatusDetail = (
+  character: ScavengeCharacter,
+  currentDay: number,
+  currentPeriod: number,
+): string | null => {
+  if (character.missionPhase === 'crafting' && character.craftingEndDay !== undefined && character.craftingEndPeriodIndex !== undefined) {
+    // 计算剩余回合
+    const totalRemaining = (character.craftingEndDay - currentDay) * 4 + (character.craftingEndPeriodIndex - currentPeriod);
+    const remaining = Math.max(0, totalRemaining);
+    // 2026-06-21 改：直**接** import（**避**免 require **在** ES module 中**未**定**义**）
+    //   blueprints.ts **不**引**用** character.ts，**不**会**循**环**依**赖**
+    const blueprintId = character.craftingBlueprintId;
+    const blueprintName = WORKBENCH_BLUEPRINTS[blueprintId as keyof typeof WORKBENCH_BLUEPRINTS]?.name
+      ?? CRAFT_BLUEPRINTS[blueprintId as keyof typeof CRAFT_BLUEPRINTS]?.name
+      ?? blueprintId;
+    return `建造中：${blueprintName}（剩 ${remaining} 回合）`;
+  }
+  if (character.missionPhase === 'repairing' && character.repairingEndDay !== undefined && character.repairingEndPeriodIndex !== undefined) {
+    const totalRemaining = (character.repairingEndDay - currentDay) * 4 + (character.repairingEndPeriodIndex - currentPeriod);
+    const remaining = Math.max(0, totalRemaining);
+    const target = character.repairingTarget === 'door' ? '门' : '窗';
+    return `修补中：${target}（剩 ${remaining} 回合）`;
+  }
+  return null;
 };
 
 /**

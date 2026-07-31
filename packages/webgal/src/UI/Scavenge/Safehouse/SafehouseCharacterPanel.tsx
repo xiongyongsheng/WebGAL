@@ -31,6 +31,7 @@ import { ScavengeCharacter } from '../ScavengeCharacter/character';
 import { CHARACTER_TEMPLATES } from '../ScavengeCharacter/characterRoster';
 import { CharacterInteractionMenu } from './CharacterInteractionMenu';
 import { MerchantTradeMenu } from '../Merchant/MerchantTradeMenu';
+import { CraftingModal } from '../ScavengeCrafting/CraftingModal';
 import {
   SceneTarget,
   RoomTarget,
@@ -66,6 +67,10 @@ export const SafehouseCharacterPanel = () => {
   const sceneUrl = WebGAL.sceneManager?.sceneData?.currentScene?.sceneUrl;
   const currentRoom = getRoomFromSceneUrl(sceneUrl);
 
+  // 当前 day / period（从 stageState 读，给 CraftingModal 用）
+  const currentDay = (stageState.GameVar['current_day'] as number) ?? 1;
+  const currentPeriod = (stageState.GameVar['current_period_index'] as number) ?? 0;
+
   // 读角色数据
   const characters = useMemo(() => {
     return parseCharacters(stageState.GameVar['scavenge_characters']);
@@ -91,6 +96,8 @@ export const SafehouseCharacterPanel = () => {
   // 被点开的角色
   const [openedCharacter, setOpenedCharacter] = useState<ScavengeCharacter | null>(null);
   const [merchantOpened, setMerchantOpened] = useState<ScavengeCharacter | null>(null);
+  // 2026-06-21 加：建造/修补 modal
+  const [craftingOpened, setCraftingOpened] = useState(false);
 
   // 找主角
   const playerCharacter = useMemo(() => {
@@ -181,6 +188,19 @@ export const SafehouseCharacterPanel = () => {
         </div>
       )}
 
+      {/* 2026-06-21 加：工作台/建造/修补 入口（始终在 safehouse 显示） */}
+      <IconCard
+        key="crafting-entry"
+        icon="material-symbols:carpenter"
+        title="工作台"
+        subtitle={<span style={{ color: '#fbbf24' }}>建造 / 制作 / 修补</span>}
+        onClick={() => {
+          console.log('[Safehouse] 工作台 click');
+          setCraftingOpened(true);
+        }}
+        hint="工作台 · 建造工作台 / 制作物品 / 修补门窗"
+      />
+
       {/* 交互菜单 */}
       {openedCharacter && (
         <CharacterInteractionMenu
@@ -195,6 +215,15 @@ export const SafehouseCharacterPanel = () => {
           merchant={merchantOpened}
           player={playerCharacter}
           onClose={() => setMerchantOpened(null)}
+        />
+      )}
+
+      {/* 2026-06-21 加：建造/制作/修补 modal */}
+      {craftingOpened && (
+        <CraftingModal
+          currentDay={currentDay}
+          currentPeriod={currentPeriod}
+          onClose={() => setCraftingOpened(false)}
         />
       )}
     </div>

@@ -17,13 +17,21 @@ MAIN_WF_PATH = "/Users/xiongyongsheng/Documents/ComfyUI/user/default/workflows/�
 OUTPUT_PATH = "/Users/xiongyongsheng/WORKSPACE/OpenWebGal/WebGAL/lore/workflows/Qwen2511_角色6视图生成+主工作流.json"
 
 # ==================== 6 视图定义 ====================
+# 关键改动(v6):3 个全身视图显式要求竖图构图 + 字符填满竖向画框
+# 之前 ref_longest_edge=1216 但 Qwen-Image-Edit 仍继承输入图宽高比 → 输出 1024x608 横图,角色只占中间 1/3
+# 现在 prompt 强制 "vertical portrait orientation, 9:16 aspect ratio",让模型自行按竖图生成
+VERTICAL_FULLBODY_HINT = (
+    "vertical portrait orientation, 9:16 aspect ratio composition, "
+    "character fills the entire vertical frame from head (top) to toe (bottom) with minimal top and bottom margin, "
+    "centered horizontally, full-length vertical framing"
+)
 VIEWS = [
     {"id_suffix": "01_front_fullbody", "name": "正面全身",
-     "instruction": "重新生成这个角色的正面全身站立视图,白底/纯色背景,完整可见头顶到脚底,双臂自然下垂,正对镜头,保持角色所有特征完全一致(面部、服装、身材比例、配件、伤疤等)。character reference sheet style, full body front view, standing, arms relaxed at sides, white background, identical character features, high detail, anime illustration style, 8k"},
+     "instruction": f"重新生成这个角色的正面全身站立视图,白底/纯色背景,完整可见头顶到脚底,双臂自然下垂,正对镜头,保持角色所有特征完全一致(面部、服装、身材比例、配件、伤疤等)。{VERTICAL_FULLBODY_HINT}。character reference sheet style, full body front view, standing, arms relaxed at sides, white background, identical character features, high detail, anime illustration style, 8k"},
     {"id_suffix": "02_side_fullbody", "name": "侧面全身",
-     "instruction": "重新生成这个角色的左侧 90 度侧面全身站立视图,白底/纯色背景,完整可见头顶到脚底,双臂自然下垂,镜头方向为角色左侧,保持角色所有特征完全一致(面部轮廓、发型侧面、服装侧面、配件、伤疤等)。character reference sheet style, full body left side view 90 degrees, standing, arms relaxed at sides, white background, identical character features, high detail, anime illustration style, 8k"},
+     "instruction": f"重新生成这个角色的左侧 90 度侧面全身站立视图,白底/纯色背景,完整可见头顶到脚底,双臂自然下垂,镜头方向为角色左侧,保持角色所有特征完全一致(面部轮廓、发型侧面、服装侧面、配件、伤疤等)。{VERTICAL_FULLBODY_HINT}。character reference sheet style, full body left side view 90 degrees, standing, arms relaxed at sides, white background, identical character features, high detail, anime illustration style, 8k"},
     {"id_suffix": "03_back_fullbody", "name": "背面全身",
-     "instruction": "重新生成这个角色的背面全身站立视图,白底/纯色背景,完整可见头顶到脚底,双臂自然下垂,正对镜头,展示背部、服装背面、发型背面,保持角色所有特征完全一致(身材比例、服装背面、配件、伤疤等)。character reference sheet style, full body back view, standing, arms relaxed at sides, white background, identical character features, high detail, anime illustration style, 8k"},
+     "instruction": f"重新生成这个角色的背面全身站立视图,白底/纯色背景,完整可见头顶到脚底,双臂自然下垂,正对镜头,展示背部、服装背面、发型背面,保持角色所有特征完全一致(身材比例、服装背面、配件、伤疤等)。{VERTICAL_FULLBODY_HINT}。character reference sheet style, full body back view, standing, arms relaxed at sides, white background, identical character features, high detail, anime illustration style, 8k"},
     {"id_suffix": "04_face_front", "name": "脸部正面",
      "instruction": "裁剪并重新生成这个角色的脸部正面特写,白底/纯色背景,展示完整面部表情、双眼、鼻、嘴、皮肤细节、伤疤,正对镜头,保持角色所有特征完全一致(瞳色、发型、刘海、面部标记等)。character reference sheet style, face front close-up portrait, white background, identical character features, high detail, anime illustration style, 8k"},
     {"id_suffix": "05_face_45", "name": "脸部45度",

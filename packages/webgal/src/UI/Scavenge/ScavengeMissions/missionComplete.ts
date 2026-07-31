@@ -304,14 +304,11 @@ export const applyMissionOutcomeToParty = (
       updated.hp = Math.max(0, updated.hp - outcome.hpLost);
     }
 
-    // 物品进背包（**只入主队员** party[0]）
-    if (idx === 0 && outcome.itemsGained.length > 0) {
-      let inv = [...(updated.inventory ?? [])];
-      for (const item of outcome.itemsGained) {
-        inv = addToInventory(inv, item);
-      }
-      updated.inventory = inv;
-    }
+    // 2026-06-21 改：**不**再把 outcome.itemsGained addToInventory 到主队员背包
+    //   - 物品已在 encounterCheck → MissionSystem 入 mission.tempLoot
+    //   - 任务完成时弹 ScavengeLootDistributionModal 让玩家**手动**分配
+    //   - 之前这里双重入库（一份入角色背包 + 一份留在 tempLoot）→ 现在移除
+    // 注：outcome.itemsGained 字段保留（UI 任务完成消息"带回 N 类物资"还要用）
 
     // 2026-06-09 加：应用丢失物品（**只主队员** party[0] 减背包）
     if (idx === 0 && outcome.lostItems && outcome.lostItems.length > 0) {

@@ -16,13 +16,7 @@
  */
 
 import { ScavengeCharacter } from '../ScavengeCharacter/character';
-import {
-  InventoryItem,
-  calculateTotalWeight,
-  canAddToInventory,
-  addToInventory,
-  MAX_CARRY_WEIGHT,
-} from '../ScavengeItems/inventory';
+import { InventoryItem, calculateTotalWeight, canAddToInventory, addToInventory, MAX_CARRY_WEIGHT, isBlueprintItem } from '../ScavengeItems/inventory';
 import { getItemById } from '../ScavengeItems/items';
 import { generateInstanceId } from '../ScavengeItems/inventory';
 
@@ -168,6 +162,12 @@ export const tryAddToParty = (
   partyBackpack: InventoryItem[],
   item: InventoryItem,
 ): DistributeResult => {
+  // 2026-06-21 改：蓝图当**普**通物**品**（**不**再**单**独 addBlueprint）
+  //   - 蓝图**也**走普**通**物**品**分配（先角色背包，**再**仓库）
+  //   - 实际上 tryAddToParty 返**回**了 DistributeResult，**调**用**方需要**把蓝图放进仓库
+  //   - **简**化：蓝图**也**走**普**通**路**径（addToInventory），**不****特**殊**处**理
+  //   - **不**消耗，可买卖
+
   // 1. 依次尝试每个角色背包
   let updatedParty = party;
   for (let i = 0; i < party.length; i++) {
@@ -265,4 +265,66 @@ export const formatLootTarget = (target: LootTarget, party: ScavengeCharacter[])
 export const ensureInstanceId = (item: InventoryItem): InventoryItem => {
   if (item.instanceId) return item;
   return { ...item, instanceId: generateInstanceId() };
+};
+
+// ============== 容量检查（拾荒阶段"超出负重直接丢弃"）==============
+
+/**
+ * 检查 tempLoot 新增物品后是否超队伍总负重
+ *
+ * 设计：
+ *   - 队伍总负重 = sum(party[].maxCarry) = 队伍总容量
+ *   - 队伍已用 = sum(party[].inventory weight) + currentBackpack 重量
+ *   - 新物品入 tempLoot：剩余容量 = 总容量 - 已用 - 物品重量
+ *   - 剩余 >= 0 → 可以装入
+ *   - 剩余 < 0 → 装不下（丢弃）
+ *
+ * 2026-06-21 加：用户要求"超出负重直接丢弃"
+ *   - 之前：物品总能入 tempLoot（无容量限制）
+ *   - 现在：基于队伍总负重做容量检查
+ *
+ * @param party 队伍（**不**包括 tempLoot 里的物品）
+ * @param currentBackpack tempLoot 当前物品
+ * @param newItem 新要加的物品
+ * @returns true = 装得下，false = 装不下（应丢弃）
+ */
+export const canAddToPartyBackpack = (
+  party: ScavengeCharacter[],
+  currentBackpack: InventoryItem[],
+  newItem: InventoryItem,
+): boolean => {
+  // 队伍总容量
+  const totalCapacity = party.reduce((sum, c) => sum + MAX_CARRY_WEIGHT + (c.end - 5) * 5, 0);
+  // 队伍已用负重（角色背包）
+  const partyUsed = party.reduce((sum, c) => sum + calculateTotalWeight(c.inventory ?? []), 0);
+  // tempLoot 已用负重
+  const backpackUsed = calculateTotalWeight(currentBackpack);
+  // 新物品重量
+  const newItemWeight = calculateTotalWeight([newItem]);
+  // 剩余容量
+  return totalCapacity - partyUsed - backpackUsed - newItemWeight >= 0;
+};
+
+/**
+ * 拾荒阶段：把物品尝试入 tempLoot，超重丢弃
+ *
+ * 返回：
+ *   - updatedBackpack: 更新后的 tempLoot（丢弃的物品不在这里）
+ *   - dropped: 被丢弃的物品（不计入 tempLoot）
+ */
+export const tryAddToTempLoot = (
+  party: ScavengeCharacter[],
+  currentBackpack: InventoryItem[],
+  newItem: InventoryItem,
+): { updatedBackpack: InventoryItem[]; dropped: InventoryItem[] } => {
+  if (canAddToPartyBackpack(party, currentBackpack, newItem)) {
+    return {
+      updatedBackpack: addToInventory(currentBackpack, newItem).filter((i): i is InventoryItem => i !== null),
+      dropped: [],
+    };
+  }
+  return {
+    updatedBackpack: currentBackpack,
+    dropped: [newItem],
+  };
 };

@@ -5,6 +5,15 @@
  * - 硬编码节点图（不改数据，改代码）
  * - 每条故事线独立（main / lucy / 等等）
  * - 节点最小化（一个 scene 一个节点，避免大块）
+ *
+ * ⚠️ 重要约定（2026-06-21 加）：
+ * - wait_trigger 的 `locationId` 必须与 `ScavengeMap/locations.ts` 里的 `id` **严格一致**
+ * - 反例：`'slums'` ❌（老 ID，已废弃 → 玩家永远看不到红点）
+ * - 正确：`'safehouse'` ✅
+ * - 加新剧情节点前**先**查 locations.ts 确认 ID
+ *
+ * 经验教训：2026-06-21 因 locationId 写错导致露西剧情不触发（红点消失）。
+ *   用户多次反馈后定位到此处，已修复为 'safehouse'。
  */
 
 import { Storyline } from './storyTypes';
@@ -19,10 +28,11 @@ export const MAIN_STORY: Storyline = {
   description: '主角在这个世界苏醒后的故事',
   startNode: 'intro',
   nodes: {
-    // 1. 玩家到 slums（安全屋）→ 触发 intro 场景
+    // 1. 玩家到 safehouse（安全屋）→ 触发 intro 场景
+    // 2026-06-21 改：locationId 从 'slums' 改**为** 'safehouse'（**配**合** ScavengeMap.locations 的 ID）
     'intro': {
       type: 'wait_trigger',
-      trigger: { type: 'location', locationId: 'slums' },
+      trigger: { type: 'location', locationId: 'safehouse' },
       next: 'intro_scene',
     },
     'intro_scene': {

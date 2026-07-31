@@ -19,11 +19,17 @@ import { ScavengeMissionHistoryModal } from './ScavengeMissionHistoryModal/Scave
 import { ScavengeEnemyCodex } from './ScavengeEnemies/ScavengeEnemyCodex/ScavengeEnemyCodex';
 import { ScavengeItemCodex } from './ScavengeItems/ScavengeItemCodex/ScavengeItemCodex';
 import { ScavengeCharacterCodex } from './ScavengeCharacter/ScavengeCharacterCodex/ScavengeCharacterCodex';
-import { readMissions } from './ScavengeMissions/missions';
+import { readMissions, writeMissions } from './ScavengeMissions/missions';
 import { ScavengeMissionOutcomeModal } from './ScavengeMissionOutcomeModal/ScavengeMissionOutcomeModal';
-import { ScavengeRestModal } from './ScavengeRestModal/ScavengeRestModal';
+// 2026-06-21 改：ScavengeRestModal 完全被 ScavengeLootDistributionModal 代替，注释掉 import
+// import { ScavengeRestModal } from './ScavengeRestModal/ScavengeRestModal';
 import { ScavengeCombatLogModal } from './ScavengeCombatLogModal/ScavengeCombatLogModal';
-import { ScavengeEncounterBoardModal } from './ScavengeEncounterBoardModal/ScavengeEncounterBoardModal';
+// 2026-06-21 改：用综合看板替代拾荒遭遇看板
+//   - 玩家主动打开（不再自动弹）
+//   - 3 个分区：工作中 / 空闲 / 无法行动
+//   - 每次 advance 记录一次快照
+import { ScavengeBoardModal } from './ScavengeBoard/ScavengeBoardModal';
+import { isBoardVisible, setBoardVisible } from './ScavengeBoard/boardStore';
 import { ScavengeLootDistributionModal } from './ScavengeLootDistributionModal/ScavengeLootDistributionModal';
 import { StoryManager } from './Story/StoryManager';
 import { getLocationHintFromState } from './Story/storyHint';
@@ -161,14 +167,14 @@ const ScavengeContent = () => {
   }, [stageState]);
 
   // 2026-06-21 加：M1 阶段 - 战利品分配 modal 触发
-  //   - 条件：mission 状态为 completed/failed/cancelled + 有 tempLoot + !tempLootDistributed
+  //   - 条件：mission 状态为 completed/failed/cancelled + **!tempLootDistributed**
+  //   - **不**要求 tempLoot.length > 0（玩家分完后 tempLoot 变 0，但还没点确认 → 仍显示 modal）
   //   - 顺序：在 outcome modal **之后**（玩家先看结算结果，再分配物品）
   //   - 注：战斗失败也走这个流程（用户要求"只要队伍背包里面有物资就要走分配流程"）
   const pendingLootMission = useMemo(() => {
     const missions = readMissions();
     return missions.find(m =>
       (m.status === 'completed' || m.status === 'failed' || m.status === 'cancelled') &&
-      m.tempLoot && m.tempLoot.length > 0 &&
       !m.tempLootDistributed
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -228,6 +234,21 @@ const ScavengeContent = () => {
   }, [restPending, stageState]);
 
   const closeRestModal = () => {
+    // 2026-06-21 改：用 ScavengeLootDistributionModal 代替 ScavengeRestModal
+    //   - 这里需要额外处理 encounter 标记（之前 ScavengeRestModal 内部做的）
+    //   - 有 encounterId：标记 encounter.shown = true, restChoice = 'rest'
+    if (restPending?.encounterId) {
+      const missions = readMissions();
+      const newMissions = missions.map(m => ({
+        ...m,
+        encounters: (m.encounters ?? []).map(e =>
+          e.id === restPending.encounterId
+            ? { ...e, shown: true, restChoice: 'rest' as const }
+            : e
+        ),
+      }));
+      writeMissions(newMissions);
+    }
     // 清 rest_pending（保险）
     stageStateManager.setStageVarAndCommit({
       key: 'scavenge_rest_pending',
@@ -378,6 +399,14 @@ const ScavengeContent = () => {
           label="特性百科"
           onClick={handleOpenTraitCodex}
         />
+        {/* 2026-06-21 加：综合看板按钮（在特性百科下方）
+            - 显示工作中（派遣+制作+修补）/ 空闲 / 无法行动
+            - 每次 advance 记录一次快照（可反复打开看上一回合） */}
+        <ScavengeMenuButton
+          icon="material-symbols:dashboard"
+          label="综合看板"
+          onClick={() => setBoardVisible(true)}
+        />
       </div>
 
       {/* 시간控制（一直显示：通用时间条） */}
@@ -459,32 +488,30 @@ const ScavengeContent = () => {
       {/* 特性百科（2026-06-09 加） */}
       {showTraitCodex && <ScavengeCharacterCodex onClose={handleCloseTraitCodex} />}
 
-      {/* 2026-06-09 加：Plan 3 战斗休整 modal */}
-      {restPending && restParty.length > 0 && (
-        <ScavengeRestModal
-          party={restParty}
-          encounterId={restPending.encounterId}
-          onClose={closeRestModal}
-        />
-      )}
+      {/* 2026-06-21 改：用 ScavengeLootDistributionModal 完全代替 ScavengeRestModal
+          - restPending 触发 → 弹分配 modal（mode='rest'）
+          - 行为：关闭时**不**标 distributed，**不**清 tempLoot（任务还在 active） */}
+      {restPending && restParty.length > 0 && (() => {
+        // 查 restPending 对应的 mission
+        const missions = readMissions();
+        const m = missions.find(x => x.id === restPending.missionId);
+        if (!m) return null;
+        return (
+          <ScavengeLootDistributionModal
+            mission={m}
+            party={restParty}
+            mode="rest"
+            onClose={closeRestModal}
+          />
+        );
+      })()}
 
-      {/* 2026-06-09 改：多队伍回合看板（替代之前一个个弹的 encounter modal）
-          - 一次性显示**所有**有未展示 encounter / outcome 的 mission
-          - 2026-06-09 改：玩家关闭 modal = **所有** mission 都 mark shown
-          - 玩家**主动**关闭 = 玩家**主动**确认
-          - 关闭后 modal 自动消失（pendingBoardMissions 为空） */}
-      {pendingBoardMissions.length > 0 && (
-        <ScavengeEncounterBoardModal
-          missions={pendingBoardMissions}
-          characters={characters}
-          onClose={() => {
-            // 内部已经 mark 完所有未读，强制刷新
-            stageStateManager.setStageVarAndCommit({
-              key: '_board_dismissed_at',
-              value: Date.now(),
-            });
-          }}
-        />
+      {/* 2026-06-21 改：综合看板（玩家主动打开，不自动弹）
+          - 3 个分区：工作中（派遣+制作+修补）/ 空闲 / 无法行动
+          - 每次 advance 记录一次快照（只存上一回合）
+          - 玩家可以反复打开查看 */}
+      {isBoardVisible() && (
+        <ScavengeBoardModal onClose={() => {}} />
       )}
     </>
   );

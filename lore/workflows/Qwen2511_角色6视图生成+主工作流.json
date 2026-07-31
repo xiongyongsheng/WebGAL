@@ -19359,7 +19359,7 @@
     "ver": "2.0.7"
    },
    "widgets_values": [
-    "重新生成这个角色的正面全身站立视图,白底/纯色背景,完整可见头顶到脚底,双臂自然下垂,正对镜头,保持角色所有特征完全一致(面部、服装、身材比例、配件、伤疤等)。character reference sheet style, full body front view, standing, arms relaxed at sides, white background, identical character features, high detail, anime illustration style, 8k",
+    "重新生成这个角色的正面全身站立视图,白底/纯色背景,完整可见头顶到脚底,双臂自然下垂,正对镜头,保持角色所有特征完全一致(面部、服装、身材比例、配件、伤疤等)。vertical portrait orientation, 9:16 aspect ratio composition, character fills the entire vertical frame from head (top) to toe (bottom) with minimal top and bottom margin, centered horizontally, full-length vertical framing。character reference sheet style, full body front view, standing, arms relaxed at sides, white background, identical character features, high detail, anime illustration style, 8k",
     true,
     "Describe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that closely follows the user's instruction while preserving the core identity of the subject."
    ],
@@ -19718,7 +19718,7 @@
     "ver": "2.0.7"
    },
    "widgets_values": [
-    "重新生成这个角色的左侧 90 度侧面全身站立视图,白底/纯色背景,完整可见头顶到脚底,双臂自然下垂,镜头方向为角色左侧,保持角色所有特征完全一致(面部轮廓、发型侧面、服装侧面、配件、伤疤等)。character reference sheet style, full body left side view 90 degrees, standing, arms relaxed at sides, white background, identical character features, high detail, anime illustration style, 8k",
+    "重新生成这个角色的左侧 90 度侧面全身站立视图,白底/纯色背景,完整可见头顶到脚底,双臂自然下垂,镜头方向为角色左侧,保持角色所有特征完全一致(面部轮廓、发型侧面、服装侧面、配件、伤疤等)。vertical portrait orientation, 9:16 aspect ratio composition, character fills the entire vertical frame from head (top) to toe (bottom) with minimal top and bottom margin, centered horizontally, full-length vertical framing。character reference sheet style, full body left side view 90 degrees, standing, arms relaxed at sides, white background, identical character features, high detail, anime illustration style, 8k",
     true,
     "Describe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that closely follows the user's instruction while preserving the core identity of the subject."
    ],
@@ -20077,7 +20077,7 @@
     "ver": "2.0.7"
    },
    "widgets_values": [
-    "重新生成这个角色的背面全身站立视图,白底/纯色背景,完整可见头顶到脚底,双臂自然下垂,正对镜头,展示背部、服装背面、发型背面,保持角色所有特征完全一致(身材比例、服装背面、配件、伤疤等)。character reference sheet style, full body back view, standing, arms relaxed at sides, white background, identical character features, high detail, anime illustration style, 8k",
+    "重新生成这个角色的背面全身站立视图,白底/纯色背景,完整可见头顶到脚底,双臂自然下垂,正对镜头,展示背部、服装背面、发型背面,保持角色所有特征完全一致(身材比例、服装背面、配件、伤疤等)。vertical portrait orientation, 9:16 aspect ratio composition, character fills the entire vertical frame from head (top) to toe (bottom) with minimal top and bottom margin, centered horizontally, full-length vertical framing。character reference sheet style, full body back view, standing, arms relaxed at sides, white background, identical character features, high detail, anime illustration style, 8k",
     true,
     "Describe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that closely follows the user's instruction while preserving the core identity of the subject."
    ],

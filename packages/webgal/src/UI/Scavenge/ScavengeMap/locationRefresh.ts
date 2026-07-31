@@ -22,7 +22,7 @@ import {
 } from './locations';
 import { LocationState, setLocationState, getLocationState, touchLocationInteracted } from './locationState';
 import { ENEMY_TEMPLATES, EnemyType, EnemyInstance } from '../ScavengeEnemies/enemies';
-import { InventoryItem, generateInstanceId } from '../ScavengeItems/inventory';
+import { InventoryItem, generateInstanceId, isBlueprintItem } from '../ScavengeItems/inventory';
 import { logger } from '@/Core/util/logger';
 
 /**
@@ -42,6 +42,9 @@ export const RESOURCE_TYPE_TO_ITEM: Record<string, string> = {
   daily: 'material_parts',
   weapon: 'weapon_knife',
   armor: 'armor_vest',
+  // 2026-06-21 加：蓝图掉落（resourceType 直接用 itemId，不走映射）
+  //   location.lootConfig.types 里加 { type: 'bp_melee_workbench' } 即可掉落
+  //   拾到后**自动**入 ownedBlueprints（**不**进 inventory）
 };
 
 // ============== 工具：权重选 ==============
@@ -156,23 +159,46 @@ export const countToEnemies = (counts: Record<string, number>): EnemyInstance[] 
   return out;
 };
 
-/** 按 lootConfig 刷新出物资物品数组（2026-06-08 加） */
+/** 按 lootConfig 刷新出物资物品数组（2026-06-08 加）
+ * 2026-06-21 改：蓝图保底（**至少**出 1 个蓝图，方便测试）
+ *   - 测试期间强制 100% 出蓝图，后续**根据**需求改回概率
+ *   - 实现：distributeByWeight 后**检**查**有**没**有**蓝图，**没**有**则**强**制**加** 1 个
+ */
 const spawnLootFromConfig = (config: LocationLootConfig): InventoryItem[] => {
   if (config.types.length === 0) return [];
   const [min, max] = config.countRange;
   const total = min + Math.floor(Math.random() * (max - min + 1));
   const chosen = distributeByWeight(config.types, total);
-  return chosen
-    .map((entry): InventoryItem | null => {
-      const itemId = RESOURCE_TYPE_TO_ITEM[entry.type];
-      if (!itemId) return null;
-      return {
-        instanceId: generateInstanceId(),
-        itemId,
-        quantity: 1,  // 每个"点"代表 1 个物品（不再 quantity 浮动）
-      };
-    })
-    .filter((x): x is InventoryItem => x !== null);
+
+  // 找第一个蓝图 type（**作**为保底**候**选）
+  const firstBlueprintType = config.types.find(t =>
+    t.type.startsWith('bp_') || t.type.startsWith('craft_')
+  );
+
+  const out: InventoryItem[] = [];
+  for (const entry of chosen) {
+    const itemId = entry.type.startsWith('bp_') || entry.type.startsWith('craft_')
+      ? entry.type
+      : RESOURCE_TYPE_TO_ITEM[entry.type];
+    if (!itemId) continue;
+    out.push({
+      instanceId: generateInstanceId(),
+      itemId,
+      quantity: 1,
+    });
+  }
+
+  // 2026-06-21 加：蓝图保底（100% 出**至**少 1 个）
+  const hasBlueprint = out.some(i => isBlueprintItem(i.itemId));
+  if (!hasBlueprint && firstBlueprintType) {
+    out.push({
+      instanceId: generateInstanceId(),
+      itemId: firstBlueprintType.type,
+      quantity: 1,
+    });
+  }
+
+  return out;
 };
 
 /** 把物品数组压成 { [type]: count }（其中 type 来自 itemId 的 metadata） */

@@ -83,6 +83,17 @@ export const migrateInventory = <T extends { instanceId?: string }>(items: T[]):
 };
 
 /**
+ * 检测 itemId 是否是蓝图（2026-06-21 加：M3 蓝图掉落）
+ * - 以 `bp_` 开头 → workbench 蓝图
+ * - 以 `craft_` 开头 → craft 蓝图
+ */
+export const isBlueprintItem = (itemId: string): 'workbench' | 'craft' | null => {
+  if (itemId.startsWith('bp_')) return 'workbench';
+  if (itemId.startsWith('craft_')) return 'craft';
+  return null;
+};
+
+/**
  * "能否放下" 检查结果
  */
 export interface CanAddResult {

@@ -11,13 +11,14 @@ import styles from './ScavengeCharacterHeader.module.scss';
 interface ScavengeCharacterHeaderProps {
   name: string;
   statusText: string;
+  /** 状态详情（如"建造中：X（剩 1 回合）"），2026-06-21 加 */
+  statusDetail?: string | null;
   isExploring: boolean;
   /** 角色完整数据（用于显示好感度等级），可选 */
   character?: { id: string; affinity: number; completedAffinityStoryLevels: number[] };
-  onClose: () => void;
 }
 
-export const ScavengeCharacterHeader = ({ name, statusText, isExploring, character, onClose }: ScavengeCharacterHeaderProps) => {
+export const ScavengeCharacterHeader = ({ name, statusText, statusDetail, isExploring, character }: ScavengeCharacterHeaderProps) => {
   // 2026-06-09 加：好感度等级（主角本身不显示 affinity 等级）
   const showAffinity = character && character.id !== 'player_1';
   const affinityLevel = showAffinity ? (computeDisplayLevel(character as any) as AffinityLevelIndex) : null;
@@ -48,11 +49,15 @@ export const ScavengeCharacterHeader = ({ name, statusText, isExploring, charact
               </span>
             )}
           </div>
+          {/* 2026-06-21 改：状态详情移到第二行（独占一行），不会被截断 */}
+          {statusDetail && (
+            <div className={styles.statusDetail} title={statusDetail}>
+              {statusDetail}
+            </div>
+          )}
         </div>
       </div>
-      <button className={styles.closeButton} onClick={onClose}>
-        <Icon icon="material-symbols:close" />
-      </button>
     </div>
   );
 };
+

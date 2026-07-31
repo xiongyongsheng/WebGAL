@@ -1,55 +1,40 @@
 /**
- * 战利品分配 modal（M1 + M2 阶段，2026-06-21 加）
+ * 战利品分配 modal（M1 + M2 阶段，2026-06-21 加 / 2026-06-21 加操作按钮）
+ *
+ * 设计（2026-06-21 重构）：
+ *   - 复用 ScavengeCharacterPanel（与休整 modal 同款）
+ *   - customWarehouseRef 把"队伍背包"（mission.tempLoot）作为"仓库"
+ *   - 拖拽 + 菜单分配自动支持
+ *
+ * 4 个操作按钮（2026-06-21 加）：
+ *   - 重置：清空 currentTempLoot，回到初始状态
+ *   - 智能分配：根据角色偏好 + 当前需求自动分配（scoreItemForParty）
+ *   - 跳过：所有物品入永久仓库（玩家不要）
+ *   - 确认：所有物品已分配（currentTempLoot.length === 0）才能点
+ *
+ * 关闭行为：
+ *   - X 按钮：同"跳过"（剩余入永久仓库）
+ *   - 智能分配后还有剩余：可以继续手动分配 或 点"跳过"入仓库
  *
  * 触发：mission 状态变化（active → completed/failed/cancelled）+ tempLoot.length > 0 + !tempLootDistributed
- * 功能：玩家把 Mission.tempLoot 里的物品手动分配给队伍成员
- * 流程：
- * 1. 显示队伍成员（每个角色显示偏好/需求）
- * 2. 显示临时仓库物品列表（每个物品显示"推荐给 X" 徽章 + 字符分配按钮）
- * 3. 玩家点 "全部推荐" → 自动按推荐分配
- * 4. 玩家手动点击角色头像 → 分配单个物品
- * 5. 玩家点 "确认分配" → 写入背包 + 标记 tempLootDistributed + 清空 tempLoot
- * 6. 玩家点 "跳过" → 全部转入永久仓库 + 标记 tempLootDistributed + 清空 tempLoot
- *
- * 推荐算法（来自 characterNeeds.ts）：
- * - preferences[category] * 1.0 + needs[category] * 1.5
- * - 最高分 = recommended，次高分 = backup
- *
- * 死亡/HP=0 的角色：禁用分配按钮（死人不能接物品）
  */
 
-import { useMemo, useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Icon } from '@iconify/react';
-import inventory from '@iconify-icons/material-symbols/inventory-2';
-import star from '@iconify-icons/material-symbols/star';
-import starOutline from '@iconify-icons/material-symbols/star-outline';
-import close from '@iconify-icons/material-symbols/close';
-import heart from '@iconify-icons/material-symbols/favorite';
-import shield from '@iconify-icons/material-symbols/shield';
-import waterDrop from '@iconify-icons/material-symbols/water-drop';
-import restaurant from '@iconify-icons/material-symbols/restaurant';
-import psychology from '@iconify-icons/material-symbols/psychology';
-import build from '@iconify-icons/material-symbols/build';
-import flag from '@iconify-icons/material-symbols/flag';
-import checkCircle from '@iconify-icons/material-symbols/check-circle';
-import warning from '@iconify-icons/material-symbols/warning';
+import autoFix from '@iconify-icons/material-symbols/auto-fix-high';
+import warehouse from '@iconify-icons/material-symbols/warehouse';
 import { ScavengeCharacter } from '../ScavengeCharacter/character';
-import {
-  getItemName, getItemIcon, getItemRarityColor,
-} from '../ScavengeItems/items';
-import {
-  InventoryItem, addToInventory, addToWarehouse,
-} from '../ScavengeItems/inventory';
+import { ScavengeCharacterPanel } from '../ScavengeCharacter/ScavengeCharacterPanel/ScavengeCharacterPanel';
 import {
   readMissions, writeMissions, Mission,
 } from '../ScavengeMissions/missions';
-import { getWarehouse, setWarehouse } from '../ScavengeCharacter/ScavengeCharacterPanel/ScavengeCharacterPanel.stage';
-import { getCharacters, setCharacters } from '../ScavengeCharacter/ScavengeCharacterPanel/ScavengeCharacterPanel.stage';
-import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
+import { getCharacters, getWarehouse, setCharacters, setWarehouse } from '../ScavengeCharacter/ScavengeCharacterPanel/ScavengeCharacterPanel.stage';
 import {
-  scoreItemForParty, ItemScore, computeCharacterNeeds,
-} from '../ScavengeMissions/characterNeeds';
-import { getItemCategory, ITEM_CATEGORY_LABELS, ItemCategory } from '../ScavengeMissions/partyLoot';
+  addToInventory, addToWarehouse, canAddToInventory, InventoryItem,
+} from '../ScavengeItems/inventory';
+import { getItemById } from '../ScavengeItems/items';
+import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
+import { scoreItemForParty, computeAffinityDelta } from '../ScavengeMissions/characterNeeds';
 import styles from './ScavengeLootDistributionModal.module.scss';
 
 interface ScavengeLootDistributionModalProps {
@@ -57,369 +42,301 @@ interface ScavengeLootDistributionModalProps {
   mission: Mission;
   /** 队伍成员（按 characterId 顺序）*/
   party: ScavengeCharacter[];
-  /** 关闭 modal */
+  /** 关闭 modal（panel 的 onClose 也会调这个）*/
   onClose: () => void;
+  /**
+   * 模式（2026-06-21 加：用此 modal 完全代替 ScavengeRestModal）
+   * - 'rest'：战斗休整 / 拾荒中途 → 关闭 modal **不**清 tempLoot，**不**标 distributed
+   * - 'complete'：任务完成 → 关闭（confirm/skip/X）会标 distributed + 清 tempLoot
+   */
+  mode?: 'rest' | 'complete';
 }
-
-// 分类 → 图标
-const CATEGORY_ICONS: Record<ItemCategory, any> = {
-  food: restaurant,
-  drink: waterDrop,
-  medicine: heart,
-  sanity: psychology,
-  weapon: 'material-symbols:swords',
-  armor: shield,
-  tool: build,
-  material: inventory,
-  quest: flag,
-  other: starOutline,
-};
 
 /**
  * Modal 主组件
+ *
+ * 状态管理：
+ *   - currentTempLoot: 当前待分配的物品（local state，不直接同步到 mission）
+ *   - 玩家分配 / 智能分配 / 重置 都会改 currentTempLoot
+ *   - 关闭时才同步到 mission（distribute / skip）
+ *   - 原因：每次操作都同步 mission 会触发 stageState 写盘，影响性能
  */
 export const ScavengeLootDistributionModal = ({
   mission, party, onClose,
+  mode = 'complete',  // 默认 'complete'（任务完成时弹）
 }: ScavengeLootDistributionModalProps) => {
-  // 待分配物品列表（key = instanceId 或 index）
-  // value = 选中的角色 id（null = 未分配）
-  const [assignments, setAssignments] = useState<Record<string, string | null>>(() => {
-    // 默认：自动按"推荐"分配
-    const init: Record<string, string | null> = {};
-    mission.tempLoot?.forEach((item, idx) => {
+  // 队伍 ID 列表
+  const partyIds = useMemo(() => {
+    if (mission.partyCharacterIds && mission.partyCharacterIds.length > 0) {
+      return mission.partyCharacterIds;
+    }
+    return [mission.characterId];
+  }, [mission]);
+
+  // 初始 tempLoot（用于"重置"按钮恢复）
+  const initialTempLoot = useMemo(() => mission.tempLoot ?? [], [mission.id]);
+
+  // 当前待分配物品（local state，玩家操作时变化）
+  const [currentTempLoot, setCurrentTempLoot] = useState<InventoryItem[]>(initialTempLoot);
+
+  // 同步到 mission 的 helper
+  // 每次 currentTempLoot 变化时也写回 mission（这样 ScavengeMain 重新计算 pendingLootMission 时能正确判断）
+  useEffect(() => {
+    const missions = readMissions();
+    const newMissions = missions.map(m => {
+      if (m.id !== mission.id) return m;
+      return { ...m, tempLoot: currentTempLoot };
+    });
+    writeMissions(newMissions);
+    stageStateManager.setStageVarAndCommit({
+      key: '_tempLoot_updated',
+      value: Date.now(),
+    });
+  }, [currentTempLoot, mission.id]);
+
+  // 2026-06-21 删：去掉重置按钮（不需要）
+  // const handleReset = () => {
+  //   setCurrentTempLoot(initialTempLoot);
+  // };
+
+  // 2026-06-21 删：去掉确认按钮（不需要）
+  // const allDistributed = currentTempLoot.length === 0;
+
+  /**
+   * 智能分配：按 scoreItemForParty 给每个 item 找推荐角色
+   *   - 能装下 → 装入角色 + 从 tempLoot 移除
+   *   - 装不下 → 留在 tempLoot（让玩家手动处理）
+   * 2026-06-21 M3 加：分配成功时增加角色好感度
+   *   - Δaffinity = base × preferenceFactor × needFactor × priceFactor
+   *   - 累加到 character.affinity
+   */
+  const handleSmartAssign = () => {
+    const allChars = getCharacters();
+    const charMap = new Map(allChars.map(c => [c.id, c]));
+    const remaining: InventoryItem[] = [];
+    const distributed: string[] = [];  // 用于日志
+    const affinityDeltas: Array<{ charName: string; charId: string; delta: number; itemName: string }> = [];
+
+    for (const item of currentTempLoot) {
       const scores = scoreItemForParty(party, item);
       const recommended = scores[0];
-      init[itemKey(item, idx)] = recommended && recommended.total > 0 ? recommended.char.id : party[0]?.id ?? null;
-    });
-    return init;
-  });
+      // 没有推荐（所有 score <= 0）或推荐角色 hp <= 0 → 跳过（留在 tempLoot）
+      if (!recommended || recommended.total <= 0) {
+        remaining.push(item);
+        continue;
+      }
+      // 推荐角色
+      const target = charMap.get(recommended.char.id);
+      if (!target) {
+        remaining.push(item);
+        continue;
+      }
+      // 容量检查
+      const inv = (target.inventory ?? []).filter((i): i is InventoryItem => i !== null);
+      const check = canAddToInventory(inv, item, false);
+      if (!check.canAdd) {
+        remaining.push(item);
+        continue;
+      }
+      // 装入角色
+      const newInv = addToInventory(inv, { ...item, quantity: check.accepted });
+      // 2026-06-21 M3 加：好感度增加
+      const affinityDelta = computeAffinityDelta(target, { ...item, quantity: check.accepted });
+      charMap.set(target.id, {
+        ...target,
+        inventory: newInv,
+        affinity: (target.affinity ?? 0) + affinityDelta,
+      });
+      // 多余的数量（accepted < item.quantity）留在 tempLoot
+      if (check.accepted < item.quantity) {
+        remaining.push({ ...item, quantity: item.quantity - check.accepted });
+      }
+      const itemName = getItemById(item.itemId)?.name ?? item.itemId;
+      distributed.push(`${itemName} → ${target.name}`);
+      affinityDeltas.push({ charName: target.name, charId: target.id, delta: affinityDelta, itemName });
+    }
 
-  // "全部推荐" 重置
-  const autoAssignAll = () => {
-    const init: Record<string, string | null> = {};
-    mission.tempLoot?.forEach((item, idx) => {
-      const scores = scoreItemForParty(party, item);
-      const recommended = scores[0];
-      init[itemKey(item, idx)] = recommended && recommended.total > 0 ? recommended.char.id : party[0]?.id ?? null;
-    });
-    setAssignments(init);
+    setCharacters(Array.from(charMap.values()));
+    setCurrentTempLoot(remaining);
+    if (distributed.length > 0) {
+      logger.info(`[智能分配] 已分 ${distributed.length} 件：${distributed.join(', ')}`);
+    }
+    // M3 加：按角色聚合好感度增量，console 提示
+    if (affinityDeltas.length > 0) {
+      const grouped = new Map<string, { name: string; total: number }>();
+      for (const d of affinityDeltas) {
+        const existing = grouped.get(d.charId);
+        if (existing) {
+          existing.total += d.delta;
+        } else {
+          grouped.set(d.charId, { name: d.charName, total: d.delta });
+        }
+      }
+      const summary = Array.from(grouped.values()).map(g => `${g.name} +${g.total}`).join(', ');
+      logger.info(`[好感度] 智能分配后：${summary}`);
+    }
   };
 
-  // 清空所有选择（玩家手动一个个点）
-  const clearAll = () => {
-    const init: Record<string, string | null> = {};
-    mission.tempLoot?.forEach((item, idx) => {
-      init[itemKey(item, idx)] = null;
+  /**
+   * 关闭 modal 时的统一收尾
+   * @param action 行为类型
+   *   - 'skip'：剩余入永久仓库
+   *   - 'close'：剩余入永久仓库（默认）
+   *   - 'keep'：剩余留在 tempLoot（玩家下次还能看到）
+   *   - 'confirm'：玩家主动确认分配完毕（currentTempLoot 必须空）
+   * 2026-06-21 加：mode === 'rest' 时不标记 distributed，不清 tempLoot
+   */
+  const finalizeModal = (action: 'skip' | 'close' | 'keep' | 'confirm' = 'close') => {
+    // 1. 处理剩余物品
+    if (action === 'skip' || action === 'close') {
+      if (currentTempLoot.length > 0) {
+        const currentWh = getWarehouse();
+        let newWh = currentWh;
+        for (const item of currentTempLoot) {
+          newWh = addToWarehouse(newWh, item);
+        }
+        setWarehouse(newWh);
+        setCurrentTempLoot([]);
+      }
+    }
+    // 'keep' 不动 currentTempLoot（留在 mission.tempLoot）
+    // 'confirm' 必须 currentTempLoot === 0（外层已 check）
+
+    // 2. mission 状态更新
+    const missions = readMissions();
+    const newMissions = missions.map(m => {
+      if (m.id !== mission.id) return m;
+      // 'rest' 模式：**不**标记 distributed，**不**清 tempLoot
+      if (mode === 'rest') {
+        return { ...m, tempLoot: currentTempLoot.length === 0 ? undefined : currentTempLoot };
+      }
+      // 'complete' 模式：标记 distributed + 清 tempLoot
+      return { ...m, tempLootDistributed: true, tempLoot: undefined };
     });
-    setAssignments(init);
-  };
+    writeMissions(newMissions);
 
-  // 分配一个物品给某个角色
-  const assignItem = (itemKey: string, charId: string) => {
-    setAssignments(prev => ({ ...prev, [itemKey]: charId }));
-  };
-
-  // 全部已分配？
-  const allAssigned = useMemo(() => {
-    return Object.values(assignments).every(v => v !== null);
-  }, [assignments]);
-
-  // 确认分配
-  const handleConfirm = () => {
-    distributeItems(assignments, mission, party);
     onClose();
   };
 
-  // 跳过（全部入永久仓库）
+  /**
+   * 跳过：所有剩余物品入永久仓库
+   * - 'rest'：入永久仓库，**不**清 tempLoot（玩家想保留在 tempLoot 也能用 close）
+   * - 'complete'：入永久仓库，标记 distributed
+   */
   const handleSkip = () => {
-    skipToWarehouse(mission);
-    onClose();
+    finalizeModal('skip');
   };
 
-  const tempLoot = mission.tempLoot ?? [];
+  // 2026-06-21 删：去掉确认按钮（玩家直接点 X 关闭）
+  // const handleConfirm = () => {
+  //   finalizeModal('confirm');
+  // };
+
+  /**
+   * 关闭（X 按钮或 panel 标题栏 X）：
+   * - 'rest'：剩余留在 tempLoot，**不**标 distributed
+   * - 'complete'：剩余入永久仓库，标 distributed
+   */
+  const handleClose = () => {
+    finalizeModal(mode === 'rest' ? 'keep' : 'close');
+  };
 
   return (
     <div className={styles.overlay} onClick={(e) => e.stopPropagation()}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        {/* 标题栏 */}
-        <div className={styles.header}>
-          <div className={styles.titleGroup}>
-            <Icon icon={inventory} className={styles.titleIcon} />
-            <h2 className={styles.title}>战利品分配</h2>
-            <span className={styles.subtitle}>{tempLoot.length} 件物品待分配</span>
-          </div>
-          <button className={styles.closeButton} onClick={onClose} title="关闭（未分配的物品将保留在临时仓库）">
-            <Icon icon={close} />
-          </button>
-        </div>
+        {/* 2026-06-21 改：删除顶部 headerBar（冗余）
+            只保留 panel，panel 内"队伍背包"标题已经包含状态信息 */}
 
-        {/* 主体：左中右三栏 */}
-        <div className={styles.body}>
-          {/* 左：队伍成员 */}
-          <div className={styles.partyPanel}>
-            <div className={styles.panelTitle}>队伍</div>
-            {party.map(char => (
-              <PartyMemberCard
-                key={char.id}
-                char={char}
-                // 统计这个角色被分配了几件
-                assignedCount={Object.values(assignments).filter(id => id === char.id).length}
-              />
-            ))}
-          </div>
-
-          {/* 中：物品列表 */}
-          <div className={styles.itemsPanel}>
-            <div className={styles.panelTitle}>临时仓库</div>
-            <div className={styles.itemList}>
-              {tempLoot.length === 0 ? (
-                <div className={styles.emptyHint}>没有待分配的物品</div>
-              ) : (
-                tempLoot.map((item, idx) => {
-                  const key = itemKey(item, idx);
-                  const assignedTo = assignments[key];
-                  const scores = scoreItemForParty(party, item);
-                  return (
-                    <ItemRow
-                      key={key}
-                      item={item}
-                      party={party}
-                      scores={scores}
-                      assignedTo={assignedTo}
-                      onAssign={(charId) => assignItem(key, charId)}
-                    />
+        {/* ScavengeCharacterPanel（实际物品 / 角色展示）
+            customWarehouseActions 把按钮注入到 panel 内"队伍背包"标题旁 */}
+        <div className={styles.panelWrapper}>
+          <ScavengeCharacterPanel
+            onClose={handleClose}
+            restrictView
+            restrictTransfer
+            partyCharacterIds={partyIds}
+            customWarehouseRef={{
+              items: currentTempLoot,
+              commit: (newItems: InventoryItem[]) => {
+                // 2026-06-21 M3 加：手动拖动 → 计算好感度增量
+                //   - 比较 old tempLoot 和 new tempLoot 找出"被分走的"物品
+                //   - 找出 inventory 包含这些物品的角色 → 好感度 +
+                const oldItems = currentTempLoot;
+                const newIds = new Set(newItems.map(i => i.instanceId ?? i.itemId));
+                const removedItems = oldItems.filter(i => !newIds.has(i.instanceId ?? i.itemId));
+                if (removedItems.length > 0) {
+                  const allChars = getCharacters();
+                  const removedIds = new Set(removedItems.map(i => i.itemId));
+                  const targets = allChars.filter(c =>
+                    (c.inventory ?? []).filter((i): i is InventoryItem => i !== null).some(i => removedIds.has(i.itemId))
                   );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* 底部操作栏 */}
-        <div className={styles.footer}>
-          <div className={styles.footerLeft}>
-            <button className={styles.actionButton} onClick={autoAssignAll} title="按推荐自动分配所有物品">
-              <Icon icon="material-symbols:auto-awesome" />
-              全部推荐
-            </button>
-            <button className={styles.actionButton} onClick={clearAll} title="清空所有选择">
-              <Icon icon="material-symbols:close" />
-              清空
-            </button>
-          </div>
-          <div className={styles.footerRight}>
-            <button className={styles.skipButton} onClick={handleSkip} title="全部转入永久仓库（跳过手动分配）">
-              <Icon icon="material-symbols:warehouse" />
-              跳过（入库）
-            </button>
-            <button
-              className={styles.confirmButton}
-              onClick={handleConfirm}
-              disabled={!allAssigned}
-              title={allAssigned ? '确认分配' : '还有物品未分配'}
-            >
-              <Icon icon={allAssigned ? checkCircle : warning} />
-              确认分配
-            </button>
-          </div>
+                  if (targets.length > 0) {
+                    const charMap = new Map(allChars.map(c => [c.id, c]));
+                    const affinitySummary: string[] = [];
+                    for (const target of targets) {
+                      let totalDelta = 0;
+                      const inv = (target.inventory ?? []).filter((i): i is InventoryItem => i !== null);
+                      for (const ri of removedItems) {
+                        if (inv.some(i => i.itemId === ri.itemId)) {
+                          totalDelta += computeAffinityDelta(target, ri);
+                        }
+                      }
+                      if (totalDelta > 0) {
+                        const newAffinity = (target.affinity ?? 0) + totalDelta;
+                        charMap.set(target.id, { ...target, affinity: newAffinity });
+                        affinitySummary.push(`${target.name} +${totalDelta}（→ ${newAffinity}）`);
+                      }
+                    }
+                    setCharacters(Array.from(charMap.values()));
+                    if (affinitySummary.length > 0) {
+                      logger.info(`[好感度] 手动分配：${affinitySummary.join(', ')}`);
+                    }
+                  }
+                }
+                setCurrentTempLoot(newItems);
+              },
+              label: '队伍背包',
+              // 2026-06-21 加：空提示改为"分配完毕"（不再显示"仓库是空的"）
+              emptyMessage: '分配完毕',
+            }}
+            customWarehouseActions={
+              <div className={styles.headerActions}>
+                {/* 2026-06-21 删：去掉重置按钮 */}
+                <button
+                  className={styles.actionBtn}
+                  onClick={handleSmartAssign}
+                  title="智能分配：根据角色偏好 + 当前需求自动分配"
+                  disabled={currentTempLoot.length === 0}
+                >
+                  <Icon icon={autoFix} />
+                  智能分配
+                </button>
+                {/* 2026-06-21 改：跳过按钮只在任务完成时显示（mode='complete'）
+                    战斗休整中途（mode='rest'）不显示，避免误操作把还没分配的物品全入仓库 */}
+                {mode === 'complete' && (
+                  <button
+                    className={styles.skipBtn}
+                    onClick={handleSkip}
+                    title="跳过：所有物品入永久仓库"
+                  >
+                    <Icon icon={warehouse} />
+                    跳过
+                  </button>
+                )}
+                {/* 2026-06-21 删：去掉确认按钮
+                    关闭（X 按钮）由 panel 自身提供，
+                    任务完成时：剩余入永久仓库 + 标 distributed
+                    战斗休整中途：剩余留在 tempLoot */}
+              </div>
+            }
+          />
         </div>
       </div>
     </div>
   );
 };
 
-// ============== 子组件 ==============
-
-/** 物品 key：优先用 instanceId，否则用 `${itemId}-${idx}` */
-const itemKey = (item: InventoryItem, idx: number): string => {
-  return item.instanceId || `${item.itemId}-${idx}`;
-};
-
-const PartyMemberCard = ({
-  char, assignedCount,
-}: {
-  char: ScavengeCharacter;
-  assignedCount: number;
-}) => {
-  const isDead = char.hp <= 0;
-  const needs = computeCharacterNeeds(char);
-
-  return (
-    <div className={`${styles.partyCard} ${isDead ? styles.dead : ''}`}>
-      <div className={styles.partyHeader}>
-        <div className={styles.partyName}>{char.name}</div>
-        {isDead && <div className={styles.deadBadge}>阵亡</div>}
-        {assignedCount > 0 && (
-          <div className={styles.assignedBadge}>
-            <Icon icon={inventory} />
-            {assignedCount}
-          </div>
-        )}
-      </div>
-      {/* 状态条 */}
-      <div className={styles.statusBar}>
-        <div className={styles.statusItem} title={`HP ${char.hp}/${char.maxHp}`}>
-          <Icon icon={heart} style={{ color: char.hp / char.maxHp < 0.3 ? '#f44336' : '#aaa' }} />
-          <span>{char.hp}/{char.maxHp}</span>
-        </div>
-        <div className={styles.statusItem} title={`饱食 ${char.hunger}/${char.maxHunger}`}>
-          <Icon icon={restaurant} style={{ color: char.hunger / char.maxHunger < 0.3 ? '#ffa726' : '#aaa' }} />
-          <span>{char.hunger}</span>
-        </div>
-        <div className={styles.statusItem} title={`饮水 ${char.thirst}/${char.maxThirst}`}>
-          <Icon icon={waterDrop} style={{ color: char.thirst / char.maxThirst < 0.3 ? '#ffa726' : '#aaa' }} />
-          <span>{char.thirst}</span>
-        </div>
-        <div className={styles.statusItem} title={`精神 ${char.sanity}/${char.maxSanity}`}>
-          <Icon icon={psychology} style={{ color: char.sanity / char.maxSanity < 0.3 ? '#9c27b0' : '#aaa' }} />
-          <span>{char.sanity}</span>
-        </div>
-      </div>
-      {/* 需求标签 */}
-      {Object.keys(needs).length > 0 && !isDead && (
-        <div className={styles.needsList}>
-          {Object.entries(needs).map(([cat, score]) => (
-            <div key={cat} className={styles.needTag} title={`${ITEM_CATEGORY_LABELS[cat as ItemCategory]} 需求 ${score}/10`}>
-              <Icon icon={CATEGORY_ICONS[cat as ItemCategory]} />
-              <span>{ITEM_CATEGORY_LABELS[cat as ItemCategory]}</span>
-              <span className={styles.needScore}>{score}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-const ItemRow = ({
-  item, party, scores, assignedTo, onAssign,
-}: {
-  item: InventoryItem;
-  party: ScavengeCharacter[];
-  scores: ItemScore[];
-  assignedTo: string | null;
-  onAssign: (charId: string) => void;
-}) => {
-  const category = getItemCategory(item.itemId);
-  const recommendedScore = scores[0];
-  const backupScore = scores[1];
-
-  return (
-    <div className={styles.itemRow}>
-      {/* 物品图标 + 名 */}
-      <div className={styles.itemInfo}>
-        <div className={styles.itemIcon} style={{ color: getItemRarityColor(item.itemId) }}>
-          <Icon icon={getItemIcon(item.itemId)} />
-        </div>
-        <div className={styles.itemNameCol}>
-          <div className={styles.itemName}>{getItemName(item.itemId)}</div>
-          <div className={styles.itemMeta}>
-            <Icon icon={CATEGORY_ICONS[category]} className={styles.categoryIcon} />
-            {ITEM_CATEGORY_LABELS[category]} ×{item.quantity}
-            {item.durability !== undefined && item.durability < 100 && (
-              <span className={styles.durability}> · 耐久 {item.durability}</span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* 分配按钮组（每个角色一个） */}
-      <div className={styles.assignButtons}>
-        {party.map(char => {
-          const isDead = char.hp <= 0;
-          const score = scores.find(s => s.char.id === char.id);
-          const isRecommended = score?.level === 'recommended';
-          const isBackup = score?.level === 'backup';
-          const isAssigned = assignedTo === char.id;
-          return (
-            <button
-              key={char.id}
-              className={`
-                ${styles.assignButton}
-                ${isAssigned ? styles.assigned : ''}
-                ${isRecommended ? styles.recommended : ''}
-                ${isBackup ? styles.backup : ''}
-                ${isDead ? styles.disabled : ''}
-              `}
-              onClick={() => !isDead && onAssign(char.id)}
-              disabled={isDead}
-              title={
-                isDead
-                  ? '该角色已阵亡'
-                  : isAssigned
-                    ? `已分配给 ${char.name}（点击切换）`
-                    : `分配给 ${char.name}（${category} 评分 ${score?.total.toFixed(1) ?? 0}）`
-              }
-            >
-              <span className={styles.charInitial}>{char.name?.[0] ?? '?'}</span>
-              {isRecommended && <span className={styles.recBadge}><Icon icon={star} /></span>}
-              {isBackup && !isRecommended && <span className={styles.backupBadge}><Icon icon={starOutline} /></span>}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
-// ============== 持久化逻辑 ==============
-
-/**
- * 把分配的物品写入角色背包
- * - 调用 setCharacters 写回 GameVar
- * - 调用 writeMissions 标记 mission.tempLootDistributed = true + 清空 tempLoot
- */
-const distributeItems = (
-  assignments: Record<string, string | null>,
-  mission: Mission,
-  party: ScavengeCharacter[],
-) => {
-  const allChars = getCharacters();
-  const charMap = new Map(allChars.map(c => [c.id, c]));
-
-  // 1. 分配物品到对应角色背包
-  (mission.tempLoot ?? []).forEach((item, idx) => {
-    const key = itemKey(item, idx);
-    const charId = assignments[key];
-    if (!charId) return;
-    const char = charMap.get(charId);
-    if (!char) return;
-    const newInv = addToInventory(char.inventory ?? [], item);
-    charMap.set(charId, { ...char, inventory: newInv });
-  });
-
-  // 2. 写回 characters
-  setCharacters(Array.from(charMap.values()));
-
-  // 3. 更新 mission：标记 distributed + 清空 tempLoot
-  const missions = readMissions();
-  const newMissions = missions.map(m => {
-    if (m.id !== mission.id) return m;
-    return { ...m, tempLootDistributed: true, tempLoot: undefined };
-  });
-  writeMissions(newMissions);
-};
-
-/**
- * 跳过分配：全部物品转入永久仓库
- */
-const skipToWarehouse = (mission: Mission) => {
-  const items = mission.tempLoot ?? [];
-  if (items.length === 0) return;
-
-  // 1. 物品入仓库
-  const currentWh = getWarehouse();
-  let newWh = currentWh;
-  for (const item of items) {
-    newWh = addToWarehouse(newWh, item);
-  }
-  setWarehouse(newWh);
-
-  // 2. 更新 mission
-  const missions = readMissions();
-  const newMissions = missions.map(m => {
-    if (m.id !== mission.id) return m;
-    return { ...m, tempLootDistributed: true, tempLoot: undefined };
-  });
-  writeMissions(newMissions);
+// 简易 logger
+const logger = {
+  info: (msg: string) => console.log(msg),
 };

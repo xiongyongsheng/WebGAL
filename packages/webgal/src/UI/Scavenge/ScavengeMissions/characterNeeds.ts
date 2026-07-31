@@ -20,6 +20,7 @@
 import { ScavengeCharacter } from '../ScavengeCharacter/character';
 import { CHARACTER_TEMPLATES } from '../ScavengeCharacter/characterRoster';
 import { InventoryItem, isItemBroken, getItemMaxDurability } from '../ScavengeItems/inventory';
+import { getItemById } from '../ScavengeItems/items';
 import { ItemCategory, getItemCategory } from './partyLoot';
 
 // ============== 评分权重（可调参）==============
@@ -139,18 +140,32 @@ export interface ItemScore {
 }
 
 /**
+ * 过滤掉商人（faction='neutral' + isMerchant=true）
+ * 2026-06-21 加：算法层防御，caller 不传商人时也安全
+ */
+const isMerchant = (char: ScavengeCharacter): boolean => {
+  const template = CHARACTER_TEMPLATES[char.id];
+  if (template?.isMerchant) return true;
+  if ((template?.faction ?? 'ally') === 'neutral') return true;
+  return false;
+};
+
+/**
  * 计算所有队员对单个物品的评分
  *
  * @param party 队伍（按队伍顺序，index 0 是主队员）
  * @param item 物品
  * @returns 每个角色的评分（按分数降序）
+ * 2026-06-21 加：自动过滤商人
  */
 export const scoreItemForParty = (
   party: ScavengeCharacter[],
   item: InventoryItem,
 ): ItemScore[] => {
   const category = getItemCategory(item.itemId);
-  const scores: ItemScore[] = party.map((char) => {
+  // 2026-06-21 加：过滤商人（caller 没传商人时也跳过）
+  const filteredParty = party.filter(c => !isMerchant(c));
+  const scores: ItemScore[] = filteredParty.map((char) => {
     const preferences = getCharacterPreferences(char.id);
     const needs = computeCharacterNeeds(char);
 
@@ -208,4 +223,81 @@ export const getBackupChar = (
   const scores = scoreItemForParty(party, item);
   if (scores.length < 2 || scores[1].total <= 0) return null;
   return scores[1].char;
+};
+
+// ============== M3 阶段：好感度增量计算 ==============
+
+/**
+ * 物品价格（2026-06-21 改：直接读 items.ts 里的 price 字段）
+ * - 来自 getItemById(itemId).price
+ * - 找不到物品定义时默认 10
+ */
+const getItemPrice = (item: InventoryItem): number => {
+  const def = getItemById(item.itemId);
+  return def?.price ?? 10;
+};
+
+/**
+ * 计算把物品分配给角色带来的好感度增量
+ *
+ * 公式（2026-06-21 M3 加）：
+ *   Δaffinity = BASE
+ *             × preferenceFactor    (1 + preferences[cat] / 5)
+ *             × needFactor         (1 + needs[cat] / 10)
+ *             × priceFactor        (1 + log10(price))
+ *
+ * 因素说明：
+ *   - 基础值 BASE = 1（每次分配的最小增量为 1）
+ *   - 偏好：角色"喜欢"这种物品 → 好感 +
+ *   - 需求：角色"正需要"这种物品 → 好感 ++
+ *   - 价格：贵重物品 → 好感 +（关系更紧密）
+ *
+ * @param char 接收物品的角色
+ * @param item 分配的物品（quantity 会影响，price * quantity 是总价）
+ * @returns 好感度增量（**正数**）
+ */
+export const computeAffinityDelta = (
+  char: ScavengeCharacter,
+  item: InventoryItem,
+): number => {
+  // 2026-06-21 加：商人不走通用 affinity 流程（商人有独立 merchantAffection）
+  if (isMerchant(char)) return 0;
+
+  // 1. 基础值
+  const BASE = 1;
+
+  // 2. 偏好系数
+  const preferences = getCharacterPreferences(char.id);
+  const prefScore = preferences[getItemCategory(item.itemId)] ?? 0;
+  // 偏好 -5 ~ +5 → 系数 0 ~ 2
+  const preferenceFactor = 1 + prefScore / 5;
+
+  // 3. 需求系数
+  const needs = computeCharacterNeeds(char);
+  const needScore = needs[getItemCategory(item.itemId)] ?? 0;
+  // 需求 0 ~ 10 → 系数 1 ~ 2
+  const needFactor = 1 + needScore / 10;
+
+  // 4. 价格系数
+  const unitPrice = getItemPrice(item);
+  const totalPrice = unitPrice * item.quantity;
+  // 价格 1 ~ 1000 → 系数 1 ~ 4（log10 缩放）
+  // 物品 1 价值 1 → 1.0
+  // 物品 10 价值 10 → 2.0
+  // 物品 100 价值 100 → 3.0
+  const priceFactor = 1 + Math.log10(Math.max(1, totalPrice));
+
+  // 综合
+  return Math.round(BASE * preferenceFactor * needFactor * priceFactor);
+};
+
+/**
+ * 把多个物品的好感度增量累加
+ * - 用来计算"智能分配"给某角色带来多少好感度
+ */
+export const computeTotalAffinityDelta = (
+  char: ScavengeCharacter,
+  items: InventoryItem[],
+): number => {
+  return items.reduce((sum, item) => sum + computeAffinityDelta(char, item), 0);
 };

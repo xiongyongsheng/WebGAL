@@ -16,10 +16,11 @@
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 20px;
   padding: 18px 14px 14px;
-  pointer-events: auto;
+  pointer-events: auto;  // 2026-06-21 加：让 click 事件穿透父容器的 none
   transition: all 0.2s ease;
   backdrop-filter: blur(8px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  z-index: 1;
 
   &:hover {
     background: rgba(30, 30, 45, 0.95);

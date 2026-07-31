@@ -29,6 +29,30 @@ interface ScavengeWarehouseProps {
     onMouseMove: (e: React.MouseEvent) => void;
     onMouseLeave: (e: React.MouseEvent) => void;
   };
+  /**
+   * 自定义标题（2026-06-21 加：M1 阶段 - 战利品分配 modal）
+   * - 不传：默认"仓库"（永久仓库）
+   * - 传了：用这个标题（战利品分配时用"队伍背包"）
+   */
+  title?: string;
+  /**
+   * 自定义标题图标（2026-06-21 加）
+   * - 不传：默认仓库图标
+   * - 传了：用这个图标
+   */
+  titleIcon?: string;
+  /**
+   * 标题旁的操作按钮 slot（2026-06-21 加：M1 阶段 - 战利品分配 modal）
+   * - 渲染在标题文字右边
+   * - 例如"重置 / 智能分配 / 跳过 / 确认"等按钮
+   */
+  headerActions?: React.ReactNode;
+  /**
+   * 自定义空提示文字（2026-06-21 加：M1 阶段 - 战利品分配 modal）
+   * - 不传：默认"仓库是空的"（永久仓库场景）
+   * - 传了：用这个文字（战利品分配场景用"分配完毕"）
+   */
+  emptyMessage?: string;
 }
 
 type TabType = 'all' | 'consumable' | 'material' | 'equipment' | 'quest';
@@ -43,8 +67,15 @@ export const ScavengeWarehouse = ({
   onDrop,
   isDragOver,
   makeItemHoverProps,
+  title,
+  titleIcon,
+  headerActions,
+  emptyMessage,
 }: ScavengeWarehouseProps) => {
   const [activeTab, setActiveTab] = useState<TabType>('all');
+  // 2026-06-21 加：自定义标题（默认"仓库"）
+  const headerTitle = title ?? '仓库';
+  const headerIcon = titleIcon ?? 'material-symbols:warehouse-outline';
 
   // 防御性过滤：仓库永远不存 null 槽位，但脏数据可能存在
   const safeItems = items.filter((i): i is InventoryItem => i !== null);
@@ -82,9 +113,12 @@ export const ScavengeWarehouse = ({
       {/* 标题栏（嵌入模式不显示关闭按钮） */}
       <div className={styles.header}>
         <div className={styles.titleGroup}>
-          <Icon icon="material-symbols:warehouse-outline" className={styles.titleIcon} />
-          <h2 className={styles.title}>仓库</h2>
+          <Icon icon={headerIcon} className={styles.titleIcon} />
+          <h2 className={styles.title}>{headerTitle}</h2>
         </div>
+        {headerActions && (
+          <div className={styles.headerActions}>{headerActions}</div>
+        )}
         {!embedded && (
           <button className={styles.closeButton} onClick={onClose}>
             <Icon icon="material-symbols:close" />
@@ -127,7 +161,7 @@ export const ScavengeWarehouse = ({
             {isDragOver
               ? '松开放入仓库'
               : activeTab === 'all'
-                ? '仓库是空的'
+                ? (emptyMessage ?? '仓库是空的')
                 : '该分类下没有物品'}
           </div>
         ) : (

@@ -52,8 +52,14 @@ const canTakeFromOtherCharacter = (
 };
 
 /**
- * 限制检查（2026-06-09 加：Plan 3 重构）
+ * 限制检查（2026-06-09 加：Plan 3 重构 / 2026-06-21 改：customWarehouseRef 豁免）
  * 检查 source / target 是否符合 restrictTransfer + partyCharacterIds
+ *
+ * 2026-06-21 改：
+ *   - customWarehouseRef 存在时（队伍背包），**不**触发"派遣中不能..."的拦截
+ *   - 因为队伍背包的语义就是"分配"，不是永久仓库
+ *   - 永久仓库（无 customWarehouseRef）依然受 restrictTransfer 限制
+ *
  * @returns true = 通过，false = 触发限制（应阻止）
  */
 export const checkTransferRestriction = (
@@ -62,28 +68,33 @@ export const checkTransferRestriction = (
   restrictTransfer: boolean,
   partyCharacterIds: string[],
   showTransferError?: (msg: string) => void,
+  hasCustomWarehouse: boolean = false,  // 2026-06-21 加：true = 队伍背包，不拦截
 ): boolean => {
   if (!restrictTransfer) return true;
 
   // 限制规则：
-  // - source 必须是队内
-  // - target 必须是队内（不能是仓库）
-  // 也就是：所有转移**只能**在队内角色之间进行
+  // - source 必须是队内（除非是 customWarehouseRef 队伍背包，那分配就是它的用途）
+  // - target 必须是队内
+  // 也就是：所有转移**只能**在队内角色之间进行（+ 队伍背包）
   const inParty = (id: string) => partyCharacterIds.includes(id);
 
-  if (source.kind === 'warehouse') {
+  // 2026-06-21 改：customWarehouseRef 存在时，warehouse source/target 不拦截
+  //   - 队伍背包 → 角色：分配（允许）
+  //   - 角色 → 队伍背包：退回（允许）
+  //   - 永久仓库 → 角色：仍然拦截（restrictTransfer 阻止）
+  if (source.kind === 'warehouse' && !hasCustomWarehouse) {
     if (showTransferError) {
       showTransferError('派遣中不能从仓库转移物品');
     }
     return false;
   }
-  if (target.kind === 'warehouse') {
+  if (target.kind === 'warehouse' && !hasCustomWarehouse) {
     if (showTransferError) {
       showTransferError('派遣中不能转移到仓库');
     }
     return false;
   }
-  if (!inParty(source.characterId)) {
+  if (source.kind === 'character' && !inParty(source.characterId)) {
     if (showTransferError) {
       const chars = getCharacters();
       const name = chars.find(c => c.id === source.characterId)?.name ?? '?';
@@ -91,7 +102,7 @@ export const checkTransferRestriction = (
     }
     return false;
   }
-  if (!inParty(target.characterId)) {
+  if (target.kind === 'character' && !inParty(target.characterId)) {
     if (showTransferError) {
       const chars = getCharacters();
       const name = chars.find(c => c.id === target.characterId)?.name ?? '?';
@@ -113,10 +124,27 @@ export const executeTransfer = (
   // 2026-06-09 加：限制参数（Plan 3 重构）
   //   - restrictTransfer=true + partyCharacterIds=[...] → 限制
   //   - 默认 false / [] = 不限
-  options: { restrictTransfer?: boolean; partyCharacterIds?: string[] } = {},
+  // 2026-06-21 加：customWarehouseRef（战利品分配 modal 用）
+  //   - 不传：用 getWarehouse/setWarehouse（永久仓库）
+  //   - 传了：用 ref.items / ref.commit（不碰永久仓库）
+  options: {
+    restrictTransfer?: boolean;
+    partyCharacterIds?: string[];
+    customWarehouseRef?: {
+      items: InventoryItem[];
+      commit: (newItems: InventoryItem[]) => void;
+    };
+  } = {},
 ): boolean => {
   // 2026-06-09 改：先做限制检查（防止 UI 漏过滤）
-  if (!checkTransferRestriction(source, target, options.restrictTransfer ?? false, options.partyCharacterIds ?? [], showTransferError)) {
+  // 2026-06-21 改：customWarehouseRef 存在时豁免"派遣中不能从仓库..."的拦截
+  if (!checkTransferRestriction(
+    source, target,
+    options.restrictTransfer ?? false,
+    options.partyCharacterIds ?? [],
+    showTransferError,
+    options.customWarehouseRef !== undefined,
+  )) {
     return false;
   }
 
@@ -162,6 +190,16 @@ export const executeTransfer = (
     }
   }
 
+  // 2026-06-21 加：自定义仓库支持（战利品分配 modal）
+  //   - 有 customWarehouseRef → 走 ref.items/ref.commit
+  //   - 没传 → 走 getWarehouse/setWarehouse（永久仓库）
+  const whRef = options.customWarehouseRef;
+  const readWh = (): InventoryItem[] => whRef ? whRef.items : getWarehouse();
+  const writeWh = (items: InventoryItem[]): void => {
+    if (whRef) whRef.commit(items);
+    else setWarehouse(items);
+  };
+
   // 从源移除（按 instanceId 精确寻址）
   if (source.kind === 'character') {
     const characters = getCharacters();
@@ -171,9 +209,9 @@ export const executeTransfer = (
     updated.inventory = removeFromInventory(updated.inventory, item.instanceId, quantity);
     updateCharacter(updated);
   } else {
-    const warehouseItems = getWarehouse();
+    const warehouseItems = readWh();
     const newWarehouse = removeFromWarehouse(warehouseItems, item.instanceId, quantity);
-    setWarehouse(newWarehouse);
+    writeWh(newWarehouse);
   }
 
   // 添加到目标（生成新 instanceId，避免和源冲突）
@@ -191,9 +229,9 @@ export const executeTransfer = (
     updated.inventory = addToInventory(updated.inventory, moveItem);
     updateCharacter(updated);
   } else {
-    const warehouseItems = getWarehouse();
+    const warehouseItems = readWh();
     const newWarehouse = addToWarehouse(warehouseItems, moveItem);
-    setWarehouse(newWarehouse);
+    writeWh(newWarehouse);
   }
 
   refresh();
@@ -245,13 +283,19 @@ export const handleWarehouseItemClick = (
   closeItemMenu: () => void,
   setTransferSubmenu: (s: any) => void,
   // 2026-06-09 加：限制参数
-  options: { restrictTransfer?: boolean; showTransferError?: (msg: string) => void } = {},
+  // 2026-06-21 加：hasCustomWarehouse 字段（true = 队伍背包，不拦截）
+  options: {
+    restrictTransfer?: boolean;
+    showTransferError?: (msg: string) => void;
+    hasCustomWarehouse?: boolean;
+  } = {},
 ) => {
   e.stopPropagation();
   closeItemMenu();
 
   // 2026-06-09 加：派遣中**禁**仓库 → 角色（流程图规定）
-  if (options.restrictTransfer) {
+  // 2026-06-21 改：customWarehouseRef 存在时豁免（队伍背包 = "分配"用途）
+  if (options.restrictTransfer && !options.hasCustomWarehouse) {
     if (options.showTransferError) {
       options.showTransferError('派遣中不能从仓库转移物品');
     }
@@ -275,14 +319,21 @@ export const handleSubmenuTargetClick = (
   refresh: () => void,
   showTransferError: (msg: string) => void,
   // 2026-06-09 加：限制参数（Plan 3 重构）
-  options: { restrictTransfer?: boolean; partyCharacterIds?: string[] } = {},
+  // 2026-06-21 加：customWarehouseRef 透传
+  options: {
+    restrictTransfer?: boolean;
+    partyCharacterIds?: string[];
+    customWarehouseRef?: { items: InventoryItem[]; commit: (newItems: InventoryItem[]) => void };
+  } = {},
 ) => {
   if (!transferSubmenu) return;
   const { source, item, quantity } = transferSubmenu;
   // 2026-06-09 改：传限制参数
+  // 2026-06-21 改：customWarehouseRef 透传
   executeTransferFn(source, target, item, quantity, refresh, showTransferError, {
     restrictTransfer: options.restrictTransfer,
     partyCharacterIds: options.partyCharacterIds,
+    customWarehouseRef: options.customWarehouseRef,
   });
   setTransferSubmenu(null);
 };
@@ -292,7 +343,11 @@ export const closeTransferSubmenu = (setTransferSubmenu: (s: any) => void) => {
   setTransferSubmenu(null);
 };
 
-/** 列出所有可转移目标（含容量检查状态） */
+/** 列出所有可转移目标（含容量检查状态）
+ * 2026-06-21 加：过滤商人（faction='neutral' + isMerchant=true）
+ *   - 商人有独立交易入口（market room），不通过 transfer submenu 转移
+ *   - 之前 bug：所有角色（含商人）都进 submenu，导致 label 显示 "?"
+ */
 export const getTransferTargetOptions = (
   source: TransferSource,
   item: InventoryItem,
@@ -302,6 +357,10 @@ export const getTransferTargetOptions = (
   const characters = getCharacters();
   for (const char of characters) {
     if (source.kind === 'character' && char.id === source.characterId) continue;
+    // 2026-06-21 加：过滤商人（不进 submenu）
+    const template = CHARACTER_TEMPLATES[char.id];
+    if (template?.isMerchant) continue;
+    if ((template?.faction ?? 'ally') === 'neutral') continue;
     const target: TransferTarget = { kind: 'character', characterId: char.id };
     const nonNullInv = (char.inventory ?? []).filter((i): i is InventoryItem => i !== null);
     const check = canAddToInventory(nonNullInv, { ...item, quantity });
@@ -369,7 +428,12 @@ export const handleDrop = (
   refresh: () => void,
   showTransferError: (msg: string) => void,
   // 2026-06-09 加：限制参数
-  options: { restrictTransfer?: boolean; partyCharacterIds?: string[] } = {},
+  // 2026-06-21 加：customWarehouseRef 透传（用于"派遣中"豁免）
+  options: {
+    restrictTransfer?: boolean;
+    partyCharacterIds?: string[];
+    customWarehouseRef?: { items: InventoryItem[]; commit: (newItems: InventoryItem[]) => void };
+  } = {},
 ) => {
   e.preventDefault();
   setDragOverTarget(null);
@@ -380,7 +444,14 @@ export const handleDrop = (
   setDraggedItem(null);
 
   // 2026-06-09 加：拖拽源限制检查（防止 UI 漏过滤）
-  if (!checkTransferRestriction(source, target, options.restrictTransfer ?? false, options.partyCharacterIds ?? [], showTransferError)) {
+  // 2026-06-21 改：customWarehouseRef 存在时豁免
+  if (!checkTransferRestriction(
+    source, target,
+    options.restrictTransfer ?? false,
+    options.partyCharacterIds ?? [],
+    showTransferError,
+    options.customWarehouseRef !== undefined,
+  )) {
     return;
   }
 
@@ -406,7 +477,12 @@ export const confirmDragQuantity = (
   refresh: () => void,
   showTransferError: (msg: string) => void,
   // 2026-06-09 加：限制参数
-  options: { restrictTransfer?: boolean; partyCharacterIds?: string[] } = {},
+  // 2026-06-21 加：customWarehouseRef 透传（用于"派遣中"豁免）
+  options: {
+    restrictTransfer?: boolean;
+    partyCharacterIds?: string[];
+    customWarehouseRef?: { items: InventoryItem[]; commit: (newItems: InventoryItem[]) => void };
+  } = {},
 ) => {
   if (!dragQuantityDialog) return;
   const { source, item, target, quantity } = dragQuantityDialog;
@@ -438,7 +514,12 @@ export const handleCardDrop = (
   refresh: () => void,
   showTransferError: (msg: string) => void,
   // 2026-06-09 加：限制参数
-  options: { restrictTransfer?: boolean; partyCharacterIds?: string[] } = {},
+  // 2026-06-21 加：customWarehouseRef 透传（用于"派遣中"豁免）
+  options: {
+    restrictTransfer?: boolean;
+    partyCharacterIds?: string[];
+    customWarehouseRef?: { items: InventoryItem[]; commit: (newItems: InventoryItem[]) => void };
+  } = {},
 ) => {
   handleDrop(
     { kind: 'character', characterId: targetCharId },
@@ -481,7 +562,12 @@ export const handleWarehouseDrop = (
   refresh: () => void,
   showTransferError: (msg: string) => void,
   // 2026-06-09 加：限制参数（拖到仓库也需要检查）
-  options: { restrictTransfer?: boolean; partyCharacterIds?: string[] } = {},
+  // 2026-06-21 加：customWarehouseRef 透传（用于"派遣中"豁免）
+  options: {
+    restrictTransfer?: boolean;
+    partyCharacterIds?: string[];
+    customWarehouseRef?: { items: InventoryItem[]; commit: (newItems: InventoryItem[]) => void };
+  } = {},
 ) => {
   handleDrop(
     { kind: 'warehouse' },

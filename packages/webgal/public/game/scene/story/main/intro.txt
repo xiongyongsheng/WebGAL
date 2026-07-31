@@ -44,6 +44,9 @@ setVar:scavenge_show_menu=true;
 ; 把露西加入队伍（触发 characterRoster manager）
 ; 2026-06-09 改：商人维克斯是中立角色（faction='neutral'），由 scavenge_neutral_ids 管理
 ;   → 不放在队伍花名册里。队伍只有 ally 角色（player_1 + 露西）
+; 2026-06-21 改：清 _last_built_character_ids cache，确保 CharacterRosterManager 一定重**新**构**建**
+;   - 防止玩家从剧情回到 scavenge_main 后，因为 cache 命中漏构 lucy
+setVar:_last_built_character_ids=;
 setVar:scavenge_character_ids=[player_1,lucy];
 
 ; 打开拾荒 UI

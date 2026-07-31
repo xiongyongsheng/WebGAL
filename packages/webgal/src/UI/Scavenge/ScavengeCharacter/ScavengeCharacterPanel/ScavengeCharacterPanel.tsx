@@ -15,7 +15,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
 import { useStageState } from '@/hooks/useStageState';
-import { ScavengeCharacter, getCharacterStatusText } from '../character';
+import { ScavengeCharacter, getCharacterStatusText, getCharacterStatusDetail } from '../character';
 import { CHARACTER_TEMPLATES } from '../characterRoster';
 import { getItemName, getItemById } from '../../ScavengeItems/items';
 import { ItemTooltip, ItemTooltipData } from '../../ScavengeItems/ItemTooltip';
@@ -78,6 +78,36 @@ interface ScavengeCharacterPanelProps {
   restrictTransfer?: boolean;
   /** 派遣时显示的角色 ID 列表（最多 3 人） */
   partyCharacterIds?: string[];
+  /**
+   * 自定义仓库（2026-06-21 加：M1 阶段 - 战利品分配 modal 用）
+   * - 不传：用 getWarehouse() / setWarehouse()（永久仓库）
+   * - 传了：用 customWarehouseRef.items 显示，用 customWarehouseRef.commit 写回
+   *   （永久仓库**完全**不参与）
+   *
+   * 用途：战利品分配 modal 把"队伍背包"（mission.tempLoot）作为仓库
+   *   - 玩家从仓库拖到角色 = 把物品分配给角色
+   *   - 玩家从角色拖到仓库 = 把物品退回队伍背包
+   *
+   * 注：
+   * - label 用于 submenu 显示（默认 "仓库"，可设 "队伍背包"）
+   * - 拖拽/菜单/转移 submenu 都自动支持
+   * - 永久仓库的读写（getWarehouse/setWarehouse）**完全**不走
+   */
+  customWarehouseRef?: {
+    items: InventoryItem[];
+    commit: (newItems: InventoryItem[]) => void;
+    label?: string;
+    emptyMessage?: string;
+  };
+  /**
+   * 仓库 section 操作按钮 slot（2026-06-21 加：M1 阶段 - 战利品分配 modal 用）
+   * - 当 customWarehouseRef 存在时，渲染在仓库 section 标题旁
+   * - 用于"重置 / 智能分配 / 跳过 / 确认"等按钮
+   * - 永久仓库场景（customWarehouseRef=undefined）不显示
+   *
+   * 渲染位置：仓库 section 顶部（"队伍背包"标题右边）
+   */
+  customWarehouseActions?: React.ReactNode;
 }
 
 type ItemFilter = 'all' | 'consumable' | 'equipment' | 'material' | 'quest';
@@ -87,6 +117,8 @@ export const ScavengeCharacterPanel = ({
   restrictView = false,
   restrictTransfer = false,
   partyCharacterIds = [],
+  customWarehouseRef,
+  customWarehouseActions,
 }: ScavengeCharacterPanelProps) => {
   // ============== UI state ==============
   useStageState();  // 订阅 stage state 变化自动重渲染
@@ -195,13 +227,31 @@ export const ScavengeCharacterPanel = ({
   const safeCharacters: ScavengeCharacter[] = allyCharacters.map(c => ({ ...c, inventory: c.inventory ?? [] }));
   // 2026-06-09 改：restrictView 时不加载仓库（不显示）
   //   restrictTransfer=true 仍显示仓库（玩家可看不能操作）
-  const warehouseItems = restrictView ? [] : getWarehouse();
+  // 2026-06-21 加：自定义仓库（战利品分配 modal）优先于永久仓库
+  //   - customWarehouseRef 存在时，用它的 items + commit（永久仓库不参与）
+  //   - 不存在时：restrictView=true 不显示，否则用 getWarehouse()
+  const warehouseItems = customWarehouseRef
+    ? customWarehouseRef.items
+    : (restrictView ? [] : getWarehouse());
+  // 自定义仓库 label（用于 submenu，默认 "仓库"，可设 "队伍背包"）
+  const warehouseLabel = customWarehouseRef?.label ?? '仓库';
 
   // ============== 包装层（2026-06-09 改：直接用 handleXxx 闭包，避免 LSP 缓存冲突） ==============
   // 之前用 onXxx = () => handleXxx(args, refresh) 包装，但 IDE LSP 缓存误判"局部声明与导入冲突"
   // 改为：JSX 处直接 () => handleXxx(...) 闭包，无 wrapper 变量
   // 也让 panel 主文件减少 35 行
   // 注：以下函数被 JSX 直接调用，不在此处定义 wrapper
+
+  // 2026-06-21 加：包装 executeTransfer，把 customWarehouseRef 注入
+  //   - 用闭包捕获 customWarehouseRef（避免改 transfer.ts 的所有签名）
+  //   - 内部把 ref 合并到 options，executeTransfer 内部读 options.customWarehouseRef
+  //   - 没传 customWarehouseRef 时，wrapper 与原 executeTransfer 行为一致
+  const wrappedExecuteTransfer: typeof executeTransfer = (source, target, item, quantity, r, err, opts) => {
+    return executeTransfer(source, target, item, quantity, r, err, {
+      ...opts,
+      customWarehouseRef,
+    });
+  };
 
   // ============== Render ==============
   return (
@@ -210,10 +260,17 @@ export const ScavengeCharacterPanel = ({
         {/* 顶部标题 */}
         <div className={styles.panelHeader}>
           <h2 className={styles.panelTitle}>
-            {restrictView ? '战斗休整' : '角色列表'}
+            {/* 2026-06-21 改：customWarehouseRef 存在时 → "小队详情"（不再叫"战斗休整"）
+                否则：restrictView=true 走"战斗休整"，否则"角色列表" */}
+            {customWarehouseRef
+              ? '小队详情'
+              : (restrictView ? '战斗休整' : '角色列表')}
           </h2>
-          {restrictView && (
+          {restrictView && !customWarehouseRef && (
             <span className={styles.restHint}>只显示小队角色 · 已隐藏仓库</span>
+          )}
+          {customWarehouseRef && (
+            <span className={styles.restHint}>查看队伍背包并分配拾荒战利品</span>
           )}
           {restrictTransfer && !restrictView && (
             <span className={styles.restHint}>已限制转移（不能跨队/仓库）</span>
@@ -236,14 +293,18 @@ export const ScavengeCharacterPanel = ({
                   className={`${styles.characterCard} ${isOver ? styles.cardDragOver : ''}`}
                   onDragOver={(e) => handleCardDragOver(charData.id, e, draggedItem, setDragOverTarget)}
                   onDragLeave={() => handleCardDragLeave(setDragOverTarget)}
-                  onDrop={(e) => handleCardDrop(charData.id, e, draggedItem, setDraggedItem, setDragOverTarget, setDragQuantityDialog, executeTransfer, refresh, showTransferError, { restrictTransfer, partyCharacterIds })}
+                  onDrop={(e) => handleCardDrop(charData.id, e, draggedItem, setDraggedItem, setDragOverTarget, setDragQuantityDialog, wrappedExecuteTransfer, refresh, showTransferError, { restrictTransfer, partyCharacterIds, customWarehouseRef })}
                 >
                   <ScavengeCharacterHeader
                     name={charData.name}
                     statusText={getCharacterStatusText(charData)}
+                    statusDetail={getCharacterStatusDetail(
+                      charData,
+                      1,  // TODO: 从 stageState 读 current_day
+                      0,  // TODO: 从 stageState 读 current_period_index
+                    )}
                     isExploring={Boolean(charData.isExploring)}
                     character={charData}
-                    onClose={() => {}}
                   />
                   <div className={styles.cardContent}>
                     <ScavengeCharacterStatus
@@ -294,26 +355,36 @@ export const ScavengeCharacterPanel = ({
         </div>
 
         {/* 底部仓库（2026-06-09 改：restrictView 时不渲染）
-            restrictTransfer=true 仍渲染仓库（玩家可看不能操作） */}
-        {!restrictView && (
+            restrictTransfer=true 仍渲染仓库（玩家可看不能操作）
+            2026-06-21 改：customWarehouseRef 存在时**强制**渲染（哪怕 restrictView=true）
+              - 战利品分配 modal：队伍背包必须显示 */}
+        {(!restrictView || customWarehouseRef !== undefined) && (
           <div
             className={styles.warehouseSection}
           onDragOver={(e) => handleWarehouseDragOver(e, draggedItem, setDragOverTarget)}
           onDragLeave={() => handleCardDragLeave(setDragOverTarget)}
-          onDrop={(e) => handleWarehouseDrop(e, draggedItem, setDraggedItem, setDragOverTarget, setDragQuantityDialog, executeTransfer, refresh, showTransferError, { restrictTransfer, partyCharacterIds })}
+          onDrop={(e) => handleWarehouseDrop(e, draggedItem, setDraggedItem, setDragOverTarget, setDragQuantityDialog, wrappedExecuteTransfer, refresh, showTransferError, { restrictTransfer, partyCharacterIds, customWarehouseRef })}
         >
           <ScavengeWarehouse
             onClose={() => {}}
             embedded
             items={warehouseItems}
-            onItemClick={(item, e) => handleWarehouseItemClick(item, e, closeItemMenu, setTransferSubmenu, { restrictTransfer, showTransferError })}
+            // 2026-06-21 改：customWarehouseRef 存在时 → "队伍背包"标题（区别于永久仓库"仓库"）
+            title={customWarehouseRef?.label ?? undefined}
+            titleIcon={customWarehouseRef ? 'material-symbols:backpack' : undefined}
+            // 2026-06-21 加：customWarehouseRef 存在时 → 渲染 customWarehouseActions slot
+            //   （战利品分配 modal 把按钮放在"队伍背包"标题旁）
+            headerActions={customWarehouseRef ? customWarehouseActions : undefined}
+            // 2026-06-21 加：customWarehouseRef 存在时 → 透传 emptyMessage（如"分配完毕"）
+            emptyMessage={customWarehouseRef?.emptyMessage}
+            onItemClick={(item, e) => handleWarehouseItemClick(item, e, closeItemMenu, setTransferSubmenu, { restrictTransfer, showTransferError, hasCustomWarehouse: customWarehouseRef !== undefined })}
             onItemDragStart={(item, e) => handleWarehouseItemDragStart(item, e, setDraggedItem)}
             onItemDragEnd={() => handleItemDragEnd(setDraggedItem, setDragOverTarget)}
             isDragOver={dragOverTarget === 'warehouse'}
             makeItemHoverProps={makeItemHoverProps}
           />
-          </div>
-        )}
+        </div>
+      )}
 
         {/* 转移子菜单 */}
         {transferSubmenu && (() => {
@@ -325,9 +396,12 @@ export const ScavengeCharacterPanel = ({
           const allOptions = getTransferTargetOptions(transferSubmenu.source, transferSubmenu.item, transferSubmenu.quantity);
           const options = restrictTransfer
             ? allOptions.filter(opt => {
-                if (opt.target.kind !== 'character') return false;  // 不显示仓库
-                const charId = (opt.target as any).characterId;
-                return partyCharacterIds.includes(charId);  // 只显示队内
+                if (opt.target.kind === 'character') {
+                  const charId = (opt.target as any).characterId;
+                  return partyCharacterIds.includes(charId);  // 只显示队内
+                }
+                // target.kind === 'warehouse'：customWarehouseRef 存在 → 显示（队伍背包），否则隐藏
+                return customWarehouseRef !== undefined;
               })
             : allOptions;
           const MENU_WIDTH_ESTIMATE = 220;
@@ -353,14 +427,14 @@ export const ScavengeCharacterPanel = ({
                   const isChar = opt.target.kind === 'character';
                   const label = isChar
                     ? safeCharacters.find(c => c.id === (opt.target as any).characterId)?.name ?? '?'
-                    : '仓库';
+                    : warehouseLabel;
                   const icon = isChar ? 'material-symbols:person' : 'material-symbols:warehouse-outline';
                   return (
                     <button
                       key={isChar ? (opt.target as any).characterId : 'warehouse'}
                       className={`${styles.submenuTargetBtn} ${!opt.available ? styles.submenuTargetDisabled : ''}`}
                       disabled={!opt.available}
-                      onClick={() => opt.available && handleSubmenuTargetClick(opt.target, transferSubmenu, executeTransfer, setTransferSubmenu, refresh, showTransferError, { restrictTransfer, partyCharacterIds })}
+                      onClick={() => opt.available && handleSubmenuTargetClick(opt.target, transferSubmenu, wrappedExecuteTransfer, setTransferSubmenu, refresh, showTransferError, { restrictTransfer, partyCharacterIds })}
                       title={opt.reason}
                     >
                       <Icon icon={icon} />
@@ -456,7 +530,7 @@ export const ScavengeCharacterPanel = ({
                   <button className={styles.dragQtyCancelBtn} onClick={() => cancelDragQuantity(setDragQuantityDialog, setActionQuantity)}>
                     取消
                   </button>
-                  <button className={styles.dragQtyConfirmBtn} onClick={() => confirmDragQuantity(dragQuantityDialog, setDragQuantityDialog, setActionQuantity, executeTransfer, refresh, showTransferError)}>
+                  <button className={styles.dragQtyConfirmBtn} onClick={() => confirmDragQuantity(dragQuantityDialog, setDragQuantityDialog, setActionQuantity, wrappedExecuteTransfer, refresh, showTransferError, { customWarehouseRef })}>
                     确认转移
                   </button>
                 </div>
